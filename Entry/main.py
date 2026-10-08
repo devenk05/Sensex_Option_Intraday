@@ -34,7 +34,7 @@ from fii_dii_engine import analyze_fii_dii
 from entry_timing_engine import confirm_entry_candle
 from confluence_engine import calculate_confluence_score
 from trade_decision_flow import compare_ce_pe
-from trade_decision_flow import compare_ce_pe, derive_market_bias
+from trade_decision_flow import compare_ce_pe, derive_market_bias, run_locked_decision_flow
 from chart_pattern_engine import detect_candle_patterns
 from active_trade_manager import ActiveTradeManager
 from support_resistance_engine import calculate_support_resistance
@@ -1153,6 +1153,7 @@ def _generate_live_dashboard(
 
 def main():
     global EXIT_MONITOR_LOOP, EXIT_MONITOR_THREAD
+    global CURRENT_SETUP_DECISION, NEARBY_CURRENT_CANDIDATE
     load_project_config()
 
     print(f"Project: {config.PROJECT_NAME}")
@@ -1711,6 +1712,30 @@ def main():
         entry_score = confluence_result.get("score")
         print("CONFLUENCE_COMPONENT_SCORES:", confluence_component_scores)
         print("CONFLUENCE_RESULT:", confluence_result)
+
+        CURRENT_SETUP_DECISION = run_locked_decision_flow(
+            multi_timeframe=multi_timeframe,
+            candle_structure=candle_structure,
+            spot=option_data.get("spot"),
+            pivot_analysis=pivot_analysis,
+            price_action=price_action,
+            volume_analysis=_cepe_volume,
+            oi_summary=oi_summary,
+            ce=ce,
+            pe=pe,
+            chart_pattern=None,
+            entry_score=entry_score,
+            min_entry_score=float(config.MIN_ENTRY_SCORE),
+            support_resistance=support_resistance,
+            gap_context=None,
+            one_minute_confirmed=False,
+        )
+        NEARBY_CURRENT_CANDIDATE = (
+            CURRENT_SETUP_DECISION.get("candidate")
+            if isinstance(CURRENT_SETUP_DECISION, dict)
+            else None
+        )
+        print("FINAL_DECISION:", CURRENT_SETUP_DECISION)
 
     except Exception as cepe_exc:
         print(
