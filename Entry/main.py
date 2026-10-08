@@ -1737,6 +1737,20 @@ def main():
         )
         print("FINAL_DECISION:", CURRENT_SETUP_DECISION)
 
+        # Complete final-decision wiring:
+        # register a recommendation only when the locked flow reaches
+        # TRADE_CANDIDATE. The existing one-minute confirmation gate remains
+        # enforced inside run_locked_decision_flow().
+        if (
+            isinstance(CURRENT_SETUP_DECISION, dict)
+            and CURRENT_SETUP_DECISION.get("status") == "TRADE_CANDIDATE"
+        ):
+            if not _register_live_trade(
+                CURRENT_SETUP_DECISION,
+                NEARBY_CURRENT_CANDIDATE,
+            ):
+                print("FINAL_DECISION_TRADE_REGISTRATION_FAILED")
+
     except Exception as cepe_exc:
         print(
             "LIVE_CE_PE_COMPARISON_ERROR:",
