@@ -1,0 +1,38 @@
+﻿
+from typing import Any
+
+
+class ActiveTradeManager:
+    """Maintain at most one active trade in memory."""
+
+    def __init__(self) -> None:
+        self._active_trade: dict[str, Any] | None = None
+
+    def get_active_trade(self) -> dict[str, Any] | None:
+        """Return the current active trade, if any."""
+        return self._active_trade
+
+    def has_active_trade(self) -> bool:
+        """Return whether an active trade exists."""
+        return self._active_trade is not None
+    def start_trade(self, trade: dict[str, Any]) -> None:
+        """Register a trade if no trade is currently active."""
+
+        if self.has_active_trade():
+            raise RuntimeError("An active trade already exists.")
+
+        if not trade:
+            raise ValueError("Trade data cannot be empty.")
+
+        self._active_trade = dict(trade)
+
+    def close_trade(self) -> dict[str, Any]:
+        """Close and return the active trade."""
+
+        if not self.has_active_trade():
+            raise RuntimeError("No active trade to close.")
+
+        closed_trade = self._active_trade
+        self._active_trade = None
+
+        return closed_trade

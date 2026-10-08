@@ -1,0 +1,11 @@
+﻿.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+astro_venv/
+data/
+*.log
+
+dashboard/live_sensex30.json
+dashboard/live_state.json

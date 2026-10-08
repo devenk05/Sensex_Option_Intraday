@@ -1,0 +1,1007 @@
+﻿
+
+==================== daily_report_archive.py ====================
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+class DailyReportArchive:
+    """Archive daily reports in date-named JSON files."""
+
+    def __init__(self, archive_dir: str = "data/reports") -> None:
+        self.archive_dir = Path(archive_dir)
+
+    def save(self, report: dict[str, Any]) -> Path:
+        """Save a report using its YYYY-MM-DD date."""
+
+        if not isinstance(report, dict):
+            raise TypeError("Report must be a dictionary.")
+
+        report_date = report.get("date")
+
+        if not isinstance(report_date, str):
+            raise ValueError("Report must contain a date string.")
+
+        from datetime import date
+
+        try:
+            date.fromisoformat(report_date)
+        except ValueError as exc:
+            raise ValueError(
+                "Report date must use YYYY-MM-DD format."
+            ) from exc
+
+        self.archive_dir.mkdir(parents=True, exist_ok=True)
+
+        file_path = self.archive_dir / f"{report_date}.json"
+        temp_path = file_path.with_suffix(".tmp")
+
+        with temp_path.open("w", encoding="utf-8") as file:
+            json.dump(report, file, indent=2, ensure_ascii=False)
+
+        temp_path.replace(file_path)
+        return file_path
+
+    def load(self, report_date: str) -> dict[str, Any] | None:
+        """Load an archived report for the given date."""
+
+        from datetime import date
+
+        try:
+            date.fromisoformat(report_date)
+        except ValueError as exc:
+            raise ValueError(
+                "report_date must use YYYY-MM-DD format."
+            ) from exc
+
+        file_path = self.archive_dir / f"{report_date}.json"
+
+        if not file_path.exists():
+            return None
+
+        with file_path.open("r", encoding="utf-8") as file:
+            report = json.load(file)
+
+        if not isinstance(report, dict):
+            raise ValueError("Archived report must be a JSON object.")
+
+        return report
+
+
+==================== daily_report_delivery.py ====================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_runner import DailyReportRunner
+from daily_report_sender import DailyReportSender
+
+
+class DailyReportDelivery:
+    """Generate and send a daily report when it is due."""
+
+    def __init__(
+        self,
+        runner: DailyReportRunner,
+        sender: DailyReportSender,
+    ) -> None:
+        self.runner = runner
+        self.sender = sender
+
+    def deliver_if_due(
+        self,
+        trades: list[dict[str, Any]],
+        now: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        """Generate and send the report when the schedule is due."""
+
+        report = self.runner.run_if_due(
+            trades=trades,
+            now=now,
+        )
+
+        if report is None:
+            return None
+
+        self.sender.send_report(report)
+        return report
+
+
+==================== daily_report_dispatcher.py ====================
+
+from typing import Any
+
+from daily_report_sender import DailyReportSender
+from daily_report_google_sheets import DailyReportGoogleSheets
+
+
+class DailyReportDispatcher:
+    """Dispatch a daily report to Telegram and Google Sheets."""
+
+    def __init__(
+        self,
+        telegram_sender: DailyReportSender,
+        google_sheets_sender: DailyReportGoogleSheets,
+    ) -> None:
+        self.telegram_sender = telegram_sender
+        self.google_sheets_sender = google_sheets_sender
+
+    def dispatch(self, report: dict[str, Any]) -> dict[str, Any]:
+        """Send a report to configured destinations."""
+
+        results: dict[str, Any] = {}
+
+        results["telegram"] = self.telegram_sender.send_report(report)
+        results["google_sheets"] = (
+            self.google_sheets_sender.send_report(report)
+        )
+
+        return results
+
+
+==================== daily_report_engine.py ====================
+
+from datetime import date
+from typing import Any
+
+from daily_summary import DailySummary
+from daily_summary_storage import DailySummaryStorage
+
+
+class DailyReportEngine:
+    """Generate and save a daily trading report."""
+
+    def __init__(
+        self,
+        summary_engine: DailySummary,
+        summary_storage: DailySummaryStorage,
+    ) -> None:
+        self.summary_engine = summary_engine
+        self.summary_storage = summary_storage
+
+    def generate_report(
+        self,
+        trades: list[dict[str, Any]],
+        report_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate a report for the supplied day's trades."""
+
+        day = report_date or date.today().isoformat()
+
+        summary = self.summary_engine.generate(trades)
+
+        report = {
+            "date": day,
+            **summary,
+        }
+
+        self.summary_storage.save(report)
+        return report
+
+
+==================== daily_report_formatter.py ====================
+
+from typing import Any
+
+
+class DailyReportFormatter:
+    """Format a daily trading report as readable text."""
+
+    def format(self, report: dict[str, Any]) -> str:
+        if not isinstance(report, dict):
+            raise TypeError("Report must be a dictionary.")
+
+        report_date = report.get("date", "Unknown date")
+        total_trades = report.get("total_trades", 0)
+        wins = report.get("wins", 0)
+        losses = report.get("losses", 0)
+        breakeven = report.get("breakeven", 0)
+        win_rate = report.get("win_rate_percent", 0)
+        total_pnl = report.get("total_pnl", 0)
+
+        try:
+            total_pnl_value = float(total_pnl)
+            win_rate_value = float(win_rate)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Invalid numeric value in report.") from exc
+
+        return (
+            f"ðŸ“Š Daily Trading Report\n"
+            f"Date: {report_date}\n"
+            f"----------------------\n"
+            f"Total Trades: {total_trades}\n"
+            f"Wins: {wins}\n"
+            f"Losses: {losses}\n"
+            f"Breakeven: {breakeven}\n"
+            f"Win Rate: {win_rate_value:.2f}%\n"
+            f"Total P&L: â‚¹{total_pnl_value:.2f}"
+        )
+
+
+==================== daily_report_google_sheets.py ====================
+
+from typing import Any
+
+from google_sheets_engine import GoogleSheetsEngine
+
+
+class DailyReportGoogleSheets:
+    """Send daily report summary to Google Sheets."""
+
+    def __init__(self, sheets_engine: GoogleSheetsEngine) -> None:
+        self.sheets_engine = sheets_engine
+
+    def send_report(self, report: dict[str, Any]) -> Any:
+        """Send report fields as a single row."""
+
+        if not isinstance(report, dict):
+            raise TypeError("Report must be a dictionary.")
+
+        row = [
+            report.get("date", ""),
+            report.get("total_trades", 0),
+            report.get("wins", 0),
+            report.get("losses", 0),
+            report.get("breakeven", 0),
+            report.get("win_rate_percent", 0),
+            report.get("total_pnl", 0),
+        ]
+
+        return self.sheets_engine.send_row(row)
+
+
+==================== daily_report_job.py ====================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_scheduler import DailyReportScheduler
+from daily_report_service import DailyReportService
+
+
+class DailyReportJob:
+    """Check report schedule and run the daily report service."""
+
+    def __init__(
+        self,
+        scheduler: DailyReportScheduler,
+        report_service: DailyReportService,
+    ) -> None:
+        self.scheduler = scheduler
+        self.report_service = report_service
+        self._last_run_date: str | None = None
+
+    def run_if_due(
+        self,
+        trades: list[dict[str, Any]],
+        now: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        """Run the report service once per date when due."""
+
+        current = now or datetime.now(self.scheduler.TIMEZONE)
+
+        if not self.scheduler.should_run(current):
+            return None
+
+        local_time = current.astimezone(self.scheduler.TIMEZONE)
+        report_date = local_time.date().isoformat()
+
+        if self._last_run_date == report_date:
+            return None
+
+        result = self.report_service.run(
+            trades=trades,
+            report_date=report_date,
+        )
+
+        self._last_run_date = report_date
+        return result
+
+
+==================== daily_report_loop.py ====================
+
+import time
+from datetime import datetime
+from typing import Any, Callable
+
+from daily_report_job import DailyReportJob
+
+
+class DailyReportLoop:
+    """Periodically check and run the daily report job."""
+
+    def __init__(
+        self,
+        report_job: DailyReportJob,
+        trades_provider: Callable[[], list[dict[str, Any]]],
+        interval_seconds: int = 30,
+    ) -> None:
+        if interval_seconds < 1:
+            raise ValueError("Interval must be at least 1 second.")
+
+        self.report_job = report_job
+        self.trades_provider = trades_provider
+        self.interval_seconds = interval_seconds
+        self._running = False
+
+    def run_forever(self) -> None:
+        """Continuously check whether the report is due."""
+
+        self._running = True
+
+        while self._running:
+            try:
+                trades = self.trades_provider()
+
+                self.report_job.run_if_due(
+                    trades=trades,
+                    now=datetime.now(
+                        self.report_job.scheduler.TIMEZONE
+                    ),
+                )
+
+            except Exception as exc:
+                print(f"Daily report loop error: {exc}")
+
+            time.sleep(self.interval_seconds)
+
+    def stop(self) -> None:
+        """Request the loop to stop after the current wait."""
+        self._running = False
+
+
+==================== daily_report_pipeline.py ====================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_engine import DailyReportEngine
+from daily_report_archive import DailyReportArchive
+from daily_report_validator import DailyReportValidator
+from daily_trade_filter import DailyTradeFilter
+
+
+class DailyReportPipeline:
+    """Filter, generate, validate, and archive a daily report."""
+
+    def __init__(
+        self,
+        trade_filter: DailyTradeFilter,
+        report_engine: DailyReportEngine,
+        validator: DailyReportValidator,
+        archive: DailyReportArchive,
+    ) -> None:
+        self.trade_filter = trade_filter
+        self.report_engine = report_engine
+        self.validator = validator
+        self.archive = archive
+
+    def run(
+        self,
+        trades: list[dict[str, Any]],
+        report_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Build and archive a report for one trading date."""
+
+        day = report_date or datetime.now().date().isoformat()
+
+        daily_trades = self.trade_filter.filter_by_date(
+            trades,
+            target_date=day,
+        )
+
+        report = self.report_engine.generate_report(
+            trades=daily_trades,
+            report_date=day,
+        )
+
+        self.validator.validate(report)
+        self.archive.save(report)
+
+        return report
+
+
+==================== daily_report_runner.py ====================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_engine import DailyReportEngine
+from daily_report_scheduler import DailyReportScheduler
+
+
+class DailyReportRunner:
+    """Run daily report generation when scheduled time is reached."""
+
+    def __init__(
+        self,
+        scheduler: DailyReportScheduler,
+        report_engine: DailyReportEngine,
+    ) -> None:
+        self.scheduler = scheduler
+        self.report_engine = report_engine
+        self._last_run_date: str | None = None
+
+    def run_if_due(
+        self,
+        trades: list[dict[str, Any]],
+        now: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        """Generate at most one report per date when due."""
+
+        current = now or datetime.now(self.scheduler.TIMEZONE)
+
+        if not self.scheduler.should_run(current):
+            return None
+
+        report_date = current.astimezone(
+            self.scheduler.TIMEZONE
+        ).date().isoformat()
+
+        if self._last_run_date == report_date:
+            return None
+
+        report = self.report_engine.generate_report(
+            trades=trades,
+            report_date=report_date,
+        )
+
+        self._last_run_date = report_date
+        return report
+
+
+==================== daily_report_scheduler.py ====================
+
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
+
+
+class DailyReportScheduler:
+    """Check whether the daily report time has been reached."""
+
+    TIMEZONE = ZoneInfo("Asia/Kolkata")
+    REPORT_TIME = time(15, 35)
+
+    def should_run(self, now: datetime | None = None) -> bool:
+        """Return True at or after 15:35 IST on weekdays."""
+
+        current_time = now or datetime.now(self.TIMEZONE)
+
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=self.TIMEZONE)
+        else:
+            current_time = current_time.astimezone(self.TIMEZONE)
+
+        if current_time.weekday() >= 5:
+            return False
+
+        return current_time.time() >= self.REPORT_TIME
+
+
+==================== daily_report_sender.py ====================
+
+from typing import Any
+
+from daily_report_formatter import DailyReportFormatter
+from telegram_engine import TelegramEngine
+
+
+class DailyReportSender:
+    """Format and send a daily report through Telegram."""
+
+    def __init__(
+        self,
+        formatter: DailyReportFormatter,
+        telegram_engine: TelegramEngine,
+    ) -> None:
+        self.formatter = formatter
+        self.telegram_engine = telegram_engine
+
+    def send_report(self, report: dict[str, Any]) -> Any:
+        """Format the report and send it using TelegramEngine."""
+
+        message = self.formatter.format(report)
+        return self.telegram_engine.send_message(message)
+
+
+==================== daily_report_service.py ====================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_pipeline import DailyReportPipeline
+from daily_report_dispatcher import DailyReportDispatcher
+
+
+class DailyReportService:
+    """Generate and dispatch a daily trading report."""
+
+    def __init__(
+        self,
+        pipeline: DailyReportPipeline,
+        dispatcher: DailyReportDispatcher,
+    ) -> None:
+        self.pipeline = pipeline
+        self.dispatcher = dispatcher
+
+    def run(
+        self,
+        trades: list[dict[str, Any]],
+        report_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate the report, then dispatch it."""
+
+        report = self.pipeline.run(
+            trades=trades,
+            report_date=report_date,
+        )
+
+        delivery_results = self.dispatcher.dispatch(report)
+
+        return {
+            "report": report,
+            "delivery_results": delivery_results,
+        }
+
+
+==================== daily_report_validator.py ====================
+
+from typing import Any
+
+
+class DailyReportValidator:
+    """Validate required fields in a daily report."""
+
+    REQUIRED_FIELDS = {
+        "date",
+        "total_trades",
+        "wins",
+        "losses",
+        "breakeven",
+        "win_rate_percent",
+        "total_pnl",
+    }
+
+    def validate(self, report: dict[str, Any]) -> bool:
+        """Return True if the report passes basic validation."""
+
+        if not isinstance(report, dict):
+            raise TypeError("Report must be a dictionary.")
+
+        missing_fields = self.REQUIRED_FIELDS - report.keys()
+
+        if missing_fields:
+            missing = ", ".join(sorted(missing_fields))
+            raise ValueError(f"Missing report fields: {missing}")
+
+        count_fields = (
+            "total_trades",
+            "wins",
+            "losses",
+            "breakeven",
+        )
+
+        for field in count_fields:
+            value = report[field]
+
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"{field} must be an integer.")
+
+            if value < 0:
+                raise ValueError(f"{field} cannot be negative.")
+
+        for field in ("win_rate_percent", "total_pnl"):
+            try:
+                float(report[field])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"{field} must be numeric."
+                ) from exc
+
+        return True
+
+
+==================== daily_summary.py ====================
+
+from typing import Any
+
+
+class DailySummary:
+    """Create a basic summary from closed trade records."""
+
+    def generate(
+        self,
+        trades: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if not isinstance(trades, list):
+            raise TypeError("Trades must be provided as a list.")
+
+        total_trades = len(trades)
+        wins = 0
+        losses = 0
+        breakeven = 0
+        total_pnl = 0.0
+
+        for trade in trades:
+            if not isinstance(trade, dict):
+                raise TypeError("Each trade must be a dictionary.")
+
+            result = str(trade.get("result", "")).strip().upper()
+
+            if result in {"WIN", "TARGET", "PROFIT"}:
+                wins += 1
+            elif result in {"LOSS", "SL", "STOP_LOSS"}:
+                losses += 1
+            elif result in {"BREAKEVEN", "BE"}:
+                breakeven += 1
+
+            pnl = trade.get("pnl", 0)
+
+            try:
+                total_pnl += float(pnl)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid P&L value in trade: {pnl!r}"
+                ) from exc
+
+        win_rate = (
+            (wins / total_trades) * 100
+            if total_trades > 0
+            else 0.0
+        )
+
+        return {
+            "total_trades": total_trades,
+            "wins": wins,
+            "losses": losses,
+            "breakeven": breakeven,
+            "win_rate_percent": round(win_rate, 2),
+            "total_pnl": round(total_pnl, 2),
+        }
+
+
+==================== daily_summary_storage.py ====================
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+class DailySummaryStorage:
+    """Save and load daily trading summaries as JSON."""
+
+    def __init__(
+        self,
+        file_path: str = "data/daily_summary.json",
+    ) -> None:
+        self.file_path = Path(file_path)
+
+    def save(self, summary: dict[str, Any]) -> None:
+        """Persist a daily summary."""
+
+        if not isinstance(summary, dict):
+            raise TypeError("Summary must be a dictionary.")
+
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = self.file_path.with_suffix(".tmp")
+
+        with temp_path.open("w", encoding="utf-8") as file:
+            json.dump(summary, file, indent=2, ensure_ascii=False)
+
+        temp_path.replace(self.file_path)
+
+    def load(self) -> dict[str, Any] | None:
+        """Load the saved summary, or return None if absent."""
+
+        if not self.file_path.exists():
+            return None
+
+        with self.file_path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            raise ValueError("Saved daily summary must be a JSON object.")
+
+        return data
+
+    def clear(self) -> None:
+        """Delete the saved summary file if it exists."""
+
+        if self.file_path.exists():
+            self.file_path.unlink()
+
+
+==================== daily_trade_filter.py ====================
+
+from datetime import date
+from typing import Any
+
+
+class DailyTradeFilter:
+    """Filter trade records by trade date."""
+
+    def filter_by_date(
+        self,
+        trades: list[dict[str, Any]],
+        target_date: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return trades matching the requested YYYY-MM-DD date."""
+
+        if not isinstance(trades, list):
+            raise TypeError("Trades must be provided as a list.")
+
+        day = target_date or date.today().isoformat()
+
+        try:
+            date.fromisoformat(day)
+        except ValueError as exc:
+            raise ValueError(
+                "target_date must use YYYY-MM-DD format."
+            ) from exc
+
+        filtered_trades = []
+
+        for trade in trades:
+            if not isinstance(trade, dict):
+                raise TypeError("Each trade must be a dictionary.")
+
+            trade_date = trade.get("date")
+
+            if trade_date == day:
+                filtered_trades.append(dict(trade))
+
+        return filtered_trades
+
+
+==================== daily_trade_summary.py ====================
+
+from typing import Any
+
+
+class DailyTradeSummary:
+    """Summarize trades for a single trading day."""
+
+    def generate(
+        self,
+        trades: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if not isinstance(trades, list):
+            raise TypeError("Trades must be provided as a list.")
+
+        wins = 0
+        losses = 0
+        breakeven = 0
+        total_pnl = 0.0
+
+        for trade in trades:
+            if not isinstance(trade, dict):
+                raise TypeError("Each trade must be a dictionary.")
+
+            result = str(trade.get("result", "")).strip().upper()
+
+            if result in {"WIN", "TARGET", "PROFIT"}:
+                wins += 1
+            elif result in {"LOSS", "SL", "STOP_LOSS"}:
+                losses += 1
+            elif result in {"BREAKEVEN", "BE"}:
+                breakeven += 1
+
+            try:
+                total_pnl += float(trade.get("pnl", 0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "Trade contains an invalid P&L value."
+                ) from exc
+
+        total_trades = len(trades)
+        win_rate = (
+            wins / total_trades * 100
+            if total_trades
+            else 0.0
+        )
+
+        return {
+            "total_trades": total_trades,
+            "wins": wins,
+            "losses": losses,
+            "breakeven": breakeven,
+            "win_rate_percent": round(win_rate, 2),
+            "total_pnl": round(total_pnl, 2),
+        }
+
+
+==================== dashboard.py ====================
+
+from html import escape
+from pathlib import Path
+from typing import Any
+
+
+def generate_dashboard(
+    data: dict[str, Any],
+    output_path: str = "dashboard/index.html",
+) -> str:
+    """Generate a basic HTML dashboard from supplied data."""
+
+    sensex_price = escape(str(data.get("sensex_price", "N/A")))
+    active_trade = escape(str(data.get("active_trade", "None")))
+    entry_score = escape(str(data.get("entry_score", "N/A")))
+    status = escape(str(data.get("status", "Starting")))
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensex Option Intraday Dashboard</title>
+</head>
+<body>
+    <h1>Sensex Option Intraday</h1>
+    <p>Status: {status}</p>
+    <p>Sensex Price: {sensex_price}</p>
+    <p>Active Trade: {active_trade}</p>
+    <p>Entry Score: {entry_score}</p>
+</body>
+</html>
+"""
+
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding="utf-8")
+
+    return str(path)
+
+
+==================== excel_report.py ====================
+
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+
+def save_trade_report(
+    trades: list[dict[str, Any]],
+    output_path: str = "reports/trade_report.xlsx",
+) -> str:
+    """Save trade records to an Excel report."""
+
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    dataframe = pd.DataFrame(trades)
+    dataframe.to_excel(path, index=False)
+
+    return str(path)
+
+
+==================== google_sheets_engine.py ====================
+
+import os
+
+import requests
+
+
+def append_google_sheet_row(
+    row: list[object],
+) -> dict[str, object]:
+    """Append one row to Google Sheets through a configured webhook."""
+
+    webhook_url = os.getenv("GOOGLE_SHEETS_WEBHOOK_URL")
+
+    if not webhook_url:
+        raise RuntimeError(
+            "GOOGLE_SHEETS_WEBHOOK_URL is missing."
+        )
+
+    if not row:
+        raise ValueError("row cannot be empty.")
+
+    response = requests.post(
+        webhook_url,
+        json={"values": row},
+        timeout=20,
+    )
+
+    response.raise_for_status()
+
+    return {
+        "status": "SENT",
+        "http_status": response.status_code,
+    }
+
+
+==================== telegram_engine.py ====================
+
+import os
+
+import requests
+
+
+def send_telegram_message(message: str) -> dict[str, object]:
+    """Send a text message using the Telegram Bot API."""
+
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+    if not bot_token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is missing.")
+
+    if not chat_id:
+        raise RuntimeError("TELEGRAM_CHAT_ID is missing.")
+
+    if not message.strip():
+        raise ValueError("Telegram message cannot be empty.")
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+    response = requests.post(
+        url,
+        json={
+            "chat_id": chat_id,
+            "text": message,
+        },
+        timeout=15,
+    )
+
+    response.raise_for_status()
+    result = response.json()
+
+    if not result.get("ok"):
+        raise RuntimeError("Telegram API did not confirm message delivery.")
+
+    return {
+        "status": "SENT",
+        "message_id": result["result"]["message_id"],
+    }
+
+
+==================== trade_pnl_calculator.py ====================
+
+from typing import Any
+
+
+class TradePnLCalculator:
+    """Calculate unrealized P&L for a trade."""
+
+    def calculate(
+        self,
+        trade: dict[str, Any],
+        ltp: float,
+    ) -> dict[str, float]:
+        if not isinstance(trade, dict):
+            raise TypeError("Trade must be a dictionary.")
+
+        try:
+            entry_price = float(trade["entry_price"])
+            quantity = int(trade["quantity"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(
+                "Trade must contain valid entry_price and quantity."
+            ) from exc
+
+        if entry_price <= 0 or ltp <= 0:
+            raise ValueError("Prices must be greater than zero.")
+
+        if quantity <= 0:
+            raise ValueError("Quantity must be greater than zero.")
+
+        direction = str(
+            trade.get("direction", "BUY")
+        ).strip().upper()
+
+        if direction == "BUY":
+            pnl = (ltp - entry_price) * quantity
+        elif direction == "SELL":
+            pnl = (entry_price - ltp) * quantity
+        else:
+            raise ValueError("Direction must be BUY or SELL.")
+
+        return {
+            "entry_price": entry_price,
+            "ltp": float(ltp),
+            "quantity": quantity,
+            "unrealized_pnl": round(pnl, 2),
+        }

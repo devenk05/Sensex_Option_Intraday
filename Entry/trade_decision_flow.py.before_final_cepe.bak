@@ -1,0 +1,411 @@
+from __future__ import annotations
+
+from typing import Any
+
+from atm_ce_pe_relative_strength_engine import (
+    ATMCEPERelativeStrengthEngine,
+)
+
+
+def _normalise(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def derive_market_bias(
+    multi_timeframe: dict[str, Any],
+    candle_structure: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    direction_15m = _normalise(
+        multi_timeframe.get("direction_15m")
+    )
+    direction_5m = _normalise(
+        multi_timeframe.get("direction_5m")
+    )
+    alignment = _normalise(
+        multi_timeframe.get("alignment")
+    )
+    structure = _normalise(
+        (candle_structure or {}).get("structure")
+    )
+
+    if (
+        alignment == "ALIGNED"
+        and direction_15m in {"BULLISH", "BEARISH"}
+    ):
+        bias = direction_15m
+        reason = "15M_AND_5M_ALIGNED"
+    elif structure in {"BULLISH", "BEARISH"}:
+        bias = structure
+        reason = "STRUCTURE_FALLBACK"
+    else:
+        bias = "NEUTRAL"
+        reason = "TIMEFRAME_NOT_CONFIRMED"
+
+    return {
+        "stage": "MARKET_BIAS",
+        "status": (
+            "CONFIRMED"
+            if bias in {"BULLISH", "BEARISH"}
+            else "NOT_CONFIRMED"
+        ),
+        "bias": bias,
+        "reason": reason,
+        "direction_15m": direction_15m,
+        "direction_5m": direction_5m,
+        "alignment": alignment,
+        "structure": structure,
+    }
+
+
+def check_pivot_points(
+    market_bias: str,
+    spot: float | None,
+    pivot_analysis: dict[str, Any] | None,
+) -> dict[str, Any]:
+    bias = _normalise(market_bias)
+
+    if (
+        spot is None
+        or not pivot_analysis
+        or pivot_analysis.get("pivot") is None
+    ):
+        return {
+            "stage": "PIVOT_POINTS",
+            "status": "NOT_CONFIRMED",
+            "signal": "NO_DATA",
+            "reason": "PIVOT_OR_SPOT_UNAVAILABLE",
+        }
+
+    spot_price = float(spot)
+    pivot = float(pivot_analysis["pivot"])
+
+    if bias == "BULLISH":
+        confirmed = spot_price > pivot
+        signal = (
+            "ABOVE_PIVOT"
+            if confirmed
+            else "BELOW_PIVOT"
+        )
+    elif bias == "BEARISH":
+        confirmed = spot_price < pivot
+        signal = (
+            "BELOW_PIVOT"
+            if confirmed
+            else "ABOVE_PIVOT"
+        )
+    else:
+        confirmed = False
+        signal = "AT_OR_UNCLEAR"
+
+    return {
+        "stage": "PIVOT_POINTS",
+        "status": (
+            "CONFIRMED"
+            if confirmed
+            else "NOT_CONFIRMED"
+        ),
+        "signal": signal,
+        "spot": round(spot_price, 2),
+        "pivot": round(pivot, 2),
+        "distance_from_pivot": round(
+            spot_price - pivot,
+            2,
+        ),
+        "reason": (
+            "BIAS_DIRECTIONAL_PIVOT_ALIGNMENT"
+            if confirmed
+            else "PIVOT_NOT_ALIGNED"
+        ),
+    }
+
+
+def check_price_action(
+    market_bias: str,
+    price_action: dict[str, Any] | None,
+) -> dict[str, Any]:
+    bias = _normalise(market_bias)
+    signal = _normalise(
+        (price_action or {}).get("signal")
+    )
+
+    if not signal:
+        return {
+            "stage": "PRICE_ACTION",
+            "status": "NOT_CONFIRMED",
+            "signal": "NO_DATA",
+            "reason": "PRICE_ACTION_UNAVAILABLE",
+        }
+
+    confirmed = (
+        (
+            bias == "BULLISH"
+            and signal.startswith("BULLISH")
+        )
+        or (
+            bias == "BEARISH"
+            and signal.startswith("BEARISH")
+        )
+    )
+
+    return {
+        "stage": "PRICE_ACTION",
+        "status": (
+            "CONFIRMED"
+            if confirmed
+            else "NOT_CONFIRMED"
+        ),
+        "signal": signal,
+        "latest_close": (
+            price_action or {}
+        ).get("latest_close"),
+        "reason": (
+            "PRICE_ACTION_ALIGNED"
+            if confirmed
+            else "PRICE_ACTION_NOT_ALIGNED"
+        ),
+    }
+
+
+def compare_ce_pe(
+    market_bias: str,
+    pivot_analysis: dict[str, Any] | None,
+    price_action: dict[str, Any] | None,
+    volume_analysis: dict[str, Any] | None,
+    oi_summary: dict[str, Any] | None,
+    ce: dict[str, Any] | None,
+    pe: dict[str, Any] | None,
+    spot: float | None = None,
+) -> dict[str, Any]:
+    """Delegate the single CE/PE comparison to the dedicated engine."""
+
+    engine = ATMCEPERelativeStrengthEngine()
+
+    return engine.analyze(
+        market_bias=market_bias,
+        spot=spot,
+        pivot=pivot_analysis,
+        price_action=price_action,
+        volume=volume_analysis,
+        oi=oi_summary,
+        ce=ce,
+        pe=pe,
+    )
+
+
+def check_optional_chart_pattern(
+    market_bias: str,
+    chart_pattern: dict[str, Any] | None,
+) -> dict[str, Any]:
+    bias = _normalise(market_bias)
+    chart_pattern = chart_pattern or {}
+    patterns = chart_pattern.get("patterns") or []
+
+    cleaned = [
+        _normalise(item)
+        for item in patterns
+    ]
+
+    usable = [
+        item
+        for item in cleaned
+        if item and item != "NO_PATTERN"
+    ]
+
+    if not usable:
+        return {
+            "stage": "CHART_PATTERN",
+            "status": "SKIPPED_OPTIONAL",
+            "patterns": ["NO_PATTERN"],
+            "supports_bias": None,
+        }
+
+    bullish = any(
+        "BULLISH" in item
+        or "HAMMER" in item
+        for item in usable
+    )
+    bearish = any(
+        "BEARISH" in item
+        or "SHOOTING_STAR" in item
+        for item in usable
+    )
+
+    supports_bias = (
+        (
+            bias == "BULLISH"
+            and bullish
+        )
+        or (
+            bias == "BEARISH"
+            and bearish
+        )
+    )
+
+    return {
+        "stage": "CHART_PATTERN",
+        "status": (
+            "SUPPORTIVE"
+            if supports_bias
+            else "NOT_SUPPORTIVE"
+        ),
+        "patterns": usable,
+        "supports_bias": supports_bias,
+    }
+
+
+def run_locked_decision_flow(
+    *,
+    multi_timeframe: dict[str, Any],
+    candle_structure: dict[str, Any] | None,
+    spot: float | None,
+    pivot_analysis: dict[str, Any] | None,
+    price_action: dict[str, Any] | None,
+    volume_analysis: dict[str, Any] | None,
+    oi_summary: dict[str, Any] | None,
+    ce: dict[str, Any] | None,
+    pe: dict[str, Any] | None,
+    chart_pattern: dict[str, Any] | None = None,
+    entry_score: float | None = None,
+    min_entry_score: float = 80.0,
+) -> dict[str, Any]:
+
+    stages: list[dict[str, Any]] = []
+
+    # 1. MARKET BIAS
+    market_bias = derive_market_bias(
+        multi_timeframe,
+        candle_structure,
+    )
+    stages.append(market_bias)
+
+    if market_bias["status"] != "CONFIRMED":
+        return _no_trade(
+            stages,
+            "MARKET_BIAS_NOT_CONFIRMED",
+        )
+
+    # 2. PIVOT POINTS
+    pivot = check_pivot_points(
+        market_bias["bias"],
+        spot,
+        pivot_analysis,
+    )
+    stages.append(pivot)
+
+    if pivot["status"] != "CONFIRMED":
+        return _no_trade(
+            stages,
+            "PIVOT_NOT_CONFIRMED",
+        )
+
+    # 3. PRICE ACTION
+    action = check_price_action(
+        market_bias["bias"],
+        price_action,
+    )
+    stages.append(action)
+
+    if action["status"] != "CONFIRMED":
+        return _no_trade(
+            stages,
+            "PRICE_ACTION_NOT_CONFIRMED",
+        )
+
+    # 4. ATM CE/PE RELATIVE STRENGTH ENGINE
+    # Volume + OI are evaluated ONLY inside this stage.
+    ce_pe = compare_ce_pe(
+        market_bias=market_bias["bias"],
+        pivot_analysis=pivot_analysis,
+        price_action=price_action,
+        volume_analysis=volume_analysis,
+        oi_summary=oi_summary,
+        ce=ce,
+        pe=pe,
+        spot=spot,
+    )
+    stages.append(ce_pe)
+
+    if ce_pe["status"] != "CONFIRMED":
+        return _no_trade(
+            stages,
+            ce_pe["reason"],
+            direction=ce_pe.get("final_direction"),
+        )
+
+    # 5. CHART PATTERN (OPTIONAL)
+    pattern = check_optional_chart_pattern(
+        market_bias["bias"],
+        chart_pattern,
+    )
+    stages.append(pattern)
+
+    direction = ce_pe["final_direction"]
+
+    # 6. FINAL DECISION / SCORE GATE
+    if entry_score is None:
+        return {
+            "status": "READY_FOR_FINAL_SCORE",
+            "action": None,
+            "direction": direction,
+            "reason": "LOCKED_FLOW_PASSED_SCORE_PENDING",
+            "entry_score": None,
+            "stages": stages,
+            "flow_order": [
+                "MARKET_BIAS",
+                "PIVOT_POINTS",
+                "PRICE_ACTION",
+                "ATM_CE_PE_RELATIVE_STRENGTH",
+                "CHART_PATTERN_OPTIONAL",
+                "FINAL_DECISION",
+            ],
+        }
+
+    if float(entry_score) < float(min_entry_score):
+        return _no_trade(
+            stages,
+            "ENTRY_SCORE_BELOW_THRESHOLD",
+            direction=direction,
+            entry_score=float(entry_score),
+        )
+
+    return {
+        "status": "TRADE_CANDIDATE",
+        "action": f"BUY_{direction}",
+        "direction": direction,
+        "reason": "LOCKED_FLOW_AND_SCORE_PASSED",
+        "entry_score": float(entry_score),
+        "stages": stages,
+        "flow_order": [
+            "MARKET_BIAS",
+            "PIVOT_POINTS",
+            "PRICE_ACTION",
+            "ATM_CE_PE_RELATIVE_STRENGTH",
+            "CHART_PATTERN_OPTIONAL",
+            "FINAL_DECISION",
+        ],
+    }
+
+
+def _no_trade(
+    stages: list[dict[str, Any]],
+    reason: str,
+    *,
+    direction: str | None = None,
+    entry_score: float | None = None,
+) -> dict[str, Any]:
+    return {
+        "status": "NO_TRADE",
+        "action": None,
+        "direction": direction,
+        "reason": reason,
+        "entry_score": entry_score,
+        "stages": stages,
+        "flow_order": [
+            "MARKET_BIAS",
+            "PIVOT_POINTS",
+            "PRICE_ACTION",
+            "ATM_CE_PE_RELATIVE_STRENGTH",
+            "CHART_PATTERN_OPTIONAL",
+            "FINAL_DECISION",
+        ],
+    }

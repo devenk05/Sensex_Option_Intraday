@@ -1,0 +1,432 @@
+from __future__ import annotations
+from typing import Any, Dict, Optional
+
+
+class ATMCEPERelativeStrengthEngine:
+    """
+    Single CE/PE comparison stage for DK SENSEX AI PRO.
+
+    Existing results are read only:
+        MARKET BIAS -> PIVOT -> PRICE ACTION
+
+    This stage combines:
+        VOLUME + OI + CE PREMIUM MOVEMENT + PE PREMIUM MOVEMENT
+
+    Output:
+        CE / PE / NEUTRAL
+
+    No Pivot/Price Action recalculation.
+    No separate Volume/OI decision stage.
+    No SL/Target/Entry Buffer/RiskManager/order placement.
+    """
+
+    VERSION = "2.1"
+
+    def __init__(self) -> None:
+        self.name = "ATM_CE_PE_RELATIVE_STRENGTH_ENGINE"
+        self.version = self.VERSION
+
+    def analyze(
+        self,
+        *,
+        market_bias: str,
+        spot: Optional[float],
+        pivot: Optional[Dict[str, Any]],
+        price_action: Optional[Dict[str, Any]],
+        volume: Optional[Dict[str, Any]],
+        oi: Optional[Dict[str, Any]],
+        ce: Optional[Dict[str, Any]],
+        pe: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+
+        bias = self._normalise(market_bias)
+        pivot = pivot or {}
+        price_action = price_action or {}
+        volume = volume or {}
+        oi = oi or {}
+        ce = ce or {}
+        pe = pe or {}
+
+        pivot_direction = self._pivot_direction(
+            bias=bias, spot=spot, pivot=pivot
+        )
+
+        price_action_direction = self._price_action_direction(
+            price_action
+        )
+
+        volume_state = self._volume_state(volume)
+        oi_context = self._oi_context(oi)
+        oi_support = self._oi_support(
+            bias=bias,
+            oi_context=oi_context,
+        )
+
+        ce_move = self._premium_movement(ce)
+        pe_move = self._premium_movement(pe)
+
+        relative_strength = self._relative_strength(
+            ce_move["change_pct"],
+            pe_move["change_pct"],
+        )
+
+        expected_direction = (
+            "CE" if bias == "BULLISH"
+            else "PE" if bias == "BEARISH"
+            else "NEUTRAL"
+        )
+
+        context_confirmed = (
+            expected_direction in {"CE", "PE"}
+            and pivot_direction == expected_direction
+            and price_action_direction == expected_direction
+            and volume_state == "ACTIVE"
+            and oi_support in {"SUPPORTIVE", "BALANCED"}
+        )
+
+        # Market bias is the PRIMARY direction.
+        # Premium relative strength is a SUPPORTING signal.
+        #
+        # Important:
+        # When both CE and PE premiums are falling, the less-negative
+        # premium must NOT automatically reverse the market direction.
+        # This avoids the 25-Sep case where:
+        #   Market = BULLISH
+        #   CE = -14.04%
+        #   PE = -8.70%
+        # and PE was incorrectly treated as the candidate direction.
+        #
+        # Premium is considered supportive when:
+        #   1) relative strength agrees with market direction, OR
+        #   2) both premiums are falling (premium decay / broad weakness).
+        both_premiums_falling = (
+            ce_move["change_pct"] is not None
+            and pe_move["change_pct"] is not None
+            and ce_move["change_pct"] < 0
+            and pe_move["change_pct"] < 0
+        )
+
+        premium_confirmed = (
+            relative_strength == expected_direction
+            or both_premiums_falling
+        )
+
+        if context_confirmed and premium_confirmed:
+            final_direction = expected_direction
+            status = "CONFIRMED"
+            reason = (
+                "PIVOT_PA_VOLUME_OI_AND_PREMIUM_ALIGNED"
+                if relative_strength == expected_direction
+                else "PIVOT_PA_VOLUME_OI_ALIGNED_PREMIUM_DECAY_NEUTRAL"
+            )
+        else:
+            final_direction = "NEUTRAL"
+            status = "NOT_CONFIRMED"
+            reason = self._reason(
+                expected_direction=expected_direction,
+                pivot_direction=pivot_direction,
+                price_action_direction=price_action_direction,
+                volume_state=volume_state,
+                oi_support=oi_support,
+                relative_strength=relative_strength,
+            )
+
+        return {
+            "stage": "CE_PE_COMPARISON",
+            "engine": self.name,
+            "version": self.version,
+            "status": status,
+
+            "market_bias": bias,
+            "pivot_direction": pivot_direction,
+            "price_action_direction": price_action_direction,
+            "volume_state": volume_state,
+            "oi_context": oi_context,
+            "oi_support": oi_support,
+
+            "ce_symbol": ce.get("tradingsymbol"),
+            "ce_ltp": ce_move["current"],
+            "ce_previous_premium": ce_move["previous"],
+            "ce_premium_change": ce_move["change"],
+            "ce_premium_change_pct": ce_move["change_pct"],
+
+            "pe_symbol": pe.get("tradingsymbol"),
+            "pe_ltp": pe_move["current"],
+            "pe_previous_premium": pe_move["previous"],
+            "pe_premium_change": pe_move["change"],
+            "pe_premium_change_pct": pe_move["change_pct"],
+
+            "relative_strength": relative_strength,
+            "premium_spread_pct": (
+                round(
+                    ce_move["change_pct"] - pe_move["change_pct"],
+                    3,
+                )
+                if (
+                    ce_move["change_pct"] is not None
+                    and pe_move["change_pct"] is not None
+                )
+                else None
+            ),
+
+            "context_confirmed": context_confirmed,
+            "premium_confirmed": premium_confirmed,
+            "final_direction": final_direction,
+            "reason": reason,
+            "confidence": self._confidence(
+                context_confirmed=context_confirmed,
+                premium_confirmed=premium_confirmed,
+                relative_strength=relative_strength,
+                ce_change_pct=ce_move["change_pct"],
+                pe_change_pct=pe_move["change_pct"],
+            ),
+        }
+
+    @staticmethod
+    def _normalise(value: Any) -> str:
+        return str(value or "").strip().upper()
+
+    @staticmethod
+    def _number(value: Any) -> Optional[float]:
+        try:
+            if value is None:
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _pivot_direction(
+        self,
+        *,
+        bias: str,
+        spot: Optional[float],
+        pivot: Dict[str, Any],
+    ) -> str:
+        pivot_value = self._number(pivot.get("pivot"))
+        spot_value = self._number(spot)
+
+        if pivot_value is None or spot_value is None:
+            return "UNKNOWN"
+
+        if bias == "BULLISH" and spot_value > pivot_value:
+            return "CE"
+
+        if bias == "BEARISH" and spot_value < pivot_value:
+            return "PE"
+
+        return "NONE"
+
+    def _price_action_direction(
+        self,
+        price_action: Dict[str, Any],
+    ) -> str:
+        signal = self._normalise(price_action.get("signal"))
+
+        if signal.startswith("BULLISH"):
+            return "CE"
+
+        if signal.startswith("BEARISH"):
+            return "PE"
+
+        return "UNKNOWN"
+
+    def _volume_state(
+        self,
+        volume: Dict[str, Any],
+    ) -> str:
+        ratio = self._number(
+            volume.get("volume_ratio")
+        )
+
+        if ratio is not None:
+            return "ACTIVE" if ratio >= 1.0 else "LOW"
+
+        if volume.get("confirmed") is True:
+            return "ACTIVE"
+
+        return "NO_DATA"
+
+    def _oi_context(
+        self,
+        oi: Dict[str, Any],
+    ) -> str:
+        call_oi = self._number(
+            oi.get("call_oi")
+        ) or 0.0
+        put_oi = self._number(
+            oi.get("put_oi")
+        ) or 0.0
+
+        if call_oi == put_oi:
+            return "BALANCED"
+
+        if put_oi > call_oi:
+            return "PE_OI_HEAVY"
+
+        return "CE_OI_HEAVY"
+
+    def _oi_support(
+        self,
+        *,
+        bias: str,
+        oi_context: str,
+    ) -> str:
+        if oi_context == "BALANCED":
+            return "BALANCED"
+
+        if (
+            bias == "BULLISH"
+            and oi_context == "PE_OI_HEAVY"
+        ):
+            return "SUPPORTIVE"
+
+        if (
+            bias == "BEARISH"
+            and oi_context == "CE_OI_HEAVY"
+        ):
+            return "SUPPORTIVE"
+
+        return "CONTRADICTORY"
+
+    def _premium_movement(
+        self,
+        option: Dict[str, Any],
+    ) -> Dict[str, Optional[float]]:
+        current = self._number(
+            option.get("last_price")
+        )
+
+        previous = self._number(
+            option.get("previous_close")
+        )
+
+        if previous is None:
+            previous = self._number(
+                option.get("previous_premium")
+            )
+
+        if current is None or previous is None:
+            return {
+                "current": current,
+                "previous": previous,
+                "change": None,
+                "change_pct": None,
+            }
+
+        change = current - previous
+
+        if previous == 0:
+            change_pct = None
+        else:
+            change_pct = (
+                change / abs(previous)
+            ) * 100.0
+
+        return {
+            "current": round(current, 2),
+            "previous": round(previous, 2),
+            "change": round(change, 2),
+            "change_pct": round(change_pct, 3)
+            if change_pct is not None
+            else None,
+        }
+
+    def _relative_strength(
+        self,
+        ce_change_pct: Optional[float],
+        pe_change_pct: Optional[float],
+    ) -> str:
+        if (
+            ce_change_pct is None
+            or pe_change_pct is None
+        ):
+            return "UNKNOWN"
+
+        # Clear opposite movement.
+        if (
+            ce_change_pct > 0.10
+            and pe_change_pct < -0.10
+        ):
+            return "CE"
+
+        if (
+            pe_change_pct > 0.10
+            and ce_change_pct < -0.10
+        ):
+            return "PE"
+
+        # Both increasing: larger increase is relatively stronger.
+        if ce_change_pct > 0.10 and pe_change_pct > 0.10:
+            if ce_change_pct > pe_change_pct:
+                return "CE"
+            if pe_change_pct > ce_change_pct:
+                return "PE"
+            return "NEUTRAL"
+
+        # Both decreasing: smaller decline is relatively stronger,
+        # but final direction still requires market context.
+        if ce_change_pct < -0.10 and pe_change_pct < -0.10:
+            if abs(ce_change_pct) < abs(pe_change_pct):
+                return "CE_RELATIVE"
+            if abs(pe_change_pct) < abs(ce_change_pct):
+                return "PE_RELATIVE"
+            return "NEUTRAL"
+
+        return "NEUTRAL"
+
+    def _reason(
+        self,
+        *,
+        expected_direction: str,
+        pivot_direction: str,
+        price_action_direction: str,
+        volume_state: str,
+        oi_support: str,
+        relative_strength: str,
+    ) -> str:
+        if expected_direction == "NEUTRAL":
+            return "MARKET_BIAS_NOT_CONFIRMED"
+
+        if pivot_direction != expected_direction:
+            return "PIVOT_NOT_ALIGNED"
+
+        if price_action_direction != expected_direction:
+            return "PRICE_ACTION_NOT_ALIGNED"
+
+        if volume_state != "ACTIVE":
+            return "VOLUME_NOT_CONFIRMED"
+
+        if oi_support == "CONTRADICTORY":
+            return "OI_CONTEXT_CONTRADICTORY"
+
+        if relative_strength != expected_direction:
+            return "CE_PE_RELATIVE_STRENGTH_NOT_CONFIRMED"
+
+        return "CE_PE_COMPARISON_NOT_CONFIRMED"
+
+    def _confidence(
+        self,
+        *,
+        context_confirmed: bool,
+        premium_confirmed: bool,
+        relative_strength: str,
+        ce_change_pct: Optional[float],
+        pe_change_pct: Optional[float],
+    ) -> str:
+        if not (
+            context_confirmed
+            and premium_confirmed
+        ):
+            return "LOW"
+
+        if (
+            ce_change_pct is not None
+            and pe_change_pct is not None
+            and abs(
+                ce_change_pct - pe_change_pct
+            ) >= 5.0
+            and relative_strength in {"CE", "PE"}
+        ):
+            return "VERY HIGH"
+
+        return "HIGH"

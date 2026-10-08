@@ -1,0 +1,92 @@
+from typing import Any, Dict
+import time
+
+from trade_exit_alert_config import TradeExitAlertConfig
+from trade_exit_alert_logger import TradeExitAlertLogger
+from trade_exit_alert_sender import TradeExitAlertSender
+
+
+class TradeExitAlertService:
+    """Logs and sends trade exit alerts with configuration and retries."""
+
+    def __init__(
+        self,
+        send_message,
+        config: TradeExitAlertConfig | None = None,
+    ) -> None:
+        self.config = config or TradeExitAlertConfig()
+        self.logger = TradeExitAlertLogger()
+        self.sender = TradeExitAlertSender(send_message)
+
+    def process_exit_signal(
+        self,
+        signal: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Exit signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        if not self.config.enabled:
+            return {
+                "status": "DISABLED",
+                "reason": "Trade exit alert service is disabled.",
+            }
+
+        log_result = None
+
+        # Logging is independently configurable.
+        if self.config.log_enabled:
+            try:
+                log_result = self.logger.log_signal(signal)
+            except Exception as exc:
+                return {
+                    "status": "ERROR",
+                    "reason": f"Exit alert logging failed: {exc}",
+                }
+
+        # Telegram sending is independently configurable.
+        if not self.config.telegram_enabled:
+            return {
+                "status": "PROCESSED",
+                "reason": "Telegram sending disabled.",
+                "log_result": log_result,
+                "send_result": None,
+            }
+
+        # retry_count means number of retries AFTER the first attempt.
+        max_attempts = int(self.config.retry_count) + 1
+        last_error = None
+
+        for attempt in range(1, max_attempts + 1):
+            result = self.sender.send_exit_alert(signal)
+
+            if result.get("status") == "SENT":
+                return {
+                    "status": "PROCESSED",
+                    "log_result": log_result,
+                    "send_result": result,
+                    "attempts": attempt,
+                }
+
+            last_error = result.get(
+                "reason",
+                "Exit alert sending failed.",
+            )
+
+            if attempt < max_attempts and self.config.retry_delay_seconds > 0:
+                time.sleep(float(self.config.retry_delay_seconds))
+
+        return {
+            "status": "ERROR",
+            "reason": last_error or "Exit alert sending failed.",
+            "log_result": log_result,
+            "attempts": max_attempts,
+        }

@@ -1,0 +1,756 @@
+from __future__ import annotations
+
+from typing import Any
+
+from atm_ce_pe_relative_strength_engine import (
+    ATMCEPERelativeStrengthEngine,
+)
+
+
+def _normalise(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def _premium_change_percent(option_data: dict[str, Any] | None) -> float | None:
+    """Return the existing option premium change percentage.
+
+    option_data_pull.py provides this value as ``premium_change_percent``.
+    """
+    data = option_data or {}
+
+    value = data.get("premium_change_percent")
+
+    if value is None:
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _num(value: Any) -> float | None:
+    if value is None:
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _option_volume(
+    option_data: dict[str, Any] | None,
+) -> float | None:
+    data = option_data or {}
+    return _num(data.get("volume"))
+
+
+def derive_market_bias(
+    multi_timeframe: dict[str, Any],
+    candle_structure: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    direction_15m = _normalise(
+        multi_timeframe.get("direction_15m")
+    )
+    direction_5m = _normalise(
+        multi_timeframe.get("direction_5m")
+    )
+    alignment = _normalise(
+        multi_timeframe.get("alignment")
+    )
+    structure = _normalise(
+        (candle_structure or {}).get("structure")
+    )
+
+    if (
+        alignment == "ALIGNED"
+        and direction_15m in {"BULLISH", "BEARISH"}
+    ):
+        bias = direction_15m
+        reason = "15M_AND_5M_ALIGNED"
+    elif structure in {"BULLISH", "BEARISH"}:
+        bias = structure
+        reason = "STRUCTURE_FALLBACK"
+    else:
+        bias = "NEUTRAL"
+        reason = "TIMEFRAME_NOT_CONFIRMED"
+
+    return {
+        "stage": "MARKET_BIAS",
+        "status": (
+            "CONFIRMED"
+            if bias in {"BULLISH", "BEARISH"}
+            else "NOT_CONFIRMED"
+        ),
+        "bias": bias,
+        "reason": reason,
+        "direction_15m": direction_15m,
+        "direction_5m": direction_5m,
+        "alignment": alignment,
+        "structure": structure,
+    }
+
+
+
+def check_reversal_continuation(
+    market_bias: str,
+    spot: float | None,
+    location: dict[str, Any] | None,
+    price_action: dict[str, Any] | None,
+    cepe: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Validate reversal/continuation using existing decision-flow inputs."""
+
+    bias = _normalise(market_bias)
+
+    if bias not in {"BULLISH", "BEARISH"}:
+        return {
+            "stage": "REVERSAL_CONTINUATION",
+            "status": "NOT_CONFIRMED",
+            "signal": "UNKNOWN",
+            "reason": "MARKET_BIAS_NOT_CONFIRMED",
+        }
+
+    if not location or location.get("status") != "CONFIRMED":
+        return {
+            "stage": "REVERSAL_CONTINUATION",
+            "status": "NOT_CONFIRMED",
+            "signal": "UNKNOWN",
+            "reason": "PIVOT_LOCATION_NOT_CONFIRMED",
+        }
+
+    if not price_action:
+        return {
+            "stage": "REVERSAL_CONTINUATION",
+            "status": "NOT_CONFIRMED",
+            "signal": "UNKNOWN",
+            "reason": "PRICE_ACTION_UNAVAILABLE",
+        }
+
+    direction = (
+        cepe.get("direction")
+        if isinstance(cepe, dict)
+        else None
+    )
+
+    if direction and _normalise(direction) != bias:
+        return {
+            "stage": "REVERSAL_CONTINUATION",
+            "status": "NOT_CONFIRMED",
+            "signal": "DIRECTION_CONFLICT",
+            "reason": "CE_PE_DIRECTION_CONFLICTS_WITH_MARKET_BIAS",
+        }
+
+    return {
+        "stage": "REVERSAL_CONTINUATION",
+        "status": "CONFIRMED",
+        "signal": f"{bias}_CONTINUATION",
+        "spot": spot,
+        "reason": "MARKET_BIAS_PIVOT_PRICE_ACTION_AND_CE_PE_ALIGNED",
+    }
+def check_pivot_points(
+    market_bias: str,
+    spot: float | None,
+    pivot_analysis: dict[str, Any] | None,
+) -> dict[str, Any]:
+    bias = _normalise(market_bias)
+
+    if (
+        spot is None
+        or not pivot_analysis
+        or pivot_analysis.get("pivot") is None
+    ):
+        return {
+            "stage": "PIVOT_POINTS",
+            "status": "NOT_CONFIRMED",
+            "signal": "NO_DATA",
+            "reason": "PIVOT_OR_SPOT_UNAVAILABLE",
+        }
+
+    spot_price = float(spot)
+    pivot = float(pivot_analysis["pivot"])
+
+    if bias == "BULLISH":
+        confirmed = spot_price > pivot
+        signal = (
+            "ABOVE_PIVOT"
+            if confirmed
+            else "BELOW_PIVOT"
+        )
+    elif bias == "BEARISH":
+        confirmed = spot_price < pivot
+        signal = (
+            "BELOW_PIVOT"
+            if confirmed
+            else "ABOVE_PIVOT"
+        )
+    else:
+        confirmed = False
+        signal = "AT_OR_UNCLEAR"
+
+    return {
+        "stage": "PIVOT_POINTS",
+        "status": (
+            "CONFIRMED"
+            if confirmed
+            else "NOT_CONFIRMED"
+        ),
+        "signal": signal,
+        "spot": round(spot_price, 2),
+        "pivot": round(pivot, 2),
+        "distance_from_pivot": round(
+            spot_price - pivot,
+            2,
+        ),
+        "reason": (
+            "BIAS_DIRECTIONAL_PIVOT_ALIGNMENT"
+            if confirmed
+            else "PIVOT_NOT_ALIGNED"
+        ),
+    }
+
+
+def check_price_action(
+    market_bias: str,
+    price_action: dict[str, Any] | None,
+) -> dict[str, Any]:
+    bias = _normalise(market_bias)
+    signal = _normalise(
+        (price_action or {}).get("signal")
+    )
+
+    if not signal:
+        return {
+            "stage": "PRICE_ACTION",
+            "status": "NOT_CONFIRMED",
+            "signal": "NO_DATA",
+            "reason": "PRICE_ACTION_UNAVAILABLE",
+        }
+
+    confirmed = (
+        (
+            bias == "BULLISH"
+            and signal.startswith("BULLISH")
+        )
+        or (
+            bias == "BEARISH"
+            and signal.startswith("BEARISH")
+        )
+    )
+
+    return {
+        "stage": "PRICE_ACTION",
+        "status": (
+            "CONFIRMED"
+            if confirmed
+            else "NOT_CONFIRMED"
+        ),
+        "signal": signal,
+        "latest_close": (
+            price_action or {}
+        ).get("latest_close"),
+        "reason": (
+            "PRICE_ACTION_ALIGNED"
+            if confirmed
+            else "PRICE_ACTION_NOT_ALIGNED"
+        ),
+    }
+
+
+def compare_ce_pe(
+    market_bias: str,
+    pivot_analysis: dict[str, Any] | None,
+    price_action: dict[str, Any] | None,
+    volume_analysis: dict[str, Any] | None,
+    oi_summary: dict[str, Any] | None,
+    ce: dict[str, Any] | None,
+    pe: dict[str, Any] | None,
+) -> dict[str, Any]:
+
+    bias = _normalise(market_bias)
+
+    ce = ce or {}
+    pe = pe or {}
+    oi = oi_summary or {}
+    volume = volume_analysis or {}
+
+    ce_change = _premium_change_percent(ce)
+    pe_change = _premium_change_percent(pe)
+
+    # Market bias is PRIMARY.
+    # CE/PE premium relative strength is SUPPORTING only.
+    if bias == "BULLISH":
+        candidate_direction = "CE"
+    elif bias == "BEARISH":
+        candidate_direction = "PE"
+    else:
+        candidate_direction = None
+
+    premium_confirmation = False
+
+    if ce_change is None or pe_change is None:
+        relative_strength = "UNAVAILABLE"
+    else:
+        spread = ce_change - pe_change
+
+        if abs(spread) < 0.10:
+            relative_strength = "BALANCED"
+        elif spread > 0:
+            relative_strength = "CE_STRONGER"
+        else:
+            relative_strength = "PE_STRONGER"
+
+        # Premium confirms the market direction only when aligned.
+        # If both premiums are falling, treat it as broad premium decay
+        # and do not reverse or block the market-bias direction.
+        both_premiums_falling = (
+            ce_change < 0
+            and pe_change < 0
+        )
+
+        premium_confirmation = (
+            (
+                candidate_direction == "CE"
+                and relative_strength == "CE_STRONGER"
+            )
+            or
+            (
+                candidate_direction == "PE"
+                and relative_strength == "PE_STRONGER"
+            )
+            or
+            both_premiums_falling
+        )
+
+    ce_volume = _option_volume(ce)
+    pe_volume = _option_volume(pe)
+    index_volume_ratio = _num(volume.get("volume_ratio"))
+
+    volume_basis = "NO_VOLUME_DATA"
+    volume_active = False
+    candidate_volume = None
+
+    if ce_volume is not None and pe_volume is not None:
+        volume_basis = "ATM_OPTION_VOLUME"
+
+        if candidate_direction == "CE":
+            candidate_volume = ce_volume
+        elif candidate_direction == "PE":
+            candidate_volume = pe_volume
+
+        volume_active = (
+            candidate_volume is not None
+            and candidate_volume > 0
+        )
+
+    elif index_volume_ratio is not None:
+        volume_basis = "INDEX_VOLUME"
+        volume_active = index_volume_ratio >= 1.0
+
+    call_oi = _num(oi.get("call_oi")) or 0.0
+    put_oi = _num(oi.get("put_oi")) or 0.0
+
+    if put_oi > call_oi:
+        oi_context = "PE_OI_HEAVY"
+    elif call_oi > put_oi:
+        oi_context = "CE_OI_HEAVY"
+    else:
+        oi_context = "BALANCED"
+
+    if candidate_direction == "CE":
+        oi_supportive = put_oi >= call_oi
+    elif candidate_direction == "PE":
+        oi_supportive = call_oi >= put_oi
+    else:
+        oi_supportive = False
+
+    oi_contradictory = (
+        candidate_direction in {"CE", "PE"}
+        and not oi_supportive
+    )
+
+    pa_signal = _normalise(
+        (price_action or {}).get("signal")
+    )
+
+    pa_confirmed = (
+        (
+            candidate_direction == "CE"
+            and pa_signal.startswith("BULLISH")
+        )
+        or
+        (
+            candidate_direction == "PE"
+            and pa_signal.startswith("BEARISH")
+        )
+    )
+
+    market_context_conflict = (
+        candidate_direction in {"CE", "PE"}
+        and bias in {"BULLISH", "BEARISH"}
+        and (
+            (
+                candidate_direction == "CE"
+                and bias == "BEARISH"
+            )
+            or
+            (
+                candidate_direction == "PE"
+                and bias == "BULLISH"
+            )
+        )
+    )
+
+    # Market bias is PRIMARY.
+    # Premium relative strength is SUPPORTING only and must not
+    # block the market-bias direction when premium moves disagree.
+    confirmed = bool(
+        candidate_direction
+        and volume_active
+        and pa_confirmed
+    )
+
+    if candidate_direction is None:
+        if relative_strength == "BALANCED":
+            reason = "CE_PE_PREMIUM_RELATIVE_STRENGTH_BALANCED"
+        else:
+            reason = "CE_PE_PREMIUM_DATA_UNAVAILABLE"
+    elif not volume_active:
+        reason = "CANDIDATE_OPTION_VOLUME_NOT_ACTIVE"
+    elif not pa_confirmed:
+        reason = "PRICE_ACTION_NOT_CONFIRMED_FOR_SELECTED_SIDE"
+    elif oi_contradictory:
+        reason = "CE_PE_CONFIRMED_OI_CONTRADICTION_CONTEXT_ONLY"
+    elif market_context_conflict:
+        reason = "CE_PE_CONFIRMED_MARKET_CONTEXT_CONFLICT"
+    elif (
+        candidate_direction in {"CE", "PE"}
+        and premium_confirmation
+    ):
+        reason = "CE_PE_COMPARISON_CONFIRMED_PREMIUM_SUPPORTIVE"
+    elif candidate_direction in {"CE", "PE"}:
+        reason = "MARKET_BIAS_PRIMARY_PREMIUM_NON_SUPPORTIVE"
+    else:
+        reason = "CE_PE_COMPARISON_CONFIRMED"
+
+    return {
+        "stage": "CE_PE_COMPARISON",
+        "status": "CONFIRMED" if confirmed else "NOT_CONFIRMED",
+        "direction": candidate_direction if confirmed else None,
+        "candidate_direction": candidate_direction,
+        "reason": reason,
+
+        "price_action_signal": pa_signal,
+        "price_action_confirmed": pa_confirmed,
+
+        "index_volume_ratio": (
+            round(index_volume_ratio, 3)
+            if index_volume_ratio is not None
+            else None
+        ),
+
+        "candidate_option_volume": candidate_volume,
+        "volume_state": "ACTIVE" if volume_active else "NO_DATA",
+        "volume_active": volume_active,
+        "volume_basis": volume_basis,
+
+        "call_oi": call_oi,
+        "put_oi": put_oi,
+        "oi_context": oi_context,
+        "oi_supportive": oi_supportive,
+        "oi_contradictory": oi_contradictory,
+
+        "ce_symbol": ce.get("tradingsymbol"),
+        "pe_symbol": pe.get("tradingsymbol"),
+
+        "ce_ltp": ce.get("last_price"),
+        "pe_ltp": pe.get("last_price"),
+
+        "ce_premium_change_percent": (
+            round(ce_change, 3)
+            if ce_change is not None
+            else None
+        ),
+
+        "pe_premium_change_percent": (
+            round(pe_change, 3)
+            if pe_change is not None
+            else None
+        ),
+
+        "premium_spread_percent": (
+            round(ce_change - pe_change, 3)
+            if ce_change is not None
+            and pe_change is not None
+            else None
+        ),
+
+        "relative_strength": relative_strength,
+        "premium_confirmed": premium_confirmation,
+        "premium_confirmation": premium_confirmation,
+
+        "market_context_conflict": market_context_conflict,
+        "pivot_is_context_only": True,
+    }
+
+
+def check_optional_chart_pattern(
+    market_bias: str,
+    chart_pattern: dict[str, Any] | None,
+) -> dict[str, Any]:
+    bias = _normalise(market_bias)
+    chart_pattern = chart_pattern or {}
+    patterns = chart_pattern.get("patterns") or []
+
+    cleaned = [
+        _normalise(item)
+        for item in patterns
+    ]
+
+    usable = [
+        item
+        for item in cleaned
+        if item and item != "NO_PATTERN"
+    ]
+
+    if not usable:
+        return {
+            "stage": "CHART_PATTERN",
+            "status": "SKIPPED_OPTIONAL",
+            "patterns": ["NO_PATTERN"],
+            "supports_bias": None,
+        }
+
+    bullish = any(
+        "BULLISH" in item
+        or "HAMMER" in item
+        for item in usable
+    )
+    bearish = any(
+        "BEARISH" in item
+        or "SHOOTING_STAR" in item
+        for item in usable
+    )
+
+    supports_bias = (
+        (
+            bias == "BULLISH"
+            and bullish
+        )
+        or (
+            bias == "BEARISH"
+            and bearish
+        )
+    )
+
+    return {
+        "stage": "CHART_PATTERN",
+        "status": (
+            "SUPPORTIVE"
+            if supports_bias
+            else "NOT_SUPPORTIVE"
+        ),
+        "patterns": usable,
+        "supports_bias": supports_bias,
+    }
+
+
+def run_locked_decision_flow(
+    *,
+    multi_timeframe: dict[str, Any],
+    candle_structure: dict[str, Any] | None,
+    spot: float | None,
+    pivot_analysis: dict[str, Any] | None,
+    price_action: dict[str, Any] | None,
+    volume_analysis: dict[str, Any] | None,
+    oi_summary: dict[str, Any] | None,
+    ce: dict[str, Any] | None,
+    pe: dict[str, Any] | None,
+    chart_pattern: dict[str, Any] | None = None,
+    entry_score: float | None = None,
+    min_entry_score: float = 80.0,
+    support_resistance: dict[str, Any] | None = None,
+    gap_context: dict[str, Any] | None = None,
+    one_minute_confirmed: bool = False,
+) -> dict[str, Any]:
+
+    stages: list[dict[str, Any]] = []
+
+    stages.append(
+        gap_context
+        or {
+            "stage": "GAP_CONTEXT",
+            "status": "NOT_AVAILABLE",
+            "gap_type": "UNKNOWN",
+        }
+    )
+
+    market = derive_market_bias(
+        multi_timeframe,
+        candle_structure,
+    )
+
+    stages.append(market)
+
+    market_bias = market.get(
+        "bias",
+        "NEUTRAL",
+    )
+
+    cepe = compare_ce_pe(
+        market_bias=market_bias,
+        pivot_analysis=pivot_analysis,
+        price_action=price_action,
+        volume_analysis=volume_analysis,
+        oi_summary=oi_summary,
+        ce=ce,
+        pe=pe,
+    )
+
+    stages.append(cepe)
+
+    location = check_pivot_points(
+        market_bias,
+        spot,
+        pivot_analysis,
+    )
+
+    stages.append(location)
+
+    reversal = check_reversal_continuation(
+        market_bias,
+        spot,
+        location,
+        price_action,
+        cepe,
+    )
+
+    stages.append(reversal)
+
+    pattern = check_optional_chart_pattern(
+        market_bias,
+        chart_pattern,
+    )
+
+    stages.append(pattern)
+
+    direction = (
+        cepe.get("direction")
+        if cepe.get("status") == "CONFIRMED"
+        else None
+    )
+
+    if not direction:
+        return _no_trade(
+            stages,
+            cepe.get(
+                "reason",
+                "CE_PE_NOT_CONFIRMED",
+            ),
+            direction=None,
+        )
+
+    if reversal.get("status") != "CONFIRMED":
+        return _no_trade(
+            stages,
+            reversal.get(
+                "reason",
+                "REVERSAL_CONTINUATION_NOT_CONFIRMED",
+            ),
+            direction=direction,
+        )
+
+    if not one_minute_confirmed:
+        return {
+            "status": "READY_FOR_1M_CONFIRMATION",
+            "action": None,
+            "direction": direction,
+            "reason": "CE_PE_AND_LEVEL_FLOW_CONFIRMED_WAITING_FOR_1M",
+            "entry_score": None,
+            "stages": stages,
+            "flow_order": [
+                "GAP_CONTEXT",
+                "MARKET_ANALYSIS",
+                "CE_PE_COMPARISON",
+                "PIVOT_SR_LOCATION",
+                "REVERSAL_CONTINUATION",
+                "ONE_MINUTE_CONFIRMATION",
+                "FINAL_SCORE",
+                "TRADE_WAIT",
+            ],
+        }
+
+    if entry_score is None:
+        return {
+            "status": "READY_FOR_FINAL_SCORE",
+            "action": None,
+            "direction": direction,
+            "reason": "1M_CONFIRMATION_PASSED_SCORE_PENDING",
+            "entry_score": None,
+            "stages": stages,
+            "flow_order": [
+                "GAP_CONTEXT",
+                "MARKET_ANALYSIS",
+                "CE_PE_COMPARISON",
+                "PIVOT_SR_LOCATION",
+                "REVERSAL_CONTINUATION",
+                "ONE_MINUTE_CONFIRMATION",
+                "FINAL_SCORE",
+                "TRADE_WAIT",
+            ],
+        }
+
+    score = float(entry_score)
+
+    if score < float(min_entry_score):
+        return _no_trade(
+            stages,
+            "ENTRY_SCORE_BELOW_THRESHOLD",
+            direction=direction,
+            entry_score=score,
+        )
+
+    return {
+        "status": "TRADE_CANDIDATE",
+        "action": f"BUY_{direction}",
+        "direction": direction,
+        "reason": "FULL_DYNAMIC_FLOW_CONFIRMED",
+        "entry_score": score,
+        "stages": stages,
+        "flow_order": [
+            "GAP_CONTEXT",
+            "MARKET_ANALYSIS",
+            "CE_PE_COMPARISON",
+            "PIVOT_SR_LOCATION",
+            "REVERSAL_CONTINUATION",
+            "ONE_MINUTE_CONFIRMATION",
+            "FINAL_SCORE",
+            "TRADE_WAIT",
+        ],
+    }
+
+
+def _no_trade(
+    stages: list[dict[str, Any]],
+    reason: str,
+    *,
+    direction: str | None = None,
+    entry_score: float | None = None,
+) -> dict[str, Any]:
+    return {
+        "status": "NO_TRADE",
+        "action": None,
+        "direction": direction,
+        "reason": reason,
+        "entry_score": entry_score,
+        "stages": stages,
+        "flow_order": [
+            "MARKET_BIAS",
+            "PIVOT_POINTS",
+            "PRICE_ACTION",
+            "ATM_CE_PE_RELATIVE_STRENGTH",
+            "CHART_PATTERN_OPTIONAL",
+            "FINAL_DECISION",
+        ],
+    }

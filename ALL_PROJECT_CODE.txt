@@ -1,0 +1,5144 @@
+﻿
+================================================================================
+FILE: D:\Sensex_Option_Intraday\active_trade_manager.py
+================================================================================
+
+from typing import Any
+
+
+class ActiveTradeManager:
+    """Maintain at most one active trade in memory."""
+
+    def __init__(self) -> None:
+        self._active_trade: dict[str, Any] | None = None
+
+    def get_active_trade(self) -> dict[str, Any] | None:
+        """Return the current active trade, if any."""
+        return self._active_trade
+
+    def has_active_trade(self) -> bool:
+        """Return whether an active trade exists."""
+        return self._active_trade is not None
+
+    def start_trade(self, trade: dict[str, Any]) -> None:
+        """Register a trade if no trade is currently active."""
+
+        if self.has_active_trade():
+            raise RuntimeError("An active trade already exists.")
+
+        if not trade:
+            raise ValueError("Trade data cannot be empty.")
+
+        self._active_trade = dict(trade)
+
+    def close_trade(self) -> dict[str, Any]:
+        """Close and return the active trade."""
+
+        if not self.has_active_trade():
+            raise RuntimeError("No active trade to close.")
+
+        closed_trade = self._active_trade
+        self._active_trade = None
+
+        return closed_trade
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\chart_pattern_engine.py
+================================================================================
+
+from typing import Any
+
+
+def detect_candle_patterns(
+    candles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Detect basic bullish/bearish candle patterns from OHLC data."""
+
+    if not candles:
+        return {
+            "status": "NO_DATA",
+            "patterns": [],
+        }
+
+    required = {"open", "high", "low", "close"}
+
+    for index, candle in enumerate(candles):
+        missing = required - candle.keys()
+        if missing:
+            raise ValueError(
+                f"Candle {index} is missing fields: {sorted(missing)}"
+            )
+
+    latest = candles[-1]
+    open_price = float(latest["open"])
+    high = float(latest["high"])
+    low = float(latest["low"])
+    close = float(latest["close"])
+
+    if high < low or not (low <= open_price <= high):
+        raise ValueError("Latest candle has invalid OHLC values.")
+
+    if not (low <= close <= high):
+        raise ValueError("Latest candle has invalid OHLC values.")
+
+    candle_range = high - low
+    body = abs(close - open_price)
+    patterns = []
+
+    if candle_range == 0:
+        return {
+            "status": "OK",
+            "patterns": ["DOJI"],
+        }
+
+    upper_wick = high - max(open_price, close)
+    lower_wick = min(open_price, close) - low
+
+    if body <= candle_range * 0.1:
+        patterns.append("DOJI")
+
+    if (
+        body > 0
+        and lower_wick >= body * 2
+        and upper_wick <= body
+    ):
+        patterns.append(
+            "BULLISH_HAMMER" if close >= open_price else "POSSIBLE_HAMMER"
+        )
+
+    if (
+        body > 0
+        and upper_wick >= body * 2
+        and lower_wick <= body
+    ):
+        patterns.append(
+            "BEARISH_SHOOTING_STAR"
+            if close <= open_price
+            else "POSSIBLE_SHOOTING_STAR"
+        )
+
+    return {
+        "status": "OK",
+        "patterns": patterns or ["NO_PATTERN"],
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\config.py
+================================================================================
+
+from datetime import time
+
+# ==================================================
+# Sensex_Option_Intraday â€” Configuration
+# ==================================================
+
+PROJECT_NAME = "Sensex_Option_Intraday"
+TIMEZONE = "Asia/Kolkata"
+
+# Market session
+TRADING_START = time(9, 10)
+TRADING_END = time(15, 40)
+NO_NEW_RECOMMENDATIONS_AFTER = time(15, 30)
+
+# Analysis timeframes
+ANALYSIS_TIMEFRAME = "5minute"
+ENTRY_TIMEFRAME = "1minute"
+MONITORING_INTERVAL_SECONDS = 60
+
+# Entry confirmation
+MIN_ENTRY_SCORE = 80
+MAX_ENTRY_SCORE = 100
+
+# Stop-loss and target are Sensex index points
+MIN_TARGET_POINTS = 100
+
+# Approved scoring weights
+SCORING_WEIGHTS = {
+    "market_structure": 15,
+    "support_resistance": 15,
+    "price_action": 20,
+    "pivot_points": 10,
+    "volume_analysis": 10,
+    "fii_dii": 5,
+    "atm_ce_pe_strength": 20,
+    "liquidity_greeks": 5,
+}
+
+# Active trade policy
+ONE_ACTIVE_TRADE_ONLY = True
+SEARCH_NEW_SETUP_AFTER_CLOSURE = True
+
+# Dashboard
+DASHBOARD_REFRESH_SECONDS = 1
+DAILY_REPORT_TIME = time(15, 35)
+
+# Trading mode
+TRADING_MODE = "LIVE_RECOMMENDATIONS_ONLY"
+AUTO_PLACE_ORDERS = False
+
+# Data source
+MARKET_DATA_PROVIDER = "ZERODHA_KITE"
+
+# Notifications
+TELEGRAM_ENABLED = True
+
+# Storage
+GOOGLE_SHEETS_ENABLED = True
+LOCAL_STORAGE_ENABLED = True
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\config_loader.py
+================================================================================
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+ENV_FILE = PROJECT_ROOT / ".env"
+
+
+def load_project_config() -> None:
+    """Load project environment variables from the .env file."""
+
+    if not ENV_FILE.exists():
+        raise FileNotFoundError(
+            f".env file not found: {ENV_FILE}"
+        )
+
+    load_dotenv(ENV_FILE, override=False)
+
+
+def get_required_env(name: str) -> str:
+    """Return a required environment variable."""
+
+    value = os.getenv(name)
+
+    if not value:
+        raise RuntimeError(
+            f"Required environment variable is missing: {name}"
+        )
+
+    return value
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\confluence_engine.py
+================================================================================
+
+from typing import Mapping
+
+
+SCORING_WEIGHTS = {
+    "market_structure": 15,
+    "support_resistance": 15,
+    "price_action": 20,
+    "pivot_points": 10,
+    "volume_analysis": 10,
+    "fii_dii": 5,
+    "atm_ce_pe_strength": 20,
+    "liquidity_greeks": 5,
+}
+
+MAX_SCORE = 100
+
+
+def calculate_confluence_score(
+    component_scores: Mapping[str, float],
+) -> dict[str, object]:
+    """Calculate weighted score from component scores (0 to 100)."""
+
+    unknown = set(component_scores) - set(SCORING_WEIGHTS)
+    if unknown:
+        raise ValueError(f"Unknown score components: {sorted(unknown)}")
+
+    missing = set(SCORING_WEIGHTS) - set(component_scores)
+    if missing:
+        raise ValueError(f"Missing score components: {sorted(missing)}")
+
+    weighted_score = 0.0
+
+    for component, weight in SCORING_WEIGHTS.items():
+        score = float(component_scores[component])
+
+        if not 0 <= score <= 100:
+            raise ValueError(
+                f"{component} score must be between 0 and 100."
+            )
+
+        weighted_score += score * weight / 100
+
+    return {
+        "status": "OK",
+        "score": round(weighted_score, 2),
+        "max_score": MAX_SCORE,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_archive.py
+================================================================================
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+class DailyReportArchive:
+    """Archive daily reports in date-named JSON files."""
+
+    def __init__(self, archive_dir: str = "data/reports") -> None:
+        self.archive_dir = Path(archive_dir)
+
+    def save(self, report: dict[str, Any]) -> Path:
+        """Save a report using its YYYY-MM-DD date."""
+
+        if not isinstance(report, dict):
+            raise TypeError("Report must be a dictionary.")
+
+        report_date = report.get("date")
+
+        if not isinstance(report_date, str):
+            raise ValueError("Report must contain a date string.")
+
+        from datetime import date
+
+        try:
+            date.fromisoformat(report_date)
+        except ValueError as exc:
+            raise ValueError(
+                "Report date must use YYYY-MM-DD format."
+            ) from exc
+
+        self.archive_dir.mkdir(parents=True, exist_ok=True)
+
+        file_path = self.archive_dir / f"{report_date}.json"
+        temp_path = file_path.with_suffix(".tmp")
+
+        with temp_path.open("w", encoding="utf-8") as file:
+            json.dump(report, file, indent=2, ensure_ascii=False)
+
+        temp_path.replace(file_path)
+        return file_path
+
+    def load(self, report_date: str) -> dict[str, Any] | None:
+        """Load an archived report for the given date."""
+
+        from datetime import date
+
+        try:
+            date.fromisoformat(report_date)
+        except ValueError as exc:
+            raise ValueError(
+                "report_date must use YYYY-MM-DD format."
+            ) from exc
+
+        file_path = self.archive_dir / f"{report_date}.json"
+
+        if not file_path.exists():
+            return None
+
+        with file_path.open("r", encoding="utf-8") as file:
+            report = json.load(file)
+
+        if not isinstance(report, dict):
+            raise ValueError("Archived report must be a JSON object.")
+
+        return report
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_delivery.py
+================================================================================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_runner import DailyReportRunner
+from daily_report_sender import DailyReportSender
+
+
+class DailyReportDelivery:
+    """Generate and send a daily report when it is due."""
+
+    def __init__(
+        self,
+        runner: DailyReportRunner,
+        sender: DailyReportSender,
+    ) -> None:
+        self.runner = runner
+        self.sender = sender
+
+    def deliver_if_due(
+        self,
+        trades: list[dict[str, Any]],
+        now: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        """Generate and send the report when the schedule is due."""
+
+        report = self.runner.run_if_due(
+            trades=trades,
+            now=now,
+        )
+
+        if report is None:
+            return None
+
+        self.sender.send_report(report)
+        return report
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_dispatcher.py
+================================================================================
+
+from typing import Any
+
+from daily_report_sender import DailyReportSender
+from daily_report_google_sheets import DailyReportGoogleSheets
+
+
+class DailyReportDispatcher:
+    """Dispatch a daily report to Telegram and Google Sheets."""
+
+    def __init__(
+        self,
+        telegram_sender: DailyReportSender,
+        google_sheets_sender: DailyReportGoogleSheets,
+    ) -> None:
+        self.telegram_sender = telegram_sender
+        self.google_sheets_sender = google_sheets_sender
+
+    def dispatch(self, report: dict[str, Any]) -> dict[str, Any]:
+        """Send a report to configured destinations."""
+
+        results: dict[str, Any] = {}
+
+        results["telegram"] = self.telegram_sender.send_report(report)
+        results["google_sheets"] = (
+            self.google_sheets_sender.send_report(report)
+        )
+
+        return results
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_engine.py
+================================================================================
+
+from datetime import date
+from typing import Any
+
+from daily_summary import DailySummary
+from daily_summary_storage import DailySummaryStorage
+
+
+class DailyReportEngine:
+    """Generate and save a daily trading report."""
+
+    def __init__(
+        self,
+        summary_engine: DailySummary,
+        summary_storage: DailySummaryStorage,
+    ) -> None:
+        self.summary_engine = summary_engine
+        self.summary_storage = summary_storage
+
+    def generate_report(
+        self,
+        trades: list[dict[str, Any]],
+        report_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate a report for the supplied day's trades."""
+
+        day = report_date or date.today().isoformat()
+
+        summary = self.summary_engine.generate(trades)
+
+        report = {
+            "date": day,
+            **summary,
+        }
+
+        self.summary_storage.save(report)
+        return report
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_formatter.py
+================================================================================
+
+from typing import Any
+
+
+class DailyReportFormatter:
+    """Format a daily trading report as readable text."""
+
+    def format(self, report: dict[str, Any]) -> str:
+        if not isinstance(report, dict):
+            raise TypeError("Report must be a dictionary.")
+
+        report_date = report.get("date", "Unknown date")
+        total_trades = report.get("total_trades", 0)
+        wins = report.get("wins", 0)
+        losses = report.get("losses", 0)
+        breakeven = report.get("breakeven", 0)
+        win_rate = report.get("win_rate_percent", 0)
+        total_pnl = report.get("total_pnl", 0)
+
+        try:
+            total_pnl_value = float(total_pnl)
+            win_rate_value = float(win_rate)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Invalid numeric value in report.") from exc
+
+        return (
+            f"ðŸ“Š Daily Trading Report\n"
+            f"Date: {report_date}\n"
+            f"----------------------\n"
+            f"Total Trades: {total_trades}\n"
+            f"Wins: {wins}\n"
+            f"Losses: {losses}\n"
+            f"Breakeven: {breakeven}\n"
+            f"Win Rate: {win_rate_value:.2f}%\n"
+            f"Total P&L: â‚¹{total_pnl_value:.2f}"
+        )
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_google_sheets.py
+================================================================================
+
+from typing import Any
+
+from google_sheets_engine import GoogleSheetsEngine
+
+
+class DailyReportGoogleSheets:
+    """Send daily report summary to Google Sheets."""
+
+    def __init__(self, sheets_engine: GoogleSheetsEngine) -> None:
+        self.sheets_engine = sheets_engine
+
+    def send_report(self, report: dict[str, Any]) -> Any:
+        """Send report fields as a single row."""
+
+        if not isinstance(report, dict):
+            raise TypeError("Report must be a dictionary.")
+
+        row = [
+            report.get("date", ""),
+            report.get("total_trades", 0),
+            report.get("wins", 0),
+            report.get("losses", 0),
+            report.get("breakeven", 0),
+            report.get("win_rate_percent", 0),
+            report.get("total_pnl", 0),
+        ]
+
+        return self.sheets_engine.send_row(row)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_job.py
+================================================================================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_scheduler import DailyReportScheduler
+from daily_report_service import DailyReportService
+
+
+class DailyReportJob:
+    """Check report schedule and run the daily report service."""
+
+    def __init__(
+        self,
+        scheduler: DailyReportScheduler,
+        report_service: DailyReportService,
+    ) -> None:
+        self.scheduler = scheduler
+        self.report_service = report_service
+        self._last_run_date: str | None = None
+
+    def run_if_due(
+        self,
+        trades: list[dict[str, Any]],
+        now: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        """Run the report service once per date when due."""
+
+        current = now or datetime.now(self.scheduler.TIMEZONE)
+
+        if not self.scheduler.should_run(current):
+            return None
+
+        local_time = current.astimezone(self.scheduler.TIMEZONE)
+        report_date = local_time.date().isoformat()
+
+        if self._last_run_date == report_date:
+            return None
+
+        result = self.report_service.run(
+            trades=trades,
+            report_date=report_date,
+        )
+
+        self._last_run_date = report_date
+        return result
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_loop.py
+================================================================================
+
+import time
+from datetime import datetime
+from typing import Any, Callable
+
+from daily_report_job import DailyReportJob
+
+
+class DailyReportLoop:
+    """Periodically check and run the daily report job."""
+
+    def __init__(
+        self,
+        report_job: DailyReportJob,
+        trades_provider: Callable[[], list[dict[str, Any]]],
+        interval_seconds: int = 30,
+    ) -> None:
+        if interval_seconds < 1:
+            raise ValueError("Interval must be at least 1 second.")
+
+        self.report_job = report_job
+        self.trades_provider = trades_provider
+        self.interval_seconds = interval_seconds
+        self._running = False
+
+    def run_forever(self) -> None:
+        """Continuously check whether the report is due."""
+
+        self._running = True
+
+        while self._running:
+            try:
+                trades = self.trades_provider()
+
+                self.report_job.run_if_due(
+                    trades=trades,
+                    now=datetime.now(
+                        self.report_job.scheduler.TIMEZONE
+                    ),
+                )
+
+            except Exception as exc:
+                print(f"Daily report loop error: {exc}")
+
+            time.sleep(self.interval_seconds)
+
+    def stop(self) -> None:
+        """Request the loop to stop after the current wait."""
+        self._running = False
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_pipeline.py
+================================================================================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_engine import DailyReportEngine
+from daily_report_archive import DailyReportArchive
+from daily_report_validator import DailyReportValidator
+from daily_trade_filter import DailyTradeFilter
+
+
+class DailyReportPipeline:
+    """Filter, generate, validate, and archive a daily report."""
+
+    def __init__(
+        self,
+        trade_filter: DailyTradeFilter,
+        report_engine: DailyReportEngine,
+        validator: DailyReportValidator,
+        archive: DailyReportArchive,
+    ) -> None:
+        self.trade_filter = trade_filter
+        self.report_engine = report_engine
+        self.validator = validator
+        self.archive = archive
+
+    def run(
+        self,
+        trades: list[dict[str, Any]],
+        report_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Build and archive a report for one trading date."""
+
+        day = report_date or datetime.now().date().isoformat()
+
+        daily_trades = self.trade_filter.filter_by_date(
+            trades,
+            target_date=day,
+        )
+
+        report = self.report_engine.generate_report(
+            trades=daily_trades,
+            report_date=day,
+        )
+
+        self.validator.validate(report)
+        self.archive.save(report)
+
+        return report
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_runner.py
+================================================================================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_engine import DailyReportEngine
+from daily_report_scheduler import DailyReportScheduler
+
+
+class DailyReportRunner:
+    """Run daily report generation when scheduled time is reached."""
+
+    def __init__(
+        self,
+        scheduler: DailyReportScheduler,
+        report_engine: DailyReportEngine,
+    ) -> None:
+        self.scheduler = scheduler
+        self.report_engine = report_engine
+        self._last_run_date: str | None = None
+
+    def run_if_due(
+        self,
+        trades: list[dict[str, Any]],
+        now: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        """Generate at most one report per date when due."""
+
+        current = now or datetime.now(self.scheduler.TIMEZONE)
+
+        if not self.scheduler.should_run(current):
+            return None
+
+        report_date = current.astimezone(
+            self.scheduler.TIMEZONE
+        ).date().isoformat()
+
+        if self._last_run_date == report_date:
+            return None
+
+        report = self.report_engine.generate_report(
+            trades=trades,
+            report_date=report_date,
+        )
+
+        self._last_run_date = report_date
+        return report
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_scheduler.py
+================================================================================
+
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
+
+
+class DailyReportScheduler:
+    """Check whether the daily report time has been reached."""
+
+    TIMEZONE = ZoneInfo("Asia/Kolkata")
+    REPORT_TIME = time(15, 35)
+
+    def should_run(self, now: datetime | None = None) -> bool:
+        """Return True at or after 15:35 IST on weekdays."""
+
+        current_time = now or datetime.now(self.TIMEZONE)
+
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=self.TIMEZONE)
+        else:
+            current_time = current_time.astimezone(self.TIMEZONE)
+
+        if current_time.weekday() >= 5:
+            return False
+
+        return current_time.time() >= self.REPORT_TIME
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_sender.py
+================================================================================
+
+from typing import Any
+
+from daily_report_formatter import DailyReportFormatter
+from telegram_engine import TelegramEngine
+
+
+class DailyReportSender:
+    """Format and send a daily report through Telegram."""
+
+    def __init__(
+        self,
+        formatter: DailyReportFormatter,
+        telegram_engine: TelegramEngine,
+    ) -> None:
+        self.formatter = formatter
+        self.telegram_engine = telegram_engine
+
+    def send_report(self, report: dict[str, Any]) -> Any:
+        """Format the report and send it using TelegramEngine."""
+
+        message = self.formatter.format(report)
+        return self.telegram_engine.send_message(message)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_service.py
+================================================================================
+
+from datetime import datetime
+from typing import Any
+
+from daily_report_pipeline import DailyReportPipeline
+from daily_report_dispatcher import DailyReportDispatcher
+
+
+class DailyReportService:
+    """Generate and dispatch a daily trading report."""
+
+    def __init__(
+        self,
+        pipeline: DailyReportPipeline,
+        dispatcher: DailyReportDispatcher,
+    ) -> None:
+        self.pipeline = pipeline
+        self.dispatcher = dispatcher
+
+    def run(
+        self,
+        trades: list[dict[str, Any]],
+        report_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate the report, then dispatch it."""
+
+        report = self.pipeline.run(
+            trades=trades,
+            report_date=report_date,
+        )
+
+        delivery_results = self.dispatcher.dispatch(report)
+
+        return {
+            "report": report,
+            "delivery_results": delivery_results,
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_report_validator.py
+================================================================================
+
+from typing import Any
+
+
+class DailyReportValidator:
+    """Validate required fields in a daily report."""
+
+    REQUIRED_FIELDS = {
+        "date",
+        "total_trades",
+        "wins",
+        "losses",
+        "breakeven",
+        "win_rate_percent",
+        "total_pnl",
+    }
+
+    def validate(self, report: dict[str, Any]) -> bool:
+        """Return True if the report passes basic validation."""
+
+        if not isinstance(report, dict):
+            raise TypeError("Report must be a dictionary.")
+
+        missing_fields = self.REQUIRED_FIELDS - report.keys()
+
+        if missing_fields:
+            missing = ", ".join(sorted(missing_fields))
+            raise ValueError(f"Missing report fields: {missing}")
+
+        count_fields = (
+            "total_trades",
+            "wins",
+            "losses",
+            "breakeven",
+        )
+
+        for field in count_fields:
+            value = report[field]
+
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"{field} must be an integer.")
+
+            if value < 0:
+                raise ValueError(f"{field} cannot be negative.")
+
+        for field in ("win_rate_percent", "total_pnl"):
+            try:
+                float(report[field])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"{field} must be numeric."
+                ) from exc
+
+        return True
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_summary.py
+================================================================================
+
+from typing import Any
+
+
+class DailySummary:
+    """Create a basic summary from closed trade records."""
+
+    def generate(
+        self,
+        trades: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if not isinstance(trades, list):
+            raise TypeError("Trades must be provided as a list.")
+
+        total_trades = len(trades)
+        wins = 0
+        losses = 0
+        breakeven = 0
+        total_pnl = 0.0
+
+        for trade in trades:
+            if not isinstance(trade, dict):
+                raise TypeError("Each trade must be a dictionary.")
+
+            result = str(trade.get("result", "")).strip().upper()
+
+            if result in {"WIN", "TARGET", "PROFIT"}:
+                wins += 1
+            elif result in {"LOSS", "SL", "STOP_LOSS"}:
+                losses += 1
+            elif result in {"BREAKEVEN", "BE"}:
+                breakeven += 1
+
+            pnl = trade.get("pnl", 0)
+
+            try:
+                total_pnl += float(pnl)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid P&L value in trade: {pnl!r}"
+                ) from exc
+
+        win_rate = (
+            (wins / total_trades) * 100
+            if total_trades > 0
+            else 0.0
+        )
+
+        return {
+            "total_trades": total_trades,
+            "wins": wins,
+            "losses": losses,
+            "breakeven": breakeven,
+            "win_rate_percent": round(win_rate, 2),
+            "total_pnl": round(total_pnl, 2),
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_summary_storage.py
+================================================================================
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+class DailySummaryStorage:
+    """Save and load daily trading summaries as JSON."""
+
+    def __init__(
+        self,
+        file_path: str = "data/daily_summary.json",
+    ) -> None:
+        self.file_path = Path(file_path)
+
+    def save(self, summary: dict[str, Any]) -> None:
+        """Persist a daily summary."""
+
+        if not isinstance(summary, dict):
+            raise TypeError("Summary must be a dictionary.")
+
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = self.file_path.with_suffix(".tmp")
+
+        with temp_path.open("w", encoding="utf-8") as file:
+            json.dump(summary, file, indent=2, ensure_ascii=False)
+
+        temp_path.replace(self.file_path)
+
+    def load(self) -> dict[str, Any] | None:
+        """Load the saved summary, or return None if absent."""
+
+        if not self.file_path.exists():
+            return None
+
+        with self.file_path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            raise ValueError("Saved daily summary must be a JSON object.")
+
+        return data
+
+    def clear(self) -> None:
+        """Delete the saved summary file if it exists."""
+
+        if self.file_path.exists():
+            self.file_path.unlink()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_trade_filter.py
+================================================================================
+
+from datetime import date
+from typing import Any
+
+
+class DailyTradeFilter:
+    """Filter trade records by trade date."""
+
+    def filter_by_date(
+        self,
+        trades: list[dict[str, Any]],
+        target_date: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return trades matching the requested YYYY-MM-DD date."""
+
+        if not isinstance(trades, list):
+            raise TypeError("Trades must be provided as a list.")
+
+        day = target_date or date.today().isoformat()
+
+        try:
+            date.fromisoformat(day)
+        except ValueError as exc:
+            raise ValueError(
+                "target_date must use YYYY-MM-DD format."
+            ) from exc
+
+        filtered_trades = []
+
+        for trade in trades:
+            if not isinstance(trade, dict):
+                raise TypeError("Each trade must be a dictionary.")
+
+            trade_date = trade.get("date")
+
+            if trade_date == day:
+                filtered_trades.append(dict(trade))
+
+        return filtered_trades
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\daily_trade_summary.py
+================================================================================
+
+from typing import Any
+
+
+class DailyTradeSummary:
+    """Summarize trades for a single trading day."""
+
+    def generate(
+        self,
+        trades: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if not isinstance(trades, list):
+            raise TypeError("Trades must be provided as a list.")
+
+        wins = 0
+        losses = 0
+        breakeven = 0
+        total_pnl = 0.0
+
+        for trade in trades:
+            if not isinstance(trade, dict):
+                raise TypeError("Each trade must be a dictionary.")
+
+            result = str(trade.get("result", "")).strip().upper()
+
+            if result in {"WIN", "TARGET", "PROFIT"}:
+                wins += 1
+            elif result in {"LOSS", "SL", "STOP_LOSS"}:
+                losses += 1
+            elif result in {"BREAKEVEN", "BE"}:
+                breakeven += 1
+
+            try:
+                total_pnl += float(trade.get("pnl", 0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "Trade contains an invalid P&L value."
+                ) from exc
+
+        total_trades = len(trades)
+        win_rate = (
+            wins / total_trades * 100
+            if total_trades
+            else 0.0
+        )
+
+        return {
+            "total_trades": total_trades,
+            "wins": wins,
+            "losses": losses,
+            "breakeven": breakeven,
+            "win_rate_percent": round(win_rate, 2),
+            "total_pnl": round(total_pnl, 2),
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\dashboard.py
+================================================================================
+
+from html import escape
+from pathlib import Path
+from typing import Any
+
+
+def generate_dashboard(
+    data: dict[str, Any],
+    output_path: str = "dashboard/index.html",
+) -> str:
+    """Generate a basic HTML dashboard from supplied data."""
+
+    sensex_price = escape(str(data.get("sensex_price", "N/A")))
+    active_trade = escape(str(data.get("active_trade", "None")))
+    entry_score = escape(str(data.get("entry_score", "N/A")))
+    status = escape(str(data.get("status", "Starting")))
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensex Option Intraday Dashboard</title>
+</head>
+<body>
+    <h1>Sensex Option Intraday</h1>
+    <p>Status: {status}</p>
+    <p>Sensex Price: {sensex_price}</p>
+    <p>Active Trade: {active_trade}</p>
+    <p>Entry Score: {entry_score}</p>
+</body>
+</html>
+"""
+
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding="utf-8")
+
+    return str(path)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\entry_timing_engine.py
+================================================================================
+
+from typing import Any
+
+
+def confirm_entry_candle(
+    candles: list[dict[str, Any]],
+    direction: str,
+    reference_level: float,
+) -> dict[str, Any]:
+    """Check whether the latest candle closes beyond a reference level."""
+
+    direction = direction.upper()
+
+    if direction not in {"CE", "PE"}:
+        raise ValueError("direction must be CE or PE.")
+
+    if reference_level <= 0:
+        raise ValueError("reference_level must be positive.")
+
+    if not candles:
+        return {
+            "status": "NO_DATA",
+            "confirmed": False,
+        }
+
+    latest = candles[-1]
+
+    required = {"open", "high", "low", "close"}
+    missing = required - latest.keys()
+
+    if missing:
+        raise ValueError(
+            f"Latest candle is missing fields: {sorted(missing)}"
+        )
+
+    open_price = float(latest["open"])
+    high = float(latest["high"])
+    low = float(latest["low"])
+    close = float(latest["close"])
+
+    if high < low or not (
+        low <= open_price <= high and low <= close <= high
+    ):
+        raise ValueError("Latest candle has invalid OHLC values.")
+
+    if direction == "CE":
+        confirmed = close > reference_level and close > open_price
+    else:
+        confirmed = close < reference_level and close < open_price
+
+    return {
+        "status": "OK",
+        "confirmed": confirmed,
+        "direction": direction,
+        "close": close,
+        "reference_level": reference_level,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\excel_report.py
+================================================================================
+
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+
+def save_trade_report(
+    trades: list[dict[str, Any]],
+    output_path: str = "reports/trade_report.xlsx",
+) -> str:
+    """Save trade records to an Excel report."""
+
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    dataframe = pd.DataFrame(trades)
+    dataframe.to_excel(path, index=False)
+
+    return str(path)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\fii_dii_engine.py
+================================================================================
+
+from typing import Any
+
+
+def analyze_fii_dii(
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Summarize supplied FII/DII net activity data."""
+
+    required = {"fii_net", "dii_net"}
+    missing = required - data.keys()
+
+    if missing:
+        raise ValueError(
+            f"FII/DII data is missing fields: {sorted(missing)}"
+        )
+
+    fii_net = float(data["fii_net"])
+    dii_net = float(data["dii_net"])
+
+    if fii_net > 0:
+        fii_bias = "BUYING"
+    elif fii_net < 0:
+        fii_bias = "SELLING"
+    else:
+        fii_bias = "NEUTRAL"
+
+    if dii_net > 0:
+        dii_bias = "BUYING"
+    elif dii_net < 0:
+        dii_bias = "SELLING"
+    else:
+        dii_bias = "NEUTRAL"
+
+    return {
+        "status": "OK",
+        "fii_net": fii_net,
+        "dii_net": dii_net,
+        "fii_bias": fii_bias,
+        "dii_bias": dii_bias,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\google_sheets_engine.py
+================================================================================
+
+import os
+
+import requests
+
+
+def append_google_sheet_row(
+    row: list[object],
+) -> dict[str, object]:
+    """Append one row to Google Sheets through a configured webhook."""
+
+    webhook_url = os.getenv("GOOGLE_SHEETS_WEBHOOK_URL")
+
+    if not webhook_url:
+        raise RuntimeError(
+            "GOOGLE_SHEETS_WEBHOOK_URL is missing."
+        )
+
+    if not row:
+        raise ValueError("row cannot be empty.")
+
+    response = requests.post(
+        webhook_url,
+        json={"values": row},
+        timeout=20,
+    )
+
+    response.raise_for_status()
+
+    return {
+        "status": "SENT",
+        "http_status": response.status_code,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\historical_data.py
+================================================================================
+
+from datetime import datetime
+from typing import Any
+
+from kiteconnect import KiteConnect
+
+
+def fetch_historical_data(
+    kite: KiteConnect,
+    instrument_token: int,
+    from_date: datetime,
+    to_date: datetime,
+    interval: str = "5minute",
+) -> list[dict[str, Any]]:
+    """Fetch historical candle data from Zerodha Kite."""
+
+    if instrument_token <= 0:
+        raise ValueError("instrument_token must be a positive integer.")
+
+    if from_date >= to_date:
+        raise ValueError("from_date must be earlier than to_date.")
+
+    return kite.historical_data(
+        instrument_token=instrument_token,
+        from_date=from_date,
+        to_date=to_date,
+        interval=interval,
+    )
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\indicator_engine.py
+================================================================================
+def calculate_ema(values, period):
+    """Calculate EMA from a list of numeric values."""
+    if period <= 0:
+        raise ValueError("EMA period must be positive.")
+
+    if len(values) < period:
+        return None
+
+    multiplier = 2 / (period + 1)
+    ema = sum(values[:period]) / period
+
+    for value in values[period:]:
+        ema = (value * multiplier) + (ema * (1 - multiplier))
+
+    return ema
+
+
+def calculate_rsi(values, period=14):
+    """Calculate RSI using Wilder's smoothing method."""
+    if period <= 0:
+        raise ValueError("RSI period must be positive.")
+
+    if len(values) <= period:
+        return None
+
+    changes = [
+        values[i] - values[i - 1]
+        for i in range(1, len(values))
+    ]
+
+    gains = [max(change, 0) for change in changes]
+    losses = [max(-change, 0) for change in changes]
+
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+
+    for i in range(period, len(changes)):
+        avg_gain = ((avg_gain * (period - 1)) + gains[i]) / period
+        avg_loss = ((avg_loss * (period - 1)) + losses[i]) / period
+
+    if avg_loss == 0:
+        return 100.0 if avg_gain > 0 else 50.0
+
+    relative_strength = avg_gain / avg_loss
+    return 100 - (100 / (1 + relative_strength))
+
+
+def calculate_indicators(candles):
+    """Calculate EMA 5/13/26 and RSI 14 from oldest to newest candles."""
+    closes = [float(candle["close"]) for candle in candles]
+
+    ema_5 = calculate_ema(closes, 5)
+    ema_13 = calculate_ema(closes, 13)
+    ema_26 = calculate_ema(closes, 26)
+    rsi_14 = calculate_rsi(closes, 14)
+
+    if ema_5 is None or ema_13 is None or ema_26 is None:
+        ema_alignment = "INSUFFICIENT_DATA"
+    elif ema_5 > ema_13 > ema_26:
+        ema_alignment = "BULLISH"
+    elif ema_5 < ema_13 < ema_26:
+        ema_alignment = "BEARISH"
+    else:
+        ema_alignment = "MIXED"
+
+    if rsi_14 is None:
+        rsi_momentum = "INSUFFICIENT_DATA"
+    elif rsi_14 >= 55:
+        rsi_momentum = "BULLISH"
+    elif rsi_14 <= 45:
+        rsi_momentum = "BEARISH"
+    else:
+        rsi_momentum = "NEUTRAL"
+
+    return {
+        "ema_5": ema_5,
+        "ema_13": ema_13,
+        "ema_26": ema_26,
+        "rsi_14": rsi_14,
+        "ema_alignment": ema_alignment,
+        "rsi_momentum": rsi_momentum,
+        "candle_count": len(closes),
+    }
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\integrate_active_trade_and_patterns.py
+================================================================================
+from pathlib import Path
+
+path = Path("main.py")
+text = path.read_text(encoding="utf-8-sig")
+
+# Add imports only if missing
+imports = [
+    ("from active_trade_manager import ActiveTradeManager",
+     "from active_trade_manager import ActiveTradeManager"),
+    ("from chart_pattern_engine import detect_candle_patterns",
+     "from chart_pattern_engine import detect_candle_patterns"),
+]
+
+for marker, import_line in imports:
+    if import_line not in text:
+        anchor = "from price_action_engine import analyze_price_action"
+        if anchor in text:
+            text = text.replace(anchor, anchor + "\n" + import_line, 1)
+        else:
+            text = import_line + "\n" + text
+
+# Add manager instance after CANDLE_HISTORY declaration
+manager_line = "ACTIVE_TRADE_MANAGER = ActiveTradeManager()"
+if manager_line not in text:
+    anchor = "CANDLE_HISTORY = {}"
+    if anchor not in text:
+        raise SystemExit("ERROR: CANDLE_HISTORY declaration not found.")
+    text = text.replace(anchor, anchor + "\n" + manager_line, 1)
+
+# Add chart pattern analysis after price action analysis
+pattern_block = '''    # Analyze candle patterns from historical Sensex candles
+    chart_patterns = detect_candle_patterns(candles)
+    print("CHART_PATTERN_ANALYSIS:", chart_patterns)
+
+    # Report current active-trade manager state
+    print("ACTIVE_TRADE_EXISTS:", ACTIVE_TRADE_MANAGER.has_active_trade())
+    print("ACTIVE_TRADE:", ACTIVE_TRADE_MANAGER.get_active_trade())
+'''
+
+anchor = '    print("PRICE_ACTION_ANALYSIS:", price_action)'
+if "CHART_PATTERN_ANALYSIS:" not in text:
+    if anchor not in text:
+        raise SystemExit("ERROR: Price action output anchor not found.")
+    text = text.replace(anchor, anchor + "\n\n" + pattern_block.rstrip(), 1)
+
+path.write_text(text, encoding="utf-8")
+print("UPDATED main.py")
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\integrate_analysis_engines.py
+================================================================================
+from pathlib import Path
+
+path = Path("main.py")
+text = path.read_text(encoding="utf-8-sig")
+
+imports = [
+    "from confluence_engine import calculate_confluence_score",
+    "from entry_timing_engine import confirm_entry_candle",
+    "from fii_dii_engine import analyze_fii_dii",
+    "from market_status_engine import get_market_status",
+    "from market_structure_engine import analyze_market_structure as analyze_candle_structure",
+    "from multi_timeframe_engine import analyze_multi_timeframe",
+]
+
+for line in imports:
+    if line not in text:
+        anchor = "from price_action_engine import analyze_price_action"
+        if anchor not in text:
+            raise SystemExit("ERROR: Import anchor not found in main.py")
+        text = text.replace(anchor, anchor + "\n" + line, 1)
+
+block = '''
+    # Current Indian market session status
+    market_status = get_market_status()
+    print("MARKET_STATUS:", market_status)
+
+    # Analyze latest-candle market structure separately
+    candle_structure = analyze_candle_structure(candles)
+    print("CANDLE_MARKET_STRUCTURE:", candle_structure)
+
+    # Fetch 15-minute candles for multi-timeframe comparison
+    candles_15m = fetch_historical_data(
+        kite=kite,
+        instrument_token=token,
+        from_date=from_date,
+        to_date=to_date,
+        interval="15minute",
+    )
+
+    print("15M_CANDLE_COUNT:", len(candles_15m))
+
+    multi_timeframe = analyze_multi_timeframe(
+        candles_15m=candles_15m,
+        candles_5m=candles,
+    )
+    print("MULTI_TIMEFRAME_ANALYSIS:", multi_timeframe)
+
+    # These engines need genuine inputs not yet produced by the current pipeline.
+    print("FII_DII_SKIPPED: Real fii_net and dii_net data not available.")
+    print("CONFLUENCE_SKIPPED: All 8 component scores are not yet available.")
+    print("ENTRY_TIMING_SKIPPED: Direction and reference level are not yet confirmed.")
+'''
+
+anchor = '    print("MARKET_STRUCTURE_ANALYSIS:", market_analysis)'
+if "MULTI_TIMEFRAME_ANALYSIS:" not in text:
+    if anchor not in text:
+        raise SystemExit("ERROR: Market structure output anchor not found.")
+    text = text.replace(anchor, anchor + "\n" + block.rstrip(), 1)
+
+path.write_text(text, encoding="utf-8")
+print("UPDATED main.py")
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\integrate_daily_report_modules.py
+================================================================================
+from pathlib import Path
+
+path = Path("main.py")
+text = path.read_text(encoding="utf-8-sig")
+
+imports = [
+    "from daily_report_archive import DailyReportArchive",
+    "from daily_report_delivery import DailyReportDelivery",
+    "from daily_report_dispatcher import DailyReportDispatcher",
+    "from daily_report_engine import DailyReportEngine",
+    "from daily_report_formatter import DailyReportFormatter",
+    "from daily_report_google_sheets import DailyReportGoogleSheets",
+    "from daily_report_job import DailyReportJob",
+    "from daily_report_loop import DailyReportLoop",
+    "from daily_report_pipeline import DailyReportPipeline",
+    "from daily_report_runner import DailyReportRunner",
+    "from daily_report_scheduler import DailyReportScheduler",
+    "from daily_report_sender import DailyReportSender",
+    "from daily_report_service import DailyReportService",
+    "from daily_report_validator import DailyReportValidator",
+    "from daily_summary import DailySummary",
+    "from daily_summary_storage import DailySummaryStorage",
+    "from daily_trade_filter import DailyTradeFilter",
+    "from daily_trade_summary import DailyTradeSummary",
+    "from dashboard import generate_dashboard",
+    "from excel_report import save_trade_report",
+    "from google_sheets_engine import append_google_sheet_row",
+    "from telegram_engine import send_telegram_message",
+    "from trade_pnl_calculator import TradePnLCalculator",
+]
+
+anchor = "from trade_engine import decide_trade"
+if anchor not in text:
+    raise SystemExit("ERROR: import anchor not found.")
+
+for line in imports:
+    if line not in text:
+        text = text.replace(anchor, anchor + "\n" + line, 1)
+
+marker = '    print("KITE_CONNECTION_OK")'
+if marker not in text:
+    raise SystemExit("ERROR: KITE_CONNECTION_OK anchor not found.")
+
+block = '''
+
+    # Daily report stack: compatible adapters for function-based engines.
+    class _TelegramAdapter:
+        def send_message(self, message):
+            return send_telegram_message(message)
+
+    class _GoogleSheetsAdapter:
+        def send_row(self, row):
+            return append_google_sheet_row(row)
+
+    daily_scheduler = DailyReportScheduler()
+    daily_summary = DailySummary()
+    daily_summary_storage = DailySummaryStorage()
+    daily_report_engine = DailyReportEngine(
+        summary_engine=daily_summary,
+        summary_storage=daily_summary_storage,
+    )
+
+    daily_pipeline = DailyReportPipeline(
+        trade_filter=DailyTradeFilter(),
+        report_engine=daily_report_engine,
+        validator=DailyReportValidator(),
+        archive=DailyReportArchive(),
+    )
+
+    daily_dispatcher = DailyReportDispatcher(
+        telegram_sender=DailyReportSender(
+            formatter=DailyReportFormatter(),
+            telegram_engine=_TelegramAdapter(),
+        ),
+        google_sheets_sender=DailyReportGoogleSheets(
+            sheets_engine=_GoogleSheetsAdapter(),
+        ),
+    )
+
+    daily_service = DailyReportService(
+        pipeline=daily_pipeline,
+        dispatcher=daily_dispatcher,
+    )
+
+    daily_job = DailyReportJob(
+        scheduler=daily_scheduler,
+        report_service=daily_service,
+    )
+
+    daily_report_loop = DailyReportLoop(
+        report_job=daily_job,
+        trades_provider=TRADE_HISTORY.get_all_trades,
+        interval_seconds=30,
+    )
+
+    daily_report_thread = Thread(
+        target=daily_report_loop.run_forever,
+        name="daily-report-loop",
+        daemon=True,
+    )
+    daily_report_thread.start()
+    print("DAILY_REPORT_LOOP_STARTED")
+'''
+
+if "DAILY_REPORT_LOOP_STARTED" not in text:
+    text = text.replace(marker, marker + block, 1)
+
+path.write_text(text, encoding="utf-8")
+print("UPDATED main.py with daily report pipeline and scheduler.")
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\integrate_trade_exit_modules.py
+================================================================================
+from pathlib import Path
+
+path = Path("main.py")
+text = path.read_text(encoding="utf-8-sig")
+
+imports = [
+    "from threading import Thread",
+    "from trade_exit_alert_config import TradeExitAlertConfig",
+    "from trade_exit_alert_controller import TradeExitAlertController",
+    "from trade_exit_alert_deduplicator import TradeExitAlertDeduplicator",
+    "from trade_exit_alert_formatter import TradeExitAlertFormatter",
+    "from trade_exit_alert_integration import TradeExitAlertIntegration",
+    "from trade_exit_alert_logger import TradeExitAlertLogger",
+    "from trade_exit_alert_manager import TradeExitAlertManager",
+    "from trade_exit_alert_pipeline import TradeExitAlertPipeline",
+    "from trade_exit_alert_runner import TradeExitAlertRunner",
+    "from trade_exit_alert_sender import TradeExitAlertSender",
+    "from trade_exit_alert_service import TradeExitAlertService",
+    "from trade_exit_alert_status import TradeExitAlertStatus",
+    "from trade_exit_checker import TradeExitChecker",
+    "from trade_exit_monitor import TradeExitMonitor",
+    "from trade_exit_monitor_loop import TradeExitMonitorLoop",
+    "from trade_exit_signal_handler import TradeExitSignalHandler",
+]
+
+anchor = "from trade_engine import decide_trade"
+if anchor not in text:
+    raise SystemExit("ERROR: trade_engine import anchor not found.")
+
+for line in imports:
+    if line not in text:
+        text = text.replace(anchor, anchor + "\n" + line, 1)
+
+marker = '        print("ACTIVE_TRADE_PRICE_MONITOR_ERROR:", exc)'
+if marker not in text:
+    raise SystemExit("ERROR: Startup price-monitor anchor not found.")
+
+block = '''
+
+    # Trade exit alert configuration and state
+    EXIT_ALERT_CONFIG = TradeExitAlertConfig()
+    EXIT_ALERT_DEDUPLICATOR = TradeExitAlertDeduplicator()
+    EXIT_ALERT_STATUS = TradeExitAlertStatus()
+
+    # Alert callback: currently logs/prints the alert message.
+    # Connect your Telegram sender here when its exact function is available.
+    def send_exit_message(message):
+        print("TRADE_EXIT_TELEGRAM_MESSAGE:")
+        print(message)
+        return {"status": "PRINTED_ONLY"}
+
+    EXIT_ALERT_INTEGRATION = TradeExitAlertIntegration(send_exit_message)
+
+    def handle_exit_alert(signal):
+        if EXIT_ALERT_DEDUPLICATOR.is_duplicate(signal):
+            EXIT_ALERT_STATUS.update("DUPLICATE", "Repeated exit signal ignored.")
+            print("TRADE_EXIT_ALERT_DUPLICATE:", signal)
+            return
+
+        result = EXIT_ALERT_INTEGRATION.on_exit_signal(signal)
+        EXIT_ALERT_STATUS.update(
+            result.get("status", "UNKNOWN"),
+            result.get("reason", ""),
+        )
+        print("TRADE_EXIT_ALERT_RESULT:", result)
+
+    EXIT_SIGNAL_HANDLER = TradeExitSignalHandler(handle_exit_alert)
+
+    # Continuous premium-based exit monitoring.
+    # Requires active trade fields: option_sl and option_target.
+    EXIT_MONITOR_LOOP = TradeExitMonitorLoop(
+        get_active_trade=ACTIVE_TRADE_MANAGER.get_active_trade,
+        get_current_option_price=get_trade_ltp,
+        on_exit_signal=EXIT_SIGNAL_HANDLER.handle_signal,
+        interval_seconds=1.0,
+    )
+
+    if ACTIVE_TRADE_MANAGER.has_active_trade():
+        EXIT_MONITOR_THREAD = Thread(
+            target=EXIT_MONITOR_LOOP.start,
+            name="trade-exit-monitor",
+            daemon=True,
+        )
+        EXIT_MONITOR_THREAD.start()
+        print("TRADE_EXIT_MONITOR_STARTED")
+    else:
+        print("TRADE_EXIT_MONITOR_NOT_STARTED: No active trade.")
+'''
+
+if "TRADE_EXIT_MONITOR_STARTED" not in text:
+    text = text.replace(marker, marker + block, 1)
+
+path.write_text(text, encoding="utf-8")
+print("UPDATED main.py with trade-exit monitoring and alert integration.")
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\integrate_trade_lifecycle_modules.py
+================================================================================
+from pathlib import Path
+
+path = Path("main.py")
+text = path.read_text(encoding="utf-8-sig")
+
+imports = [
+    "from trade_engine import decide_trade",
+    "from trade_monitor import TradeMonitor",
+    "from trade_state_storage import TradeStateStorage",
+    "from trade_monitor_loop import TradeMonitorLoop",
+    "from trade_recovery import TradeRecovery",
+    "from trade_price_monitor import TradePriceMonitor",
+    "from trade_history import TradeHistory",
+    "from trade_history_storage import TradeHistoryStorage",
+    "from trade_lifecycle_manager import TradeLifecycleManager",
+]
+
+anchor = "from veto_engine import check_trade_vetoes"
+if anchor not in text:
+    raise SystemExit("ERROR: Existing import anchor not found.")
+
+for line in imports:
+    if line not in text:
+        text = text.replace(anchor, anchor + "\n" + line, 1)
+
+# Initialize storage/history/lifecycle objects next to ActiveTradeManager
+setup = '''
+ACTIVE_TRADE_STATE_STORAGE = TradeStateStorage()
+TRADE_HISTORY_STORAGE = TradeHistoryStorage()
+TRADE_HISTORY = TradeHistory()
+'''
+
+if "ACTIVE_TRADE_STATE_STORAGE = TradeStateStorage()" not in text:
+    anchor = "ACTIVE_TRADE_MANAGER = ActiveTradeManager()"
+    if anchor not in text:
+        raise SystemExit("ERROR: ActiveTradeManager initialization not found.")
+    text = text.replace(anchor, anchor + "\n" + setup.rstrip(), 1)
+
+# Recover saved state and initialize lifecycle after Kite connection
+connection_anchor = '    print("KITE_CONNECTION_OK")'
+connection_block = '''
+
+    # Load persisted closed-trade history
+    saved_history = TRADE_HISTORY_STORAGE.load()
+    for saved_trade in saved_history:
+        TRADE_HISTORY.add_trade(saved_trade)
+
+    # Restore active trade, if one was saved previously
+    recovery = TradeRecovery(
+        trade_manager=ACTIVE_TRADE_MANAGER,
+        storage=ACTIVE_TRADE_STATE_STORAGE,
+    )
+    recovered_trade = recovery.recover()
+    print("TRADE_RECOVERY:", recovered_trade)
+
+    lifecycle = TradeLifecycleManager(
+        active_trade_manager=ACTIVE_TRADE_MANAGER,
+        trade_state_storage=ACTIVE_TRADE_STATE_STORAGE,
+        trade_history=TRADE_HISTORY,
+        trade_history_storage=TRADE_HISTORY_STORAGE,
+    )
+
+    trade_monitor = TradeMonitor(ACTIVE_TRADE_MANAGER)
+    print("ACTIVE_TRADE_STATUS:", trade_monitor.get_status())
+
+    def get_trade_ltp(trade):
+        symbol = trade.get("tradingsymbol")
+        if not symbol:
+            raise ValueError("Active trade is missing tradingsymbol.")
+
+        quote_key = symbol if ":" in symbol else f"BFO:{symbol}"
+        quote = kite.ltp([quote_key])
+        if quote_key not in quote:
+            raise RuntimeError(f"LTP not returned for {quote_key}")
+
+        return float(quote[quote_key]["last_price"])
+
+    trade_price_monitor = TradePriceMonitor(
+        trade_manager=ACTIVE_TRADE_MANAGER,
+        ltp_provider=get_trade_ltp,
+    )
+
+    try:
+        price_status = trade_price_monitor.get_price_status()
+        print("ACTIVE_TRADE_PRICE_STATUS:", price_status)
+    except Exception as exc:
+        print("ACTIVE_TRADE_PRICE_MONITOR_ERROR:", exc)
+'''
+
+if "TRADE_RECOVERY:" not in text:
+    if connection_anchor not in text:
+        raise SystemExit("ERROR: Kite connection output anchor not found.")
+    text = text.replace(
+        connection_anchor,
+        connection_anchor + connection_block,
+        1,
+    )
+
+path.write_text(text, encoding="utf-8")
+print("UPDATED main.py")
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\integrate_trade_volume_reversal_sr.py
+================================================================================
+from pathlib import Path
+
+path = Path("main.py")
+text = path.read_text(encoding="utf-8-sig")
+
+imports = [
+    "from veto_engine import check_trade_vetoes",
+    "from volume_engine import analyze_volume",
+    "from reversal_engine import detect_reversal",
+    "from risk_manager import calculate_position_size",
+    "from support_resistance_engine import calculate_support_resistance",
+]
+
+anchor = "from active_trade_manager import ActiveTradeManager"
+if anchor not in text:
+    raise SystemExit("ERROR: Existing import anchor not found.")
+
+for line in imports:
+    if line not in text:
+        text = text.replace(anchor, anchor + "\n" + line, 1)
+
+# Add live option volume and reversal analysis inside finalized-candle callback
+callback_anchor = '        "RSI14:", indicators["rsi_14"],\n    )'
+callback_block = '''
+
+    # Analyze live option candle volume and reversal
+    volume_analysis = analyze_volume(history)
+    print("LIVE_OPTION_VOLUME_ANALYSIS:", volume_analysis)
+
+    reversal_analysis = detect_reversal(history)
+    print("LIVE_OPTION_REVERSAL_ANALYSIS:", reversal_analysis)
+'''
+
+if "LIVE_OPTION_VOLUME_ANALYSIS:" not in text:
+    if callback_anchor not in text:
+        raise SystemExit("ERROR: Indicator callback anchor not found.")
+    text = text.replace(
+        callback_anchor,
+        callback_anchor + callback_block,
+        1,
+    )
+
+# Add support/resistance analysis after existing market structure analysis
+sr_anchor = '    print("CANDLE_MARKET_STRUCTURE:", candle_structure)'
+sr_block = '''
+
+    # Calculate Sensex support and resistance from historical candles
+    support_resistance = calculate_support_resistance(candles)
+    print("SUPPORT_RESISTANCE_ANALYSIS:", support_resistance)
+
+    # These require valid trade-decision inputs that are not available yet.
+    print("VETO_ENGINE_SKIPPED: Mandatory live confirmation checks are not ready.")
+    print("RISK_MANAGER_SKIPPED: Requires option-premium entry and stop-loss values.")
+'''
+
+if "SUPPORT_RESISTANCE_ANALYSIS:" not in text:
+    if sr_anchor not in text:
+        raise SystemExit("ERROR: Market structure anchor not found.")
+    text = text.replace(sr_anchor, sr_anchor + sr_block, 1)
+
+path.write_text(text, encoding="utf-8")
+print("UPDATED main.py")
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\kite_client.py
+================================================================================
+
+import os
+
+from kiteconnect import KiteConnect
+
+
+def create_kite_client() -> KiteConnect:
+    """Create and return an authenticated Zerodha Kite client."""
+
+    api_key = os.getenv("KITE_API_KEY")
+    access_token = os.getenv("KITE_ACCESS_TOKEN")
+
+    if not api_key:
+        raise RuntimeError("KITE_API_KEY is missing from environment.")
+
+    if not access_token:
+        raise RuntimeError("KITE_ACCESS_TOKEN is missing from environment.")
+
+    kite = KiteConnect(api_key=api_key)
+    kite.set_access_token(access_token)
+
+    return kite
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\liquidity_greeks_engine.py
+================================================================================
+
+from typing import Any
+
+
+def analyze_liquidity_greeks(
+    option: dict[str, Any],
+    max_spread_percent: float = 2.0,
+) -> dict[str, Any]:
+    """Validate option liquidity and supplied Greeks/IV values."""
+
+    required = {
+        "bid",
+        "ask",
+        "delta",
+        "theta",
+        "iv",
+    }
+    missing = required - option.keys()
+
+    if missing:
+        raise ValueError(
+            f"Option data is missing fields: {sorted(missing)}"
+        )
+
+    bid = float(option["bid"])
+    ask = float(option["ask"])
+    delta = float(option["delta"])
+    theta = float(option["theta"])
+    iv = float(option["iv"])
+
+    if bid < 0 or ask <= 0 or ask < bid:
+        raise ValueError("Invalid bid/ask prices.")
+
+    if not -1 <= delta <= 1:
+        raise ValueError("Delta must be between -1 and 1.")
+
+    if iv < 0:
+        raise ValueError("IV cannot be negative.")
+
+    midpoint = (bid + ask) / 2
+    spread_percent = (
+        ((ask - bid) / midpoint) * 100 if midpoint > 0 else None
+    )
+
+    liquid = (
+        spread_percent is not None
+        and spread_percent <= max_spread_percent
+    )
+
+    return {
+        "status": "OK",
+        "bid": bid,
+        "ask": ask,
+        "spread_percent": (
+            round(spread_percent, 2)
+            if spread_percent is not None
+            else None
+        ),
+        "liquidity_passed": liquid,
+        "delta": delta,
+        "theta": theta,
+        "iv": iv,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\live_option_feed.py
+================================================================================
+from datetime import datetime
+from kiteconnect import KiteTicker
+
+
+def start_live_option_feed(kite, instrument_tokens, on_candle=None):
+    """
+    Subscribe to selected options and build 1-minute OHLC candles.
+    Send each finalized candle to the optional on_candle callback.
+    Data only; no orders are placed.
+    """
+    if not instrument_tokens:
+        raise ValueError("No instrument tokens provided.")
+
+    ticker = KiteTicker(kite.api_key, kite.access_token)
+
+    current_candles = {}
+    candle_history = {token: [] for token in instrument_tokens}
+
+    def on_connect(ws, response):
+        print("WEBSOCKET_CONNECTED")
+        ws.subscribe(instrument_tokens)
+        ws.set_mode(ws.MODE_FULL, instrument_tokens)
+        print("SUBSCRIBED_TOKENS:", instrument_tokens)
+
+    def finalize_candle(token, current):
+        start_vol = current["start_cumulative_volume"]
+        last_vol = current["last_cumulative_volume"]
+
+        if start_vol is not None and last_vol is not None:
+            minute_volume = max(0, last_vol - start_vol)
+        else:
+            minute_volume = None
+
+        candle = {
+            "instrument_token": token,
+            "minute": current["minute"],
+            "open": current["open"],
+            "high": current["high"],
+            "low": current["low"],
+            "close": current["close"],
+            "volume": minute_volume,
+        }
+
+        candle_history[token].append(candle)
+
+        print(
+            "CANDLE_1M",
+            "TOKEN:", token,
+            "TIME:", candle["minute"].strftime("%H:%M"),
+            "O:", candle["open"],
+            "H:", candle["high"],
+            "L:", candle["low"],
+            "C:", candle["close"],
+            "V:", candle["volume"],
+            "STORED:", len(candle_history[token]),
+        )
+
+        if on_candle is not None:
+            try:
+                on_candle(candle)
+            except Exception as exc:
+                print("CANDLE_CALLBACK_ERROR:", repr(exc))
+
+    def on_ticks(ws, ticks):
+        for tick in ticks:
+            token = tick.get("instrument_token")
+            price = tick.get("last_price")
+            cumulative_volume = tick.get("volume_traded")
+
+            if token is None or price is None:
+                continue
+
+            now = datetime.now()
+            minute = now.replace(second=0, microsecond=0)
+            current = current_candles.get(token)
+
+            if current is None:
+                current_candles[token] = {
+                    "minute": minute,
+                    "open": price,
+                    "high": price,
+                    "low": price,
+                    "close": price,
+                    "start_cumulative_volume": cumulative_volume,
+                    "last_cumulative_volume": cumulative_volume,
+                }
+                continue
+
+            if minute > current["minute"]:
+                finalize_candle(token, current)
+
+                current_candles[token] = {
+                    "minute": minute,
+                    "open": price,
+                    "high": price,
+                    "low": price,
+                    "close": price,
+                    "start_cumulative_volume": cumulative_volume,
+                    "last_cumulative_volume": cumulative_volume,
+                }
+            else:
+                current["high"] = max(current["high"], price)
+                current["low"] = min(current["low"], price)
+                current["close"] = price
+
+                if cumulative_volume is not None:
+                    current["last_cumulative_volume"] = cumulative_volume
+
+            print("LIVE_TICK", "TOKEN:", token, "LTP:", price)
+
+    def on_close(ws, code, reason):
+        print("WEBSOCKET_CLOSED:", code, reason)
+
+    def on_error(ws, code, reason):
+        print("WEBSOCKET_ERROR:", code, reason)
+
+    ticker.on_connect = on_connect
+    ticker.on_ticks = on_ticks
+    ticker.on_close = on_close
+    ticker.on_error = on_error
+
+    print("STARTING_WEBSOCKET...")
+    ticker.connect()
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\main.py
+================================================================================
+import config
+from datetime import datetime, timedelta
+
+from config_loader import load_project_config
+from kite_client import create_kite_client
+from historical_data import fetch_historical_data
+from option_data_pull import fetch_sensex_options
+from option_chain_engine import analyze_option_chain
+from strike_selector import select_option
+from live_option_feed import start_live_option_feed
+from indicator_engine import calculate_indicators
+from oi_engine import analyze_oi_data
+from market_engine import analyze_market_structure
+from liquidity_greeks_engine import analyze_liquidity_greeks
+from pivot_engine import calculate_pivot_points
+from price_action_engine import analyze_price_action
+from multi_timeframe_engine import analyze_multi_timeframe
+from market_structure_engine import analyze_market_structure as analyze_candle_structure
+from market_status_engine import get_market_status
+from fii_dii_engine import analyze_fii_dii
+from entry_timing_engine import confirm_entry_candle
+from confluence_engine import calculate_confluence_score
+from chart_pattern_engine import detect_candle_patterns
+from active_trade_manager import ActiveTradeManager
+from support_resistance_engine import calculate_support_resistance
+from risk_manager import calculate_position_size
+from reversal_engine import detect_reversal
+from volume_engine import analyze_volume
+from veto_engine import check_trade_vetoes
+from trade_lifecycle_manager import TradeLifecycleManager
+from trade_history_storage import TradeHistoryStorage
+from trade_history import TradeHistory
+from trade_price_monitor import TradePriceMonitor
+from trade_recovery import TradeRecovery
+from trade_monitor_loop import TradeMonitorLoop
+from trade_state_storage import TradeStateStorage
+from trade_monitor import TradeMonitor
+from trade_engine import decide_trade
+from trade_pnl_calculator import TradePnLCalculator
+from telegram_engine import send_telegram_message
+from google_sheets_engine import append_google_sheet_row
+from excel_report import save_trade_report
+from dashboard import generate_dashboard
+from daily_trade_summary import DailyTradeSummary
+from daily_trade_filter import DailyTradeFilter
+from daily_summary_storage import DailySummaryStorage
+from daily_summary import DailySummary
+from daily_report_validator import DailyReportValidator
+from daily_report_service import DailyReportService
+from daily_report_sender import DailyReportSender
+from daily_report_scheduler import DailyReportScheduler
+from daily_report_runner import DailyReportRunner
+from daily_report_pipeline import DailyReportPipeline
+from daily_report_loop import DailyReportLoop
+from daily_report_job import DailyReportJob
+from daily_report_google_sheets import DailyReportGoogleSheets
+from daily_report_formatter import DailyReportFormatter
+from daily_report_engine import DailyReportEngine
+from daily_report_dispatcher import DailyReportDispatcher
+from daily_report_delivery import DailyReportDelivery
+from daily_report_archive import DailyReportArchive
+from trade_exit_signal_handler import TradeExitSignalHandler
+from trade_exit_monitor_loop import TradeExitMonitorLoop
+from trade_exit_monitor import TradeExitMonitor
+from trade_exit_checker import TradeExitChecker
+from trade_exit_alert_status import TradeExitAlertStatus
+from trade_exit_alert_service import TradeExitAlertService
+from trade_exit_alert_sender import TradeExitAlertSender
+from trade_exit_alert_runner import TradeExitAlertRunner
+from trade_exit_alert_pipeline import TradeExitAlertPipeline
+from trade_exit_alert_manager import TradeExitAlertManager
+from trade_exit_alert_logger import TradeExitAlertLogger
+from trade_exit_alert_integration import TradeExitAlertIntegration
+from trade_exit_alert_formatter import TradeExitAlertFormatter
+from trade_exit_alert_deduplicator import TradeExitAlertDeduplicator
+from trade_exit_alert_controller import TradeExitAlertController
+from trade_exit_alert_config import TradeExitAlertConfig
+from threading import Thread
+
+
+# Separate candle history for each selected option token
+CANDLE_HISTORY = {}
+ACTIVE_TRADE_MANAGER = ActiveTradeManager()
+
+ACTIVE_TRADE_STATE_STORAGE = TradeStateStorage()
+TRADE_HISTORY_STORAGE = TradeHistoryStorage()
+TRADE_HISTORY = TradeHistory()
+
+
+def handle_finalized_candle(candle):
+    """Receive finalized 1-minute candles and calculate indicators."""
+    token = candle["instrument_token"]
+
+    history = CANDLE_HISTORY.setdefault(token, [])
+    history.append(candle)
+
+    # Keep recent candles in memory
+    if len(history) > 500:
+        del history[:-500]
+
+    indicators = calculate_indicators(history)
+
+    print(
+        "CANDLE_CALLBACK_RECEIVED",
+        "TOKEN:", token,
+        "TIME:", candle["minute"].strftime("%H:%M"),
+        "O:", candle["open"],
+        "H:", candle["high"],
+        "L:", candle["low"],
+        "C:", candle["close"],
+        "V:", candle["volume"],
+    )
+
+    print(
+        "INDICATORS",
+        "TOKEN:", token,
+        "CANDLES:", indicators["candle_count"],
+        "EMA5:", indicators["ema_5"],
+        "EMA13:", indicators["ema_13"],
+        "EMA26:", indicators["ema_26"],
+        "RSI14:", indicators["rsi_14"],
+    )
+
+    # Analyze live option candle volume and reversal
+    volume_analysis = analyze_volume(history)
+    print("LIVE_OPTION_VOLUME_ANALYSIS:", volume_analysis)
+
+    reversal_analysis = detect_reversal(history)
+    print("LIVE_OPTION_REVERSAL_ANALYSIS:", reversal_analysis)
+
+
+
+def main():
+    load_project_config()
+
+    print(f"Project: {config.PROJECT_NAME}")
+    print(f"Trading Time: {config.TRADING_START} - {config.TRADING_END}")
+    print(f"Analysis Timeframe: {config.ANALYSIS_TIMEFRAME}")
+    print(f"Entry Timeframe: {config.ENTRY_TIMEFRAME}")
+    print(f"Minimum Entry Score: {config.MIN_ENTRY_SCORE}")
+    print(f"Risk Per Trade: â‚¹{config.MAX_RISK_PER_TRADE_INR}")
+    print(f"Trading Mode: {config.TRADING_MODE}")
+    print(f"Auto Order Placement: {config.AUTO_PLACE_ORDERS}")
+
+    kite = create_kite_client()
+    kite.profile()
+    print("KITE_CONNECTION_OK")
+
+    # Daily report stack: compatible adapters for function-based engines.
+    class _TelegramAdapter:
+        def send_message(self, message):
+            return send_telegram_message(message)
+
+    class _GoogleSheetsAdapter:
+        def send_row(self, row):
+            return append_google_sheet_row(row)
+
+    daily_scheduler = DailyReportScheduler()
+    daily_summary = DailySummary()
+    daily_summary_storage = DailySummaryStorage()
+    daily_report_engine = DailyReportEngine(
+        summary_engine=daily_summary,
+        summary_storage=daily_summary_storage,
+    )
+
+    daily_pipeline = DailyReportPipeline(
+        trade_filter=DailyTradeFilter(),
+        report_engine=daily_report_engine,
+        validator=DailyReportValidator(),
+        archive=DailyReportArchive(),
+    )
+
+    daily_dispatcher = DailyReportDispatcher(
+        telegram_sender=DailyReportSender(
+            formatter=DailyReportFormatter(),
+            telegram_engine=_TelegramAdapter(),
+        ),
+        google_sheets_sender=DailyReportGoogleSheets(
+            sheets_engine=_GoogleSheetsAdapter(),
+        ),
+    )
+
+    daily_service = DailyReportService(
+        pipeline=daily_pipeline,
+        dispatcher=daily_dispatcher,
+    )
+
+    daily_job = DailyReportJob(
+        scheduler=daily_scheduler,
+        report_service=daily_service,
+    )
+
+    daily_report_loop = DailyReportLoop(
+        report_job=daily_job,
+        trades_provider=TRADE_HISTORY.get_all_trades,
+        interval_seconds=30,
+    )
+
+    daily_report_thread = Thread(
+        target=daily_report_loop.run_forever,
+        name="daily-report-loop",
+        daemon=True,
+    )
+    daily_report_thread.start()
+    print("DAILY_REPORT_LOOP_STARTED")
+
+
+    # Load persisted closed-trade history
+    saved_history = TRADE_HISTORY_STORAGE.load()
+    for saved_trade in saved_history:
+        TRADE_HISTORY.add_trade(saved_trade)
+
+    # Restore active trade, if one was saved previously
+    recovery = TradeRecovery(
+        trade_manager=ACTIVE_TRADE_MANAGER,
+        storage=ACTIVE_TRADE_STATE_STORAGE,
+    )
+    recovered_trade = recovery.recover()
+    print("TRADE_RECOVERY:", recovered_trade)
+
+    lifecycle = TradeLifecycleManager(
+        active_trade_manager=ACTIVE_TRADE_MANAGER,
+        trade_state_storage=ACTIVE_TRADE_STATE_STORAGE,
+        trade_history=TRADE_HISTORY,
+        trade_history_storage=TRADE_HISTORY_STORAGE,
+    )
+
+    trade_monitor = TradeMonitor(ACTIVE_TRADE_MANAGER)
+    print("ACTIVE_TRADE_STATUS:", trade_monitor.get_status())
+
+    def get_trade_ltp(trade):
+        symbol = trade.get("tradingsymbol")
+        if not symbol:
+            raise ValueError("Active trade is missing tradingsymbol.")
+
+        quote_key = symbol if ":" in symbol else f"BFO:{symbol}"
+        quote = kite.ltp([quote_key])
+        if quote_key not in quote:
+            raise RuntimeError(f"LTP not returned for {quote_key}")
+
+        return float(quote[quote_key]["last_price"])
+
+    trade_price_monitor = TradePriceMonitor(
+        trade_manager=ACTIVE_TRADE_MANAGER,
+        ltp_provider=get_trade_ltp,
+    )
+
+    try:
+        price_status = trade_price_monitor.get_price_status()
+        print("ACTIVE_TRADE_PRICE_STATUS:", price_status)
+    except Exception as exc:
+        print("ACTIVE_TRADE_PRICE_MONITOR_ERROR:", exc)
+
+    # Trade exit alert configuration and state
+    EXIT_ALERT_CONFIG = TradeExitAlertConfig()
+    EXIT_ALERT_DEDUPLICATOR = TradeExitAlertDeduplicator()
+    EXIT_ALERT_STATUS = TradeExitAlertStatus()
+
+    # Alert callback: currently logs/prints the alert message.
+    # Connect your Telegram sender here when its exact function is available.
+    def send_exit_message(message):
+        print("TRADE_EXIT_TELEGRAM_MESSAGE:")
+        print(message)
+        return {"status": "PRINTED_ONLY"}
+
+    EXIT_ALERT_INTEGRATION = TradeExitAlertIntegration(send_exit_message)
+
+    def handle_exit_alert(signal):
+        if EXIT_ALERT_DEDUPLICATOR.is_duplicate(signal):
+            EXIT_ALERT_STATUS.update("DUPLICATE", "Repeated exit signal ignored.")
+            print("TRADE_EXIT_ALERT_DUPLICATE:", signal)
+            return
+
+        result = EXIT_ALERT_INTEGRATION.on_exit_signal(signal)
+        EXIT_ALERT_STATUS.update(
+            result.get("status", "UNKNOWN"),
+            result.get("reason", ""),
+        )
+        print("TRADE_EXIT_ALERT_RESULT:", result)
+
+    EXIT_SIGNAL_HANDLER = TradeExitSignalHandler(handle_exit_alert)
+
+    # Continuous premium-based exit monitoring.
+    # Requires active trade fields: option_sl and option_target.
+    EXIT_MONITOR_LOOP = TradeExitMonitorLoop(
+        get_active_trade=ACTIVE_TRADE_MANAGER.get_active_trade,
+        get_current_option_price=get_trade_ltp,
+        on_exit_signal=EXIT_SIGNAL_HANDLER.handle_signal,
+        interval_seconds=1.0,
+    )
+
+    if ACTIVE_TRADE_MANAGER.has_active_trade():
+        EXIT_MONITOR_THREAD = Thread(
+            target=EXIT_MONITOR_LOOP.start,
+            name="trade-exit-monitor",
+            daemon=True,
+        )
+        EXIT_MONITOR_THREAD.start()
+        print("TRADE_EXIT_MONITOR_STARTED")
+    else:
+        print("TRADE_EXIT_MONITOR_NOT_STARTED: No active trade.")
+
+
+
+    # Fetch Sensex historical candles
+    instruments = kite.instruments("BSE")
+    sensex = [
+        item for item in instruments
+        if item.get("tradingsymbol") == "SENSEX"
+        or item.get("name") == "SENSEX"
+    ]
+
+    if not sensex:
+        raise RuntimeError("SENSEX instrument not found.")
+
+    token = sensex[0]["instrument_token"]
+    to_date = datetime.now()
+    from_date = to_date - timedelta(days=5)
+
+    candles = fetch_historical_data(
+        kite=kite,
+        instrument_token=token,
+        from_date=from_date,
+        to_date=to_date,
+        interval=config.ANALYSIS_TIMEFRAME,
+    )
+
+    print("HISTORICAL_FETCH_OK")
+    print("CANDLE_COUNT:", len(candles))
+
+    # Analyze Sensex market structure from historical candles
+    market_analysis = analyze_market_structure(candles)
+    print("MARKET_STRUCTURE_ANALYSIS:", market_analysis)
+
+    # Current Indian market session status
+    market_status = get_market_status()
+    print("MARKET_STATUS:", market_status)
+
+    # Analyze latest-candle market structure separately
+    candle_structure = analyze_candle_structure(candles)
+    print("CANDLE_MARKET_STRUCTURE:", candle_structure)
+
+    # Calculate Sensex support and resistance from historical candles
+    support_resistance = calculate_support_resistance(candles)
+    print("SUPPORT_RESISTANCE_ANALYSIS:", support_resistance)
+
+    # These require valid trade-decision inputs that are not available yet.
+    print("VETO_ENGINE_SKIPPED: Mandatory live confirmation checks are not ready.")
+    print("RISK_MANAGER_SKIPPED: Requires option-premium entry and stop-loss values.")
+
+
+    # Fetch 15-minute candles for multi-timeframe comparison
+    candles_15m = fetch_historical_data(
+        kite=kite,
+        instrument_token=token,
+        from_date=from_date,
+        to_date=to_date,
+        interval="15minute",
+    )
+
+    print("15M_CANDLE_COUNT:", len(candles_15m))
+
+    multi_timeframe = analyze_multi_timeframe(
+        candles_15m=candles_15m,
+        candles_5m=candles,
+    )
+    print("MULTI_TIMEFRAME_ANALYSIS:", multi_timeframe)
+
+    # These engines need genuine inputs not yet produced by the current pipeline.
+    print("FII_DII_SKIPPED: Real fii_net and dii_net data not available.")
+    print("CONFLUENCE_SKIPPED: All 8 component scores are not yet available.")
+    print("ENTRY_TIMING_SKIPPED: Direction and reference level are not yet confirmed.")
+
+    # Analyze Sensex price action using historical candles
+    price_action = analyze_price_action(candles)
+    print("PRICE_ACTION_ANALYSIS:", price_action)
+
+    # Analyze candle patterns from historical Sensex candles
+    chart_patterns = detect_candle_patterns(candles)
+    print("CHART_PATTERN_ANALYSIS:", chart_patterns)
+
+    # Report current active-trade manager state
+    print("ACTIVE_TRADE_EXISTS:", ACTIVE_TRADE_MANAGER.has_active_trade())
+    print("ACTIVE_TRADE:", ACTIVE_TRADE_MANAGER.get_active_trade())
+
+    # Calculate pivots from the previous available trading session
+    candles_by_date = {}
+    for candle in candles:
+        candle_date = candle["date"].date()
+        candles_by_date.setdefault(candle_date, []).append(candle)
+
+    trading_dates = sorted(candles_by_date)
+
+    if len(trading_dates) >= 2:
+        previous_session_date = trading_dates[-2]
+        previous_session_candles = candles_by_date[previous_session_date]
+
+        previous_day = {
+            "high": max(float(c["high"]) for c in previous_session_candles),
+            "low": min(float(c["low"]) for c in previous_session_candles),
+            "close": float(previous_session_candles[-1]["close"]),
+        }
+
+        pivot_analysis = calculate_pivot_points(previous_day)
+        print("PIVOT_SESSION_DATE:", previous_session_date)
+        print("PIVOT_ANALYSIS:", pivot_analysis)
+    else:
+        print("PIVOT_SKIPPED: Not enough distinct trading dates.")
+
+    # Fetch nearby Sensex option quotes
+    option_data = fetch_sensex_options(kite, strike_range=200)
+
+    print("SENSEX_SPOT:", option_data["spot"])
+    print("SELECTED_EXPIRY:", option_data["expiry"])
+    print("ATM_STRIKE:", option_data["atm_strike"])
+
+    # Validate fetched options
+    summary = analyze_option_chain(option_data["options"])
+    print("OPTION_CHAIN_SUMMARY:", summary)
+
+    # Analyze call/put open interest and PCR
+    oi_summary = analyze_oi_data(option_data["options"])
+    print("OI_ANALYSIS:", oi_summary)
+
+    # Select ATM CE and PE from fetched records
+    selected_tokens = []
+
+    for option_type in ("CE", "PE"):
+        result = select_option(
+            options=option_data["options"],
+            target_strike=option_data["atm_strike"],
+            option_type=option_type,
+        )
+
+        if result["status"] == "OK":
+            selected = result["option"]
+            selected_tokens.append(selected["instrument_token"])
+
+            print(
+                f"ATM_{option_type}:",
+                selected["tradingsymbol"],
+                "| Strike:", selected["strike"],
+                "| LTP:", selected["last_price"],
+            )
+        else:
+            print(f"ATM_{option_type}: NO_MATCH")
+
+    if selected_tokens:
+        start_live_option_feed(
+            kite,
+            selected_tokens,
+            on_candle=handle_finalized_candle,
+        )
+    else:
+        print("LIVE_FEED_SKIPPED: No ATM option tokens selected.")
+
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\market_engine.py
+================================================================================
+
+from typing import Any
+
+
+def analyze_market_structure(
+    candles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Summarize recent candle structure using available OHLC data."""
+
+    if not candles:
+        return {
+            "status": "NO_DATA",
+            "trend": "UNKNOWN",
+            "latest_close": None,
+            "recent_high": None,
+            "recent_low": None,
+        }
+
+    required = {"open", "high", "low", "close"}
+
+    for index, candle in enumerate(candles):
+        missing = required - candle.keys()
+        if missing:
+            raise ValueError(
+                f"Candle {index} is missing fields: {sorted(missing)}"
+            )
+
+    latest_close = float(candles[-1]["close"])
+    recent_high = max(float(candle["high"]) for candle in candles)
+    recent_low = min(float(candle["low"]) for candle in candles)
+
+    if len(candles) < 2:
+        trend = "INSUFFICIENT_DATA"
+    else:
+        previous_close = float(candles[-2]["close"])
+
+        if latest_close > previous_close:
+            trend = "UP"
+        elif latest_close < previous_close:
+            trend = "DOWN"
+        else:
+            trend = "SIDEWAYS"
+
+    return {
+        "status": "OK",
+        "trend": trend,
+        "latest_close": latest_close,
+        "recent_high": recent_high,
+        "recent_low": recent_low,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\market_status_engine.py
+================================================================================
+
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
+
+
+TIMEZONE = ZoneInfo("Asia/Kolkata")
+
+MARKET_OPEN = time(9, 15)
+MARKET_CLOSE = time(15, 30)
+
+
+def get_market_status(
+    current_time: datetime | None = None,
+) -> dict[str, str]:
+    """Return market status based on Indian market session hours."""
+
+    if current_time is None:
+        current_time = datetime.now(TIMEZONE)
+    elif current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=TIMEZONE)
+    else:
+        current_time = current_time.astimezone(TIMEZONE)
+
+    current_clock = current_time.time()
+
+    if MARKET_OPEN <= current_clock < MARKET_CLOSE:
+        status = "TRADING"
+    elif current_clock < MARKET_OPEN:
+        status = "PRE_MARKET"
+    else:
+        status = "CLOSED"
+
+    return {
+        "status": status,
+        "date": current_time.strftime("%Y-%m-%d"),
+        "time": current_time.strftime("%H:%M:%S"),
+        "timezone": "Asia/Kolkata",
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\market_structure_engine.py
+================================================================================
+
+from typing import Any
+
+
+def analyze_market_structure(
+    candles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Classify basic market structure using the latest two candles."""
+
+    if len(candles) < 2:
+        return {
+            "status": "INSUFFICIENT_DATA",
+            "structure": "UNKNOWN",
+        }
+
+    required = {"high", "low", "close"}
+
+    for index, candle in enumerate(candles):
+        missing = required - candle.keys()
+        if missing:
+            raise ValueError(
+                f"Candle {index} is missing fields: {sorted(missing)}"
+            )
+
+    previous = candles[-2]
+    latest = candles[-1]
+
+    previous_high = float(previous["high"])
+    previous_low = float(previous["low"])
+    latest_high = float(latest["high"])
+    latest_low = float(latest["low"])
+
+    if latest_high > previous_high and latest_low > previous_low:
+        structure = "BULLISH"
+    elif latest_high < previous_high and latest_low < previous_low:
+        structure = "BEARISH"
+    else:
+        structure = "MIXED"
+
+    return {
+        "status": "OK",
+        "structure": structure,
+        "latest_high": latest_high,
+        "latest_low": latest_low,
+        "latest_close": float(latest["close"]),
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\multi_timeframe_engine.py
+================================================================================
+
+from typing import Any
+
+
+def get_timeframe_direction(
+    candles: list[dict[str, Any]],
+) -> str:
+    """Determine direction from the latest candle's close vs open."""
+
+    if not candles:
+        return "UNKNOWN"
+
+    latest = candles[-1]
+
+    required = {"open", "close"}
+    missing = required - latest.keys()
+
+    if missing:
+        raise ValueError(
+            f"Latest candle is missing fields: {sorted(missing)}"
+        )
+
+    open_price = float(latest["open"])
+    close_price = float(latest["close"])
+
+    if close_price > open_price:
+        return "BULLISH"
+    if close_price < open_price:
+        return "BEARISH"
+
+    return "NEUTRAL"
+
+
+def analyze_multi_timeframe(
+    candles_15m: list[dict[str, Any]],
+    candles_5m: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Compare 15-minute and 5-minute candle directions."""
+
+    direction_15m = get_timeframe_direction(candles_15m)
+    direction_5m = get_timeframe_direction(candles_5m)
+
+    if "UNKNOWN" in {direction_15m, direction_5m}:
+        alignment = "INSUFFICIENT_DATA"
+    elif direction_15m == direction_5m:
+        alignment = (
+            "ALIGNED"
+            if direction_15m != "NEUTRAL"
+            else "NEUTRAL"
+        )
+    else:
+        alignment = "NOT_ALIGNED"
+
+    return {
+        "status": "OK",
+        "direction_15m": direction_15m,
+        "direction_5m": direction_5m,
+        "alignment": alignment,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\oi_engine.py
+================================================================================
+
+from typing import Any
+
+
+def analyze_oi_data(
+    options: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Summarize call/put open interest and calculate PCR."""
+
+    if not options:
+        return {
+            "status": "NO_DATA",
+            "call_oi": 0,
+            "put_oi": 0,
+            "pcr": None,
+        }
+
+    call_oi = 0
+    put_oi = 0
+
+    for index, option in enumerate(options):
+        required = {"option_type", "oi"}
+        missing = required - option.keys()
+
+        if missing:
+            raise ValueError(
+                f"Option {index} is missing fields: {sorted(missing)}"
+            )
+
+        option_type = str(option["option_type"]).upper()
+        oi = float(option["oi"])
+
+        if oi < 0:
+            raise ValueError(f"Option {index} has negative OI.")
+
+        if option_type == "CE":
+            call_oi += oi
+        elif option_type == "PE":
+            put_oi += oi
+        else:
+            raise ValueError(
+                f"Option {index} has invalid option_type: {option_type}"
+            )
+
+    pcr = put_oi / call_oi if call_oi > 0 else None
+
+    return {
+        "status": "OK",
+        "call_oi": call_oi,
+        "put_oi": put_oi,
+        "pcr": pcr,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\option_chain_engine.py
+================================================================================
+
+from typing import Any
+
+
+def analyze_option_chain(
+    options: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Validate and summarize option-chain records."""
+
+    if not options:
+        return {
+            "status": "NO_DATA",
+            "total_options": 0,
+            "ce_count": 0,
+            "pe_count": 0,
+        }
+
+    required = {"strike", "option_type", "last_price"}
+    ce_count = 0
+    pe_count = 0
+
+    for index, option in enumerate(options):
+        missing = required - option.keys()
+        if missing:
+            raise ValueError(
+                f"Option {index} is missing fields: {sorted(missing)}"
+            )
+
+        option_type = str(option["option_type"]).upper()
+
+        if option_type == "CE":
+            ce_count += 1
+        elif option_type == "PE":
+            pe_count += 1
+        else:
+            raise ValueError(
+                f"Option {index} has invalid option_type: {option_type}"
+            )
+
+        if float(option["strike"]) <= 0:
+            raise ValueError(f"Option {index} has invalid strike.")
+
+        if float(option["last_price"]) < 0:
+            raise ValueError(f"Option {index} has invalid last_price.")
+
+    return {
+        "status": "OK",
+        "total_options": len(options),
+        "ce_count": ce_count,
+        "pe_count": pe_count,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\option_data_pull.py
+================================================================================
+from datetime import date
+from typing import Any
+
+from kiteconnect import KiteConnect
+
+
+def fetch_sensex_options(
+    kite: KiteConnect,
+    strike_range: float = 200,
+) -> dict[str, Any]:
+    """Fetch nearest-expiry Sensex ATM and nearby CE/PE quotes with OI."""
+
+    spot = kite.ltp("BSE:SENSEX")["BSE:SENSEX"]["last_price"]
+    instruments = kite.instruments("BFO")
+
+    options = [
+        item for item in instruments
+        if "SENSEX" in str(item.get("name", "")).upper()
+        and item.get("instrument_type") in ("CE", "PE")
+        and item.get("expiry")
+        and item["expiry"] >= date.today()
+        and float(item.get("strike", 0)) > 0
+    ]
+
+    if not options:
+        raise RuntimeError("No current/future Sensex options found.")
+
+    expiry = min(item["expiry"] for item in options)
+    expiry_options = [
+        item for item in options if item["expiry"] == expiry
+    ]
+
+    atm_strike = min(
+        {float(item["strike"]) for item in expiry_options},
+        key=lambda strike: abs(strike - spot),
+    )
+
+    selected = [
+        item for item in expiry_options
+        if abs(float(item["strike"]) - atm_strike) <= strike_range
+    ]
+
+    symbols = [f'BFO:{item["tradingsymbol"]}' for item in selected]
+    quotes = kite.quote(symbols)
+
+    records = []
+    for item in selected:
+        symbol = f'BFO:{item["tradingsymbol"]}'
+        quote = quotes.get(symbol)
+
+        if not quote or "last_price" not in quote:
+            continue
+
+        records.append({
+            "tradingsymbol": item["tradingsymbol"],
+            "instrument_token": item["instrument_token"],
+            "expiry": item["expiry"],
+            "strike": float(item["strike"]),
+            "option_type": item["instrument_type"],
+            "last_price": float(quote["last_price"]),
+            "oi": float(quote.get("oi", 0)),
+            "lot_size": item["lot_size"],
+        })
+
+    return {
+        "spot": spot,
+        "expiry": expiry,
+        "atm_strike": atm_strike,
+        "options": records,
+    }
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\pivot_engine.py
+================================================================================
+
+from typing import Any
+
+
+def calculate_pivot_points(
+    previous_day: dict[str, Any],
+) -> dict[str, Any]:
+    """Calculate standard pivot, support, and resistance levels."""
+
+    required = {"high", "low", "close"}
+    missing = required - previous_day.keys()
+
+    if missing:
+        raise ValueError(
+            f"Previous-day data is missing fields: {sorted(missing)}"
+        )
+
+    high = float(previous_day["high"])
+    low = float(previous_day["low"])
+    close = float(previous_day["close"])
+
+    if high < low:
+        raise ValueError("High cannot be lower than low.")
+
+    if not low <= close <= high:
+        raise ValueError("Close must be between low and high.")
+
+    pivot = (high + low + close) / 3
+
+    resistance_1 = (2 * pivot) - low
+    support_1 = (2 * pivot) - high
+
+    resistance_2 = pivot + (high - low)
+    support_2 = pivot - (high - low)
+
+    resistance_3 = high + 2 * (pivot - low)
+    support_3 = low - 2 * (high - pivot)
+
+    return {
+        "status": "OK",
+        "pivot": pivot,
+        "r1": resistance_1,
+        "r2": resistance_2,
+        "r3": resistance_3,
+        "s1": support_1,
+        "s2": support_2,
+        "s3": support_3,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\price_action_engine.py
+================================================================================
+
+from typing import Any
+
+
+def analyze_price_action(
+    candles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Analyze the latest candle's direction and range breakout."""
+
+    if not candles:
+        return {
+            "status": "NO_DATA",
+            "signal": "UNKNOWN",
+        }
+
+    required = {"open", "high", "low", "close"}
+
+    for index, candle in enumerate(candles):
+        missing = required - candle.keys()
+        if missing:
+            raise ValueError(
+                f"Candle {index} is missing fields: {sorted(missing)}"
+            )
+
+    latest = candles[-1]
+    open_price = float(latest["open"])
+    high = float(latest["high"])
+    low = float(latest["low"])
+    close = float(latest["close"])
+
+    if high < low or not (
+        low <= open_price <= high and low <= close <= high
+    ):
+        raise ValueError("Latest candle has invalid OHLC values.")
+
+    if len(candles) < 2:
+        return {
+            "status": "INSUFFICIENT_DATA",
+            "signal": "UNKNOWN",
+            "latest_close": close,
+        }
+
+    previous_high = float(candles[-2]["high"])
+    previous_low = float(candles[-2]["low"])
+
+    if close > open_price and close > previous_high:
+        signal = "BULLISH_BREAKOUT"
+    elif close < open_price and close < previous_low:
+        signal = "BEARISH_BREAKDOWN"
+    elif close > open_price:
+        signal = "BULLISH"
+    elif close < open_price:
+        signal = "BEARISH"
+    else:
+        signal = "NEUTRAL"
+
+    return {
+        "status": "OK",
+        "signal": signal,
+        "latest_close": close,
+        "previous_high": previous_high,
+        "previous_low": previous_low,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\reversal_engine.py
+================================================================================
+
+from typing import Any
+
+
+def detect_reversal(
+    candles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Detect a basic reversal using the last two candles."""
+
+    if len(candles) < 2:
+        return {
+            "status": "INSUFFICIENT_DATA",
+            "signal": "UNKNOWN",
+        }
+
+    required = {"open", "high", "low", "close"}
+
+    for index, candle in enumerate(candles[-2:]):
+        missing = required - candle.keys()
+        if missing:
+            raise ValueError(
+                f"Candle {index} is missing fields: {sorted(missing)}"
+            )
+
+    previous, latest = candles[-2], candles[-1]
+
+    previous_open = float(previous["open"])
+    previous_close = float(previous["close"])
+    latest_open = float(latest["open"])
+    latest_close = float(latest["close"])
+
+    if (
+        previous_close < previous_open
+        and latest_close > latest_open
+        and latest_close > previous_open
+        and latest_open < previous_close
+    ):
+        signal = "BULLISH_ENGULFING"
+    elif (
+        previous_close > previous_open
+        and latest_close < latest_open
+        and latest_close < previous_open
+        and latest_open > previous_close
+    ):
+        signal = "BEARISH_ENGULFING"
+    else:
+        signal = "NO_REVERSAL"
+
+    return {
+        "status": "OK",
+        "signal": signal,
+        "latest_close": latest_close,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\risk_manager.py
+================================================================================
+from typing import Any
+
+
+MAX_SL_POINTS = 50.0
+
+
+def calculate_stop_loss(
+    entry_price: float,
+    direction: str,
+    recent_reversal_level: float,
+) -> dict[str, Any]:
+    """Calculate Sensex index-point SL using the nearer of reversal and 50 points."""
+
+    entry = float(entry_price)
+    reversal = float(recent_reversal_level)
+    direction = direction.upper()
+
+    if entry <= 0:
+        raise ValueError("entry_price must be positive.")
+
+    if reversal <= 0:
+        raise ValueError("recent_reversal_level must be positive.")
+
+    if direction not in {"CE", "PE"}:
+        raise ValueError("direction must be CE or PE.")
+
+    if direction == "CE":
+        if reversal >= entry:
+            raise ValueError("For CE, reversal level must be below entry.")
+
+        max_sl_level = entry - MAX_SL_POINTS
+        stop_loss = max(reversal, max_sl_level)
+
+    else:
+        if reversal <= entry:
+            raise ValueError("For PE, reversal level must be above entry.")
+
+        max_sl_level = entry + MAX_SL_POINTS
+        stop_loss = min(reversal, max_sl_level)
+
+    return {
+        "status": "OK",
+        "direction": direction,
+        "entry_price": round(entry, 2),
+        "recent_reversal_level": round(reversal, 2),
+        "stop_loss": round(stop_loss, 2),
+        "sl_points": round(abs(entry - stop_loss), 2),
+        "max_sl_points": MAX_SL_POINTS,
+    }
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\strike_selector.py
+================================================================================
+
+from typing import Any
+
+
+def select_option(
+    options: list[dict[str, Any]],
+    target_strike: float,
+    option_type: str,
+) -> dict[str, Any]:
+    """Select the available option nearest to the target strike."""
+
+    option_type = option_type.upper()
+
+    if option_type not in {"CE", "PE"}:
+        raise ValueError("option_type must be CE or PE.")
+
+    if target_strike <= 0:
+        raise ValueError("target_strike must be positive.")
+
+    candidates = [
+        option
+        for option in options
+        if str(option.get("option_type", "")).upper() == option_type
+        and float(option.get("strike", 0)) > 0
+    ]
+
+    if not candidates:
+        return {
+            "status": "NO_MATCH",
+            "option": None,
+        }
+
+    selected = min(
+        candidates,
+        key=lambda option: abs(
+            float(option["strike"]) - target_strike
+        ),
+    )
+
+    return {
+        "status": "OK",
+        "option": selected,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\support_resistance_engine.py
+================================================================================
+
+from typing import Any
+
+
+def calculate_support_resistance(
+    candles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Calculate basic support and resistance from candle highs/lows."""
+
+    if not candles:
+        return {
+            "status": "NO_DATA",
+            "support": None,
+            "resistance": None,
+        }
+
+    required = {"high", "low"}
+
+    for index, candle in enumerate(candles):
+        missing = required - candle.keys()
+        if missing:
+            raise ValueError(
+                f"Candle {index} is missing fields: {sorted(missing)}"
+            )
+
+    support = min(float(candle["low"]) for candle in candles)
+    resistance = max(float(candle["high"]) for candle in candles)
+
+    return {
+        "status": "OK",
+        "support": support,
+        "resistance": resistance,
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\telegram_engine.py
+================================================================================
+
+import os
+
+import requests
+
+
+def send_telegram_message(message: str) -> dict[str, object]:
+    """Send a text message using the Telegram Bot API."""
+
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+    if not bot_token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is missing.")
+
+    if not chat_id:
+        raise RuntimeError("TELEGRAM_CHAT_ID is missing.")
+
+    if not message.strip():
+        raise ValueError("Telegram message cannot be empty.")
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+    response = requests.post(
+        url,
+        json={
+            "chat_id": chat_id,
+            "text": message,
+        },
+        timeout=15,
+    )
+
+    response.raise_for_status()
+    result = response.json()
+
+    if not result.get("ok"):
+        raise RuntimeError("Telegram API did not confirm message delivery.")
+
+    return {
+        "status": "SENT",
+        "message_id": result["result"]["message_id"],
+    }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_alert_controller.py
+================================================================================
+import unittest
+from unittest.mock import patch
+
+from trade_exit_alert_controller import TradeExitAlertController
+
+
+class TestTradeExitAlertController(unittest.TestCase):
+
+    def setUp(self):
+        self.controller = TradeExitAlertController(
+            send_message=lambda message: "MOCK_SENT"
+        )
+
+    def test_exit_signal_is_forwarded(self):
+        signal = {
+            "status": "EXIT",
+            "symbol": "TEST-CE",
+            "reason": "STOP_LOSS",
+        }
+
+        with patch.object(
+            self.controller.runner,
+            "run",
+            return_value={"status": "PROCESSED"},
+        ) as mock_run:
+            result = self.controller.handle_exit_signal(signal)
+
+        mock_run.assert_called_once_with(signal)
+        self.assertEqual(result["status"], "PROCESSED")
+
+    def test_non_exit_signal_is_ignored(self):
+        result = self.controller.handle_exit_signal(
+            {"status": "MONITORING"}
+        )
+
+        self.assertEqual(result["status"], "IGNORED")
+
+    def test_invalid_signal_returns_error(self):
+        result = self.controller.handle_exit_signal(None)
+
+        self.assertEqual(result["status"], "ERROR")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_alert_integration.py
+================================================================================
+import unittest
+from unittest.mock import Mock, patch
+
+from trade_exit_alert_integration import TradeExitAlertIntegration
+
+
+class TestTradeExitAlertIntegration(unittest.TestCase):
+
+    @patch("trade_exit_alert_integration.TradeExitAlertManager")
+    def test_valid_signal_is_forwarded_to_manager(self, manager_class):
+        send_message = Mock()
+        manager = manager_class.return_value
+        manager.process.return_value = {"status": "SENT"}
+
+        integration = TradeExitAlertIntegration(send_message)
+        signal = {"status": "EXIT", "reason": "STOP_LOSS"}
+
+        result = integration.on_exit_signal(signal)
+
+        manager.process.assert_called_once_with(signal)
+        self.assertEqual(result, {"status": "SENT"})
+
+    @patch("trade_exit_alert_integration.TradeExitAlertManager")
+    def test_non_dictionary_signal_returns_error(self, manager_class):
+        integration = TradeExitAlertIntegration(Mock())
+
+        result = integration.on_exit_signal("invalid")
+
+        self.assertEqual(result["status"], "ERROR")
+        self.assertEqual(
+            result["reason"],
+            "Signal must be a dictionary.",
+        )
+        manager_class.return_value.process.assert_not_called()
+
+    @patch("trade_exit_alert_integration.TradeExitAlertManager")
+    def test_none_signal_returns_error(self, manager_class):
+        integration = TradeExitAlertIntegration(Mock())
+
+        result = integration.on_exit_signal(None)
+
+        self.assertEqual(result["status"], "ERROR")
+        manager_class.return_value.process.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_alert_manager.py
+================================================================================
+import unittest
+from unittest.mock import patch
+
+from trade_exit_alert_manager import TradeExitAlertManager
+
+
+class TestTradeExitAlertManager(unittest.TestCase):
+
+    def setUp(self):
+        self.manager = TradeExitAlertManager(
+            send_message=lambda message: "MOCK_SENT"
+        )
+
+    def test_exit_signal_is_forwarded(self):
+        signal = {
+            "status": "EXIT",
+            "symbol": "TEST-CE",
+            "reason": "STOP_LOSS",
+        }
+
+        with patch.object(
+            self.manager.controller,
+            "handle_exit_signal",
+            return_value={"status": "PROCESSED"},
+        ) as mock_handle:
+            result = self.manager.process(signal)
+
+        mock_handle.assert_called_once_with(signal)
+        self.assertEqual(result["status"], "PROCESSED")
+
+    def test_invalid_signal_returns_error(self):
+        result = self.manager.process(None)
+
+        self.assertEqual(result["status"], "ERROR")
+
+    def test_non_exit_signal_is_ignored(self):
+        result = self.manager.process(
+            {"status": "MONITORING"}
+        )
+
+        self.assertEqual(result["status"], "IGNORED")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_alert_pipeline.py
+================================================================================
+import unittest
+from unittest.mock import patch
+
+from trade_exit_alert_pipeline import TradeExitAlertPipeline
+
+
+class TestTradeExitAlertPipeline(unittest.TestCase):
+
+    def setUp(self):
+        self.sent_messages = []
+
+        def mock_send_message(message):
+            self.sent_messages.append(message)
+            return "MOCK_SENT"
+
+        self.pipeline = TradeExitAlertPipeline(mock_send_message)
+
+    def test_exit_signal_is_processed(self):
+        signal = {
+            "status": "EXIT",
+            "symbol": "TEST-CE",
+            "reason": "STOP_LOSS",
+            "current_option_price": 95.0,
+        }
+
+        with patch.object(
+            self.pipeline.alert_service,
+            "process_exit_signal",
+            return_value={"status": "PROCESSED"},
+        ) as mock_process:
+            result = self.pipeline.process(signal)
+
+        mock_process.assert_called_once_with(signal)
+        self.assertEqual(result["status"], "PROCESSED")
+
+    def test_non_exit_signal_is_ignored(self):
+        signal = {
+            "status": "MONITORING",
+            "symbol": "TEST-CE",
+        }
+
+        result = self.pipeline.process(signal)
+
+        self.assertEqual(result["status"], "IGNORED")
+
+    def test_invalid_signal_returns_error(self):
+        result = self.pipeline.process(None)
+
+        self.assertEqual(result["status"], "ERROR")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_alert_runner.py
+================================================================================
+import unittest
+from unittest.mock import patch
+
+from trade_exit_alert_runner import TradeExitAlertRunner
+
+
+class TestTradeExitAlertRunner(unittest.TestCase):
+
+    def setUp(self):
+        self.runner = TradeExitAlertRunner(
+            send_message=lambda message: "MOCK_SENT"
+        )
+
+    def test_exit_signal_runs_pipeline(self):
+        signal = {
+            "status": "EXIT",
+            "symbol": "TEST-CE",
+            "reason": "STOP_LOSS",
+            "current_option_price": 95.0,
+        }
+
+        with patch.object(
+            self.runner.pipeline,
+            "process",
+            return_value={"status": "PROCESSED"},
+        ) as mock_process:
+            result = self.runner.run(signal)
+
+        mock_process.assert_called_once_with(signal)
+        self.assertEqual(result["status"], "PROCESSED")
+
+    def test_invalid_signal_returns_error(self):
+        result = self.runner.run(None)
+
+        self.assertEqual(result["status"], "ERROR")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_alert_sender.py
+================================================================================
+import unittest
+
+from trade_exit_alert_sender import TradeExitAlertSender
+
+
+class TestTradeExitAlertSender(unittest.TestCase):
+
+    def setUp(self):
+        self.sent_messages = []
+
+        def mock_send_message(message):
+            self.sent_messages.append(message)
+            return "MOCK_SENT"
+
+        self.sender = TradeExitAlertSender(mock_send_message)
+
+    def test_exit_signal_is_sent(self):
+        signal = {
+            "status": "EXIT",
+            "symbol": "TEST-CE",
+            "reason": "STOP_LOSS",
+            "current_option_price": 95.0,
+        }
+
+        result = self.sender.send_exit_alert(signal)
+
+        self.assertEqual(result["status"], "SENT")
+        self.assertEqual(len(self.sent_messages), 1)
+        self.assertIn("TEST-CE", self.sent_messages[0])
+        self.assertIn("STOP_LOSS", self.sent_messages[0])
+
+    def test_non_exit_signal_is_ignored(self):
+        signal = {
+            "status": "MONITORING",
+            "symbol": "TEST-CE",
+        }
+
+        result = self.sender.send_exit_alert(signal)
+
+        self.assertEqual(result["status"], "IGNORED")
+        self.assertEqual(len(self.sent_messages), 0)
+
+    def test_invalid_signal_returns_error(self):
+        result = self.sender.send_exit_alert(None)
+
+        self.assertEqual(result["status"], "ERROR")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_alert_service.py
+================================================================================
+import unittest
+from unittest.mock import patch
+
+from trade_exit_alert_service import TradeExitAlertService
+
+
+class TestTradeExitAlertService(unittest.TestCase):
+
+    def setUp(self):
+        self.sent_messages = []
+
+        def mock_send_message(message):
+            self.sent_messages.append(message)
+            return "MOCK_SENT"
+
+        self.service = TradeExitAlertService(mock_send_message)
+
+    def test_exit_signal_is_logged_and_sent(self):
+        signal = {
+            "status": "EXIT",
+            "symbol": "TEST-CE",
+            "reason": "STOP_LOSS",
+            "current_option_price": 95.0,
+        }
+
+        with patch.object(
+            self.service.logger,
+            "log_signal",
+            return_value={"status": "LOGGED"},
+        ) as mock_log:
+            result = self.service.process_exit_signal(signal)
+
+        mock_log.assert_called_once_with(signal)
+
+        self.assertEqual(result["status"], "PROCESSED")
+        self.assertEqual(len(self.sent_messages), 1)
+        self.assertIn("TEST-CE", self.sent_messages[0])
+        self.assertIn("STOP_LOSS", self.sent_messages[0])
+
+    def test_non_exit_signal_is_ignored(self):
+        signal = {
+            "status": "MONITORING",
+            "symbol": "TEST-CE",
+        }
+
+        result = self.service.process_exit_signal(signal)
+
+        self.assertEqual(result["status"], "IGNORED")
+        self.assertEqual(len(self.sent_messages), 0)
+
+    def test_invalid_signal_returns_error(self):
+        result = self.service.process_exit_signal(None)
+
+        self.assertEqual(result["status"], "ERROR")
+        self.assertEqual(len(self.sent_messages), 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_alert_status.py
+================================================================================
+	import unittest
+from datetime import datetime
+
+from trade_exit_alert_status import TradeExitAlertStatus
+
+
+class TestTradeExitAlertStatus(unittest.TestCase):
+
+    def test_default_values(self):
+        status = TradeExitAlertStatus()
+
+        self.assertEqual(status.status, "IDLE")
+        self.assertEqual(status.message, "")
+        self.assertIsNone(status.updated_at)
+
+    def test_update_sets_status_and_message(self):
+        status = TradeExitAlertStatus()
+
+        status.update("SENT", "Alert sent successfully.")
+
+        self.assertEqual(status.status, "SENT")
+        self.assertEqual(status.message, "Alert sent successfully.")
+        self.assertIsNotNone(status.updated_at)
+
+    def test_updated_at_is_valid_iso_datetime(self):
+        status = TradeExitAlertStatus()
+
+        status.update("ERROR", "Test error.")
+
+        parsed = datetime.fromisoformat(status.updated_at)
+
+        self.assertIsNotNone(parsed.tzinfo)
+
+    def test_to_dict_returns_expected_fields(self):
+        status = TradeExitAlertStatus(
+            status="SENT",
+            message="Alert sent.",
+            updated_at="2026-09-21T10:00:00+05:30",
+        )
+
+        result = status.to_dict()
+
+        self.assertEqual(
+            result,
+            {
+                "status": "SENT",
+                "message": "Alert sent.",
+                "updated_at": "2026-09-21T10:00:00+05:30",
+            },
+        )
+
+    def test_update_overwrites_previous_status(self):
+        status = TradeExitAlertStatus()
+
+        status.update("SENT", "First alert.")
+        status.update("ERROR", "Second alert failed.")
+
+        self.assertEqual(status.status, "ERROR")
+        self.assertEqual(status.message, "Second alert failed.")
+        self.assertIsNotNone(status.updated_at)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_alerts.py
+================================================================================
+import unittest
+
+from trade_exit_alert_deduplicator import TradeExitAlertDeduplicator
+from trade_exit_alert_status import TradeExitAlertStatus
+
+
+class TestTradeExitAlerts(unittest.TestCase):
+
+    def test_duplicate_signal_detection(self):
+        deduplicator = TradeExitAlertDeduplicator()
+
+        signal = {
+            "trade_id": "TEST-001",
+            "status": "EXIT",
+            "reason": "STOP_LOSS",
+        }
+
+        self.assertFalse(deduplicator.is_duplicate(signal))
+        self.assertTrue(deduplicator.is_duplicate(signal))
+
+    def test_deduplicator_reset(self):
+        deduplicator = TradeExitAlertDeduplicator()
+
+        signal = {
+            "trade_id": "TEST-002",
+            "status": "EXIT",
+            "reason": "TARGET",
+        }
+
+        deduplicator.is_duplicate(signal)
+        deduplicator.reset()
+
+        self.assertFalse(deduplicator.is_duplicate(signal))
+
+    def test_alert_status_update(self):
+        status = TradeExitAlertStatus()
+        status.update("SENT", "Test alert")
+
+        result = status.to_dict()
+
+        self.assertEqual(result["status"], "SENT")
+        self.assertEqual(result["message"], "Test alert")
+        self.assertIsNotNone(result["updated_at"])
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_checker.py
+================================================================================
+import unittest
+
+from trade_exit_checker import TradeExitChecker
+
+
+class TestTradeExitChecker(unittest.TestCase):
+
+    def setUp(self):
+        self.checker = TradeExitChecker()
+        self.trade = {
+            "symbol": "TEST-CE",
+            "option_sl": 100,
+            "option_target": 200,
+        }
+
+    def test_stop_loss_triggered(self):
+        result = self.checker.check_exit(self.trade, 100)
+
+        self.assertEqual(result["status"], "EXIT")
+        self.assertEqual(result["reason"], "STOP_LOSS")
+
+    def test_target_triggered(self):
+        result = self.checker.check_exit(self.trade, 200)
+
+        self.assertEqual(result["status"], "EXIT")
+        self.assertEqual(result["reason"], "TARGET")
+
+    def test_trade_remains_under_monitoring(self):
+        result = self.checker.check_exit(self.trade, 150)
+
+        self.assertEqual(result["status"], "MONITORING")
+
+    def test_missing_sl_or_target(self):
+        result = self.checker.check_exit(
+            {"symbol": "TEST-CE"},
+            150,
+        )
+
+        self.assertEqual(result["status"], "ERROR")
+
+    def test_invalid_sl_target_order(self):
+        trade = {
+            "symbol": "TEST-CE",
+            "option_sl": 200,
+            "option_target": 100,
+        }
+
+        result = self.checker.check_exit(trade, 150)
+
+        self.assertEqual(result["status"], "ERROR")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\test_trade_exit_monitor.py
+================================================================================
+import unittest
+
+from trade_exit_monitor import TradeExitMonitor
+
+
+class TestTradeExitMonitor(unittest.TestCase):
+
+    def setUp(self):
+        self.monitor = TradeExitMonitor()
+        self.trade = {
+            "symbol": "TEST-CE",
+            "option_sl": 100,
+            "option_target": 200,
+        }
+
+    def test_stop_loss_signal(self):
+        result = self.monitor.monitor_trade(self.trade, 100)
+
+        self.assertEqual(result["status"], "EXIT")
+        self.assertEqual(result["reason"], "STOP_LOSS")
+
+    def test_target_signal(self):
+        result = self.monitor.monitor_trade(self.trade, 200)
+
+        self.assertEqual(result["status"], "EXIT")
+        self.assertEqual(result["reason"], "TARGET")
+
+    def test_monitoring_status(self):
+        result = self.monitor.monitor_trade(self.trade, 150)
+
+        self.assertEqual(result["status"], "MONITORING")
+
+    def test_invalid_trade_data(self):
+        result = self.monitor.monitor_trade(None, 150)
+
+        self.assertEqual(result["status"], "ERROR")
+
+    def test_invalid_price(self):
+        result = self.monitor.monitor_trade(self.trade, 0)
+
+        self.assertEqual(result["status"], "ERROR")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_engine.py
+================================================================================
+from typing import Any
+
+
+MIN_ENTRY_SCORE = 80
+
+
+def decide_trade(
+    score: float,
+    direction: str,
+    veto_result: dict[str, Any],
+    min_entry_score: float = MIN_ENTRY_SCORE,
+) -> dict[str, Any]:
+    """Return a trade candidate only when mandatory checks and score pass."""
+
+    if not isinstance(veto_result, dict):
+        raise TypeError("veto_result must be a dictionary.")
+
+    if not isinstance(direction, str):
+        raise TypeError("direction must be a string: CE or PE.")
+
+    direction = direction.strip().upper()
+
+    if direction not in {"CE", "PE"}:
+        raise ValueError("direction must be CE or PE.")
+
+    if not isinstance(score, (int, float)) or isinstance(score, bool):
+        raise TypeError("score must be a number.")
+
+    if not 0 <= score <= 100:
+        raise ValueError("score must be between 0 and 100.")
+
+    if not isinstance(min_entry_score, (int, float)) or isinstance(min_entry_score, bool):
+        raise TypeError("min_entry_score must be a number.")
+
+    if not 0 <= min_entry_score <= 100:
+        raise ValueError("min_entry_score must be between 0 and 100.")
+
+    if veto_result.get("approved") is not True:
+        return {
+            "status": "NO_TRADE",
+            "reason": "MANDATORY_CHECK_FAILED",
+            "score": score,
+            "direction": None,
+        }
+
+    if score < min_entry_score:
+        return {
+            "status": "NO_TRADE",
+            "reason": "SCORE_BELOW_THRESHOLD",
+            "score": score,
+            "direction": None,
+        }
+
+    return {
+        "status": "TRADE_CANDIDATE",
+        "reason": "ENTRY_CRITERIA_PASSED",
+        "score": score,
+        "direction": f"BUY_{direction}",
+    }
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_config.py
+================================================================================
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class TradeExitAlertConfig:
+    """Configuration for trade exit alerts."""
+
+    enabled: bool = True
+    log_enabled: bool = True
+    telegram_enabled: bool = True
+    retry_count: int = 3
+    retry_delay_seconds: float = 2.0
+
+    def __post_init__(self) -> None:
+        if self.retry_count < 0:
+            raise ValueError("retry_count cannot be negative.")
+
+        if self.retry_delay_seconds < 0:
+            raise ValueError("retry_delay_seconds cannot be negative.")
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_controller.py
+================================================================================
+from typing import Any, Dict
+
+from trade_exit_alert_runner import TradeExitAlertRunner
+
+
+class TradeExitAlertController:
+    """Coordinates incoming trade exit signals and alert processing."""
+
+    def __init__(self, send_message) -> None:
+        self.runner = TradeExitAlertRunner(send_message)
+
+    def handle_exit_signal(
+        self,
+        signal: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        return self.runner.run(signal)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_deduplicator.py
+================================================================================
+from typing import Any, Dict, Optional, Tuple
+
+
+class TradeExitAlertDeduplicator:
+    """Prevents repeated processing of the same exit signal."""
+
+    def __init__(self) -> None:
+        self._last_signal_key: Optional[Tuple[str, str, str]] = None
+
+    def is_duplicate(self, signal: Dict[str, Any]) -> bool:
+        if not isinstance(signal, dict):
+            raise TypeError("signal must be a dictionary.")
+
+        key = (
+            str(signal.get("trade_id", "")),
+            str(signal.get("status", "")),
+            str(signal.get("reason", "")),
+        )
+
+        if key == self._last_signal_key:
+            return True
+
+        self._last_signal_key = key
+        return False
+
+    def reset(self) -> None:
+        self._last_signal_key = None
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_formatter.py
+================================================================================
+from typing import Any, Dict
+
+
+class TradeExitAlertFormatter:
+    """Formats trade exit signals into readable alert messages."""
+
+    @staticmethod
+    def format_signal(signal: Dict[str, Any]) -> str:
+        if not isinstance(signal, dict):
+            raise TypeError("signal must be a dictionary.")
+
+        status = signal.get("status", "UNKNOWN")
+        reason = signal.get("reason", "No reason provided.")
+        symbol = signal.get("symbol", "N/A")
+        price = signal.get("current_option_price", "N/A")
+
+        return (
+            "TRADE EXIT ALERT\n"
+            f"Symbol: {symbol}\n"
+            f"Status: {status}\n"
+            f"Current Option Price: {price}\n"
+            f"Reason: {reason}"
+        )
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_integration.py
+================================================================================
+from typing import Any, Dict
+
+from trade_exit_alert_manager import TradeExitAlertManager
+
+
+class TradeExitAlertIntegration:
+    """
+    Connects trade exit signals to the alert manager.
+    Does not place or close orders.
+    """
+
+    def __init__(self, send_message) -> None:
+        self.alert_manager = TradeExitAlertManager(send_message)
+
+    def on_exit_signal(
+        self,
+        signal: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        return self.alert_manager.process(signal)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_logger.py
+================================================================================
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
+
+
+class TradeExitAlertLogger:
+    """Saves trade exit alerts as JSON Lines records."""
+
+    def __init__(self, log_file: str = "logs/trade_exit_alerts.jsonl") -> None:
+        self.log_path = Path(log_file)
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def log_signal(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            raise TypeError("signal must be a dictionary.")
+
+        record = {
+            "logged_at": datetime.now().astimezone().isoformat(),
+            "signal": signal,
+        }
+
+        with self.log_path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(record, ensure_ascii=False, default=str))
+            file.write("\n")
+
+        return {
+            "status": "LOGGED",
+            "file": str(self.log_path),
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_manager.py
+================================================================================
+from typing import Any, Dict
+
+from trade_exit_alert_controller import TradeExitAlertController
+
+
+class TradeExitAlertManager:
+    """Manages processing of trade exit alerts."""
+
+    def __init__(self, send_message) -> None:
+        self.controller = TradeExitAlertController(send_message)
+
+    def process(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        return self.controller.handle_exit_signal(signal)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_pipeline.py
+================================================================================
+from typing import Any, Dict
+
+from trade_exit_alert_service import TradeExitAlertService
+
+
+class TradeExitAlertPipeline:
+    """Passes exit signals to the alert service."""
+
+    def __init__(self, send_message) -> None:
+        self.alert_service = TradeExitAlertService(send_message)
+
+    def process(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        return self.alert_service.process_exit_signal(signal)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_runner.py
+================================================================================
+from typing import Any, Dict
+
+from trade_exit_alert_pipeline import TradeExitAlertPipeline
+
+
+class TradeExitAlertRunner:
+    """Runs the trade exit alert pipeline for incoming signals."""
+
+    def __init__(self, send_message) -> None:
+        self.pipeline = TradeExitAlertPipeline(send_message)
+
+    def run(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        return self.pipeline.process(signal)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_sender.py
+================================================================================
+from typing import Any, Callable, Dict
+
+from trade_exit_alert_formatter import TradeExitAlertFormatter
+
+
+class TradeExitAlertSender:
+    """
+    Formats and sends trade exit alerts through a supplied callback.
+    Does not place or close trades.
+    """
+
+    def __init__(
+        self,
+        send_message: Callable[[str], Any],
+    ) -> None:
+        self.send_message = send_message
+        self.formatter = TradeExitAlertFormatter()
+
+    def send_exit_alert(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Exit signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        message = self.formatter.format_signal(signal)
+        result = self.send_message(message)
+
+        return {
+            "status": "SENT",
+            "message": message,
+            "send_result": result,
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_service.py
+================================================================================
+from typing import Any, Dict
+
+from trade_exit_alert_logger import TradeExitAlertLogger
+from trade_exit_alert_sender import TradeExitAlertSender
+
+
+class TradeExitAlertService:
+    """Logs and sends trade exit alerts."""
+
+    def __init__(self, send_message) -> None:
+        self.logger = TradeExitAlertLogger()
+        self.sender = TradeExitAlertSender(send_message)
+
+    def process_exit_signal(
+        self,
+        signal: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Exit signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        try:
+            log_result = self.logger.log_signal(signal)
+            send_result = self.sender.send_exit_alert(signal)
+
+            return {
+                "status": "PROCESSED",
+                "log_result": log_result,
+                "send_result": send_result,
+            }
+
+        except Exception as exc:
+            return {
+                "status": "ERROR",
+                "reason": str(exc),
+            }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_alert_status.py
+================================================================================
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
+
+@dataclass
+class TradeExitAlertStatus:
+    """Stores the latest trade exit alert processing status."""
+
+    status: str = "IDLE"
+    message: str = ""
+    updated_at: Optional[str] = None
+
+    def update(self, status: str, message: str = "") -> None:
+        self.status = status
+        self.message = message
+        self.updated_at = datetime.now().astimezone().isoformat()
+
+    def to_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "message": self.message,
+            "updated_at": self.updated_at,
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_checker.py
+================================================================================
+from typing import Any, Dict
+
+
+class TradeExitChecker:
+    """
+    Checks option premium against configured option SL and target.
+
+    This checker does not place or close orders.
+    """
+
+    def check_exit(
+        self,
+        trade: Dict[str, Any],
+        current_option_price: float,
+    ) -> Dict[str, Any]:
+
+        if not isinstance(trade, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Trade data must be a dictionary.",
+            }
+
+        if current_option_price <= 0:
+            return {
+                "status": "ERROR",
+                "reason": "Current option price must be greater than zero.",
+            }
+
+        option_sl = trade.get("option_sl")
+        option_target = trade.get("option_target")
+
+        if option_sl is None or option_target is None:
+            return {
+                "status": "ERROR",
+                "reason": "option_sl and option_target are required.",
+            }
+
+        try:
+            option_sl = float(option_sl)
+            option_target = float(option_target)
+        except (TypeError, ValueError):
+            return {
+                "status": "ERROR",
+                "reason": "SL and target must be numeric values.",
+            }
+
+        if option_sl <= 0 or option_target <= 0:
+            return {
+                "status": "ERROR",
+                "reason": "SL and target must be greater than zero.",
+            }
+
+        if option_sl >= option_target:
+            return {
+                "status": "ERROR",
+                "reason": "For a BUY option, SL must be below target.",
+            }
+
+        symbol = trade.get("symbol", "N/A")
+
+        if current_option_price <= option_sl:
+            return {
+                "status": "EXIT",
+                "reason": "STOP_LOSS",
+                "symbol": symbol,
+                "current_option_price": current_option_price,
+            }
+
+        if current_option_price >= option_target:
+            return {
+                "status": "EXIT",
+                "reason": "TARGET",
+                "symbol": symbol,
+                "current_option_price": current_option_price,
+            }
+
+        return {
+            "status": "MONITORING",
+            "reason": "No exit condition triggered.",
+            "symbol": symbol,
+            "current_option_price": current_option_price,
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_monitor.py
+================================================================================
+from typing import Any, Dict
+
+from trade_exit_checker import TradeExitChecker
+
+
+class TradeExitMonitor:
+    """Checks active trade exit conditions without placing orders."""
+
+    def __init__(self) -> None:
+        self.exit_checker = TradeExitChecker()
+
+    def monitor_trade(
+        self,
+        trade: Dict[str, Any],
+        current_option_price: float,
+    ) -> Dict[str, Any]:
+
+        if not isinstance(trade, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Trade data must be a dictionary.",
+            }
+
+        if current_option_price <= 0:
+            return {
+                "status": "ERROR",
+                "reason": "Current option price must be greater than zero.",
+            }
+
+        return self.exit_checker.check_exit(
+            trade=trade,
+            current_option_price=current_option_price,
+        )
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_monitor_loop.py
+================================================================================
+import time
+from typing import Any, Callable, Dict
+
+from trade_exit_monitor import TradeExitMonitor
+
+
+class TradeExitMonitorLoop:
+    """
+    Repeatedly checks an active trade's exit conditions.
+
+    This module does not fetch market data or place/close orders.
+    Provide callbacks for retrieving the active trade and latest
+    option price.
+    """
+
+    def __init__(
+        self,
+        get_active_trade: Callable[[], Dict[str, Any]],
+        get_current_option_price: Callable[[Dict[str, Any]], float],
+        on_exit_signal: Callable[[Dict[str, Any]], None],
+        interval_seconds: float = 1.0,
+    ) -> None:
+        if interval_seconds <= 0:
+            raise ValueError("interval_seconds must be greater than zero.")
+
+        self.get_active_trade = get_active_trade
+        self.get_current_option_price = get_current_option_price
+        self.on_exit_signal = on_exit_signal
+        self.interval_seconds = interval_seconds
+        self.monitor = TradeExitMonitor()
+        self.running = False
+
+    def run_once(self) -> Dict[str, Any]:
+        trade = self.get_active_trade()
+
+        if not trade:
+            return {
+                "status": "NO_ACTIVE_TRADE",
+                "reason": "No active trade found.",
+            }
+
+        current_price = self.get_current_option_price(trade)
+
+        result = self.monitor.monitor_trade(
+            trade=trade,
+            current_option_price=current_price,
+        )
+
+        if result.get("status") == "EXIT":
+            self.on_exit_signal(result)
+
+        return result
+
+    def start(self) -> None:
+        self.running = True
+
+        while self.running:
+            self.run_once()
+            time.sleep(self.interval_seconds)
+
+    def stop(self) -> None:
+        self.running = False
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_exit_signal_handler.py
+================================================================================
+from typing import Any, Callable, Dict
+
+
+class TradeExitSignalHandler:
+    """
+    Handles exit signals from the trade monitor.
+
+    This module records and forwards exit signals only.
+    It does not place or close orders.
+    """
+
+    def __init__(
+        self,
+        notify_callback: Callable[[Dict[str, Any]], None],
+    ) -> None:
+        self.notify_callback = notify_callback
+        self.last_signal = None
+
+    def handle_signal(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Exit signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal does not indicate an exit.",
+            }
+
+        self.last_signal = signal
+        self.notify_callback(signal)
+
+        return {
+            "status": "HANDLED",
+            "signal": signal,
+        }
+
+    def get_last_signal(self):
+        return self.last_signal
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_history.py
+================================================================================
+
+from typing import Any
+
+
+class TradeHistory:
+    """Store closed trade records in memory."""
+
+    def __init__(self) -> None:
+        self._trades: list[dict[str, Any]] = []
+
+    def add_trade(self, trade: dict[str, Any]) -> None:
+        """Add a closed trade record."""
+
+        if not isinstance(trade, dict):
+            raise TypeError("Trade record must be a dictionary.")
+
+        if not trade:
+            raise ValueError("Trade record cannot be empty.")
+
+        self._trades.append(dict(trade))
+
+    def get_all_trades(self) -> list[dict[str, Any]]:
+        """Return a copy of all recorded trades."""
+        return [dict(trade) for trade in self._trades]
+
+    def get_trade_count(self) -> int:
+        """Return the number of recorded trades."""
+        return len(self._trades)
+
+    def clear(self) -> None:
+        """Clear all trade records from memory."""
+        self._trades.clear()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_history_storage.py
+================================================================================
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+class TradeHistoryStorage:
+    """Persist closed trade history in a JSON file."""
+
+    def __init__(self, file_path: str = "data/trade_history.json") -> None:
+        self.file_path = Path(file_path)
+
+    def save(self, trades: list[dict[str, Any]]) -> None:
+        """Save a list of trade records."""
+
+        if not isinstance(trades, list):
+            raise TypeError("Trades must be provided as a list.")
+
+        if not all(isinstance(trade, dict) for trade in trades):
+            raise TypeError("Every trade record must be a dictionary.")
+
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = self.file_path.with_suffix(".tmp")
+
+        with temp_path.open("w", encoding="utf-8") as file:
+            json.dump(trades, file, indent=2, ensure_ascii=False)
+
+        temp_path.replace(self.file_path)
+
+    def load(self) -> list[dict[str, Any]]:
+        """Load trade records, or return an empty list if absent."""
+
+        if not self.file_path.exists():
+            return []
+
+        with self.file_path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if not isinstance(data, list):
+            raise ValueError("Saved trade history must be a JSON list.")
+
+        if not all(isinstance(trade, dict) for trade in data):
+            raise ValueError("Each saved trade record must be a JSON object.")
+
+        return data
+
+    def clear(self) -> None:
+        """Delete the saved history file if it exists."""
+
+        if self.file_path.exists():
+            self.file_path.unlink()
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_lifecycle_manager.py
+================================================================================
+
+from typing import Any
+
+from active_trade_manager import ActiveTradeManager
+from trade_history import TradeHistory
+from trade_history_storage import TradeHistoryStorage
+from trade_state_storage import TradeStateStorage
+
+
+class TradeLifecycleManager:
+    """Coordinate active trade closure and history persistence."""
+
+    def __init__(
+        self,
+        active_trade_manager: ActiveTradeManager,
+        trade_state_storage: TradeStateStorage,
+        trade_history: TradeHistory,
+        trade_history_storage: TradeHistoryStorage,
+    ) -> None:
+        self.active_trade_manager = active_trade_manager
+        self.trade_state_storage = trade_state_storage
+        self.trade_history = trade_history
+        self.trade_history_storage = trade_history_storage
+
+    def close_active_trade(
+        self,
+        close_details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Close the active trade and persist the updated history."""
+
+        active_trade = self.active_trade_manager.get_active_trade()
+
+        if active_trade is None:
+            raise RuntimeError("No active trade to close.")
+
+        closed_trade = dict(active_trade)
+
+        if close_details:
+            closed_trade.update(close_details)
+
+        self.trade_history.add_trade(closed_trade)
+
+        self.trade_history_storage.save(
+            self.trade_history.get_all_trades()
+        )
+
+        self.active_trade_manager.close_trade()
+        self.trade_state_storage.clear()
+
+        return closed_trade
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_monitor.py
+================================================================================
+
+from typing import Any
+
+from active_trade_manager import ActiveTradeManager
+
+
+class TradeMonitor:
+    """Read and report the current active trade status."""
+
+    def __init__(
+        self,
+        trade_manager: ActiveTradeManager,
+    ) -> None:
+        self.trade_manager = trade_manager
+
+    def get_status(self) -> dict[str, Any]:
+        """Return whether a trade is active and its details."""
+
+        active_trade = self.trade_manager.get_active_trade()
+
+        if active_trade is None:
+            return {
+                "active": False,
+                "trade": None,
+            }
+
+        return {
+            "active": True,
+            "trade": dict(active_trade),
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_monitor_loop.py
+================================================================================
+
+import time
+from typing import Any, Callable
+
+from trade_monitor import TradeMonitor
+
+
+class TradeMonitorLoop:
+    """Periodically check active trade status."""
+
+    def __init__(
+        self,
+        monitor: TradeMonitor,
+        on_update: Callable[[dict[str, Any]], None] | None = None,
+        interval_seconds: int = 1,
+    ) -> None:
+        if interval_seconds < 1:
+            raise ValueError("Interval must be at least 1 second.")
+
+        self.monitor = monitor
+        self.on_update = on_update
+        self.interval_seconds = interval_seconds
+        self._running = False
+
+    def run_forever(self) -> None:
+        """Continuously check the active trade status."""
+
+        self._running = True
+
+        while self._running:
+            try:
+                status = self.monitor.get_status()
+
+                if self.on_update is not None:
+                    self.on_update(status)
+
+            except Exception as exc:
+                print(f"Trade monitor error: {exc}")
+
+            time.sleep(self.interval_seconds)
+
+    def stop(self) -> None:
+        """Request the loop to stop."""
+        self._running = False
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_pnl_calculator.py
+================================================================================
+
+from typing import Any
+
+
+class TradePnLCalculator:
+    """Calculate unrealized P&L for a trade."""
+
+    def calculate(
+        self,
+        trade: dict[str, Any],
+        ltp: float,
+    ) -> dict[str, float]:
+        if not isinstance(trade, dict):
+            raise TypeError("Trade must be a dictionary.")
+
+        try:
+            entry_price = float(trade["entry_price"])
+            quantity = int(trade["quantity"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(
+                "Trade must contain valid entry_price and quantity."
+            ) from exc
+
+        if entry_price <= 0 or ltp <= 0:
+            raise ValueError("Prices must be greater than zero.")
+
+        if quantity <= 0:
+            raise ValueError("Quantity must be greater than zero.")
+
+        direction = str(
+            trade.get("direction", "BUY")
+        ).strip().upper()
+
+        if direction == "BUY":
+            pnl = (ltp - entry_price) * quantity
+        elif direction == "SELL":
+            pnl = (entry_price - ltp) * quantity
+        else:
+            raise ValueError("Direction must be BUY or SELL.")
+
+        return {
+            "entry_price": entry_price,
+            "ltp": float(ltp),
+            "quantity": quantity,
+            "unrealized_pnl": round(pnl, 2),
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_price_monitor.py
+================================================================================
+
+from typing import Any, Callable
+
+from active_trade_manager import ActiveTradeManager
+
+
+class TradePriceMonitor:
+    """Fetch and report the latest price for an active trade."""
+
+    def __init__(
+        self,
+        trade_manager: ActiveTradeManager,
+        ltp_provider: Callable[[dict[str, Any]], float],
+    ) -> None:
+        self.trade_manager = trade_manager
+        self.ltp_provider = ltp_provider
+
+    def get_price_status(self) -> dict[str, Any] | None:
+        """Return active trade details and its latest price."""
+
+        trade = self.trade_manager.get_active_trade()
+
+        if trade is None:
+            return None
+
+        ltp = self.ltp_provider(dict(trade))
+
+        if isinstance(ltp, bool) or not isinstance(ltp, (int, float)):
+            raise ValueError("LTP provider must return a numeric price.")
+
+        if ltp <= 0:
+            raise ValueError("LTP must be greater than zero.")
+
+        return {
+            "trade": dict(trade),
+            "ltp": float(ltp),
+        }
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_recovery.py
+================================================================================
+
+from typing import Any
+
+from active_trade_manager import ActiveTradeManager
+from trade_state_storage import TradeStateStorage
+
+
+class TradeRecovery:
+    """Restore a saved active trade after application restart."""
+
+    def __init__(
+        self,
+        trade_manager: ActiveTradeManager,
+        storage: TradeStateStorage,
+    ) -> None:
+        self.trade_manager = trade_manager
+        self.storage = storage
+
+    def recover(self) -> dict[str, Any] | None:
+        """Load saved state and register it with the trade manager."""
+
+        saved_trade = self.storage.load()
+
+        if saved_trade is None:
+            return None
+
+        if self.trade_manager.has_active_trade():
+            raise RuntimeError(
+                "Cannot recover: an active trade is already registered."
+            )
+
+        self.trade_manager.start_trade(saved_trade)
+        return saved_trade
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\trade_state_storage.py
+================================================================================
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+class TradeStateStorage:
+    """Save and load active trade state as JSON."""
+
+    def __init__(self, file_path: str = "data/active_trade.json") -> None:
+        self.file_path = Path(file_path)
+
+    def save(self, trade: dict[str, Any] | None) -> None:
+        """Persist active trade; None clears the saved state."""
+
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if trade is None:
+            if self.file_path.exists():
+                self.file_path.unlink()
+            return
+
+        if not isinstance(trade, dict):
+            raise TypeError("Trade state must be a dictionary or None.")
+
+        temp_path = self.file_path.with_suffix(".tmp")
+
+        with temp_path.open("w", encoding="utf-8") as file:
+            json.dump(trade, file, indent=2, ensure_ascii=False)
+
+        temp_path.replace(self.file_path)
+
+    def load(self) -> dict[str, Any] | None:
+        """Load saved active trade, or return None if unavailable."""
+
+        if not self.file_path.exists():
+            return None
+
+        with self.file_path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if data is None:
+            return None
+
+        if not isinstance(data, dict):
+            raise ValueError("Saved trade state must contain a JSON object.")
+
+        return data
+
+    def clear(self) -> None:
+        """Remove saved active trade state."""
+        self.save(None)
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\veto_engine.py
+================================================================================
+from typing import Any
+
+
+REQUIRED_CHECKS = {
+    "price_action_confirmed",
+    "risk_check_passed",
+    "direction_confirmed",
+    "liquidity_passed",
+}
+
+
+def check_trade_vetoes(
+    checks: dict[str, Any],
+) -> dict[str, Any]:
+    """Reject a setup when any mandatory check is not exactly True."""
+
+    if not isinstance(checks, dict):
+        raise TypeError("checks must be a dictionary.")
+
+    missing = REQUIRED_CHECKS - checks.keys()
+
+    if missing:
+        raise ValueError(
+            f"Missing mandatory checks: {sorted(missing)}"
+        )
+
+    failed_checks = [
+        name
+        for name in sorted(REQUIRED_CHECKS)
+        if checks[name] is not True
+    ]
+
+    return {
+        "status": "OK",
+        "approved": not failed_checks,
+        "failed_checks": failed_checks,
+    }
+
+
+================================================================================
+FILE: D:\Sensex_Option_Intraday\volume_engine.py
+================================================================================
+
+from typing import Any
+
+
+def analyze_volume(
+    candles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Compare the latest candle volume with previous candle average."""
+
+    if not candles:
+        return {
+            "status": "NO_DATA",
+            "latest_volume": None,
+            "average_volume": None,
+            "volume_ratio": None,
+        }
+
+    for index, candle in enumerate(candles):
+        if "volume" not in candle:
+            raise ValueError(f"Candle {index} is missing volume.")
+
+        if float(candle["volume"]) < 0:
+            raise ValueError(f"Candle {index} has negative volume.")
+
+    latest_volume = float(candles[-1]["volume"])
+    previous_volumes = [
+        float(candle["volume"]) for candle in candles[:-1]
+    ]
+
+    if not previous_volumes:
+        return {
+            "status": "INSUFFICIENT_DATA",
+            "latest_volume": latest_volume,
+            "average_volume": None,
+            "volume_ratio": None,
+        }
+
+    average_volume = sum(previous_volumes) / len(previous_volumes)
+    volume_ratio = (
+        latest_volume / average_volume if average_volume > 0 else None
+    )
+
+    return {
+        "status": "OK",
+        "latest_volume": latest_volume,
+        "average_volume": average_volume,
+        "volume_ratio": volume_ratio,
+    }

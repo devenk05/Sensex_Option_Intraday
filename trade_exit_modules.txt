@@ -1,0 +1,588 @@
+﻿
+
+==================== trade_exit_alert_config.py ====================
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class TradeExitAlertConfig:
+    """Configuration for trade exit alerts."""
+
+    enabled: bool = True
+    log_enabled: bool = True
+    telegram_enabled: bool = True
+    retry_count: int = 3
+    retry_delay_seconds: float = 2.0
+
+    def __post_init__(self) -> None:
+        if self.retry_count < 0:
+            raise ValueError("retry_count cannot be negative.")
+
+        if self.retry_delay_seconds < 0:
+            raise ValueError("retry_delay_seconds cannot be negative.")
+
+
+==================== trade_exit_alert_controller.py ====================
+from typing import Any, Dict
+
+from trade_exit_alert_runner import TradeExitAlertRunner
+
+
+class TradeExitAlertController:
+    """Coordinates incoming trade exit signals and alert processing."""
+
+    def __init__(self, send_message) -> None:
+        self.runner = TradeExitAlertRunner(send_message)
+
+    def handle_exit_signal(
+        self,
+        signal: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        return self.runner.run(signal)
+
+
+==================== trade_exit_alert_deduplicator.py ====================
+from typing import Any, Dict, Optional, Tuple
+
+
+class TradeExitAlertDeduplicator:
+    """Prevents repeated processing of the same exit signal."""
+
+    def __init__(self) -> None:
+        self._last_signal_key: Optional[Tuple[str, str, str]] = None
+
+    def is_duplicate(self, signal: Dict[str, Any]) -> bool:
+        if not isinstance(signal, dict):
+            raise TypeError("signal must be a dictionary.")
+
+        key = (
+            str(signal.get("trade_id", "")),
+            str(signal.get("status", "")),
+            str(signal.get("reason", "")),
+        )
+
+        if key == self._last_signal_key:
+            return True
+
+        self._last_signal_key = key
+        return False
+
+    def reset(self) -> None:
+        self._last_signal_key = None
+
+
+==================== trade_exit_alert_formatter.py ====================
+from typing import Any, Dict
+
+
+class TradeExitAlertFormatter:
+    """Formats trade exit signals into readable alert messages."""
+
+    @staticmethod
+    def format_signal(signal: Dict[str, Any]) -> str:
+        if not isinstance(signal, dict):
+            raise TypeError("signal must be a dictionary.")
+
+        status = signal.get("status", "UNKNOWN")
+        reason = signal.get("reason", "No reason provided.")
+        symbol = signal.get("symbol", "N/A")
+        price = signal.get("current_option_price", "N/A")
+
+        return (
+            "TRADE EXIT ALERT\n"
+            f"Symbol: {symbol}\n"
+            f"Status: {status}\n"
+            f"Current Option Price: {price}\n"
+            f"Reason: {reason}"
+        )
+
+
+==================== trade_exit_alert_integration.py ====================
+from typing import Any, Dict
+
+from trade_exit_alert_manager import TradeExitAlertManager
+
+
+class TradeExitAlertIntegration:
+    """
+    Connects trade exit signals to the alert manager.
+    Does not place or close orders.
+    """
+
+    def __init__(self, send_message) -> None:
+        self.alert_manager = TradeExitAlertManager(send_message)
+
+    def on_exit_signal(
+        self,
+        signal: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        return self.alert_manager.process(signal)
+
+
+==================== trade_exit_alert_logger.py ====================
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
+
+
+class TradeExitAlertLogger:
+    """Saves trade exit alerts as JSON Lines records."""
+
+    def __init__(self, log_file: str = "logs/trade_exit_alerts.jsonl") -> None:
+        self.log_path = Path(log_file)
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def log_signal(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            raise TypeError("signal must be a dictionary.")
+
+        record = {
+            "logged_at": datetime.now().astimezone().isoformat(),
+            "signal": signal,
+        }
+
+        with self.log_path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(record, ensure_ascii=False, default=str))
+            file.write("\n")
+
+        return {
+            "status": "LOGGED",
+            "file": str(self.log_path),
+        }
+
+
+==================== trade_exit_alert_manager.py ====================
+from typing import Any, Dict
+
+from trade_exit_alert_controller import TradeExitAlertController
+
+
+class TradeExitAlertManager:
+    """Manages processing of trade exit alerts."""
+
+    def __init__(self, send_message) -> None:
+        self.controller = TradeExitAlertController(send_message)
+
+    def process(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        return self.controller.handle_exit_signal(signal)
+
+
+==================== trade_exit_alert_pipeline.py ====================
+from typing import Any, Dict
+
+from trade_exit_alert_service import TradeExitAlertService
+
+
+class TradeExitAlertPipeline:
+    """Passes exit signals to the alert service."""
+
+    def __init__(self, send_message) -> None:
+        self.alert_service = TradeExitAlertService(send_message)
+
+    def process(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        return self.alert_service.process_exit_signal(signal)
+
+
+==================== trade_exit_alert_runner.py ====================
+from typing import Any, Dict
+
+from trade_exit_alert_pipeline import TradeExitAlertPipeline
+
+
+class TradeExitAlertRunner:
+    """Runs the trade exit alert pipeline for incoming signals."""
+
+    def __init__(self, send_message) -> None:
+        self.pipeline = TradeExitAlertPipeline(send_message)
+
+    def run(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Signal must be a dictionary.",
+            }
+
+        return self.pipeline.process(signal)
+
+
+==================== trade_exit_alert_sender.py ====================
+from typing import Any, Callable, Dict
+
+from trade_exit_alert_formatter import TradeExitAlertFormatter
+
+
+class TradeExitAlertSender:
+    """
+    Formats and sends trade exit alerts through a supplied callback.
+    Does not place or close trades.
+    """
+
+    def __init__(
+        self,
+        send_message: Callable[[str], Any],
+    ) -> None:
+        self.send_message = send_message
+        self.formatter = TradeExitAlertFormatter()
+
+    def send_exit_alert(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Exit signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        message = self.formatter.format_signal(signal)
+        result = self.send_message(message)
+
+        return {
+            "status": "SENT",
+            "message": message,
+            "send_result": result,
+        }
+
+
+==================== trade_exit_alert_service.py ====================
+from typing import Any, Dict
+
+from trade_exit_alert_logger import TradeExitAlertLogger
+from trade_exit_alert_sender import TradeExitAlertSender
+
+
+class TradeExitAlertService:
+    """Logs and sends trade exit alerts."""
+
+    def __init__(self, send_message) -> None:
+        self.logger = TradeExitAlertLogger()
+        self.sender = TradeExitAlertSender(send_message)
+
+    def process_exit_signal(
+        self,
+        signal: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Exit signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        try:
+            log_result = self.logger.log_signal(signal)
+            send_result = self.sender.send_exit_alert(signal)
+
+            return {
+                "status": "PROCESSED",
+                "log_result": log_result,
+                "send_result": send_result,
+            }
+
+        except Exception as exc:
+            return {
+                "status": "ERROR",
+                "reason": str(exc),
+            }
+
+
+==================== trade_exit_alert_status.py ====================
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
+
+@dataclass
+class TradeExitAlertStatus:
+    """Stores the latest trade exit alert processing status."""
+
+    status: str = "IDLE"
+    message: str = ""
+    updated_at: Optional[str] = None
+
+    def update(self, status: str, message: str = "") -> None:
+        self.status = status
+        self.message = message
+        self.updated_at = datetime.now().astimezone().isoformat()
+
+    def to_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "message": self.message,
+            "updated_at": self.updated_at,
+        }
+
+
+==================== trade_exit_checker.py ====================
+from typing import Any, Dict
+
+
+class TradeExitChecker:
+    """
+    Checks option premium against configured option SL and target.
+
+    This checker does not place or close orders.
+    """
+
+    def check_exit(
+        self,
+        trade: Dict[str, Any],
+        current_option_price: float,
+    ) -> Dict[str, Any]:
+
+        if not isinstance(trade, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Trade data must be a dictionary.",
+            }
+
+        if current_option_price <= 0:
+            return {
+                "status": "ERROR",
+                "reason": "Current option price must be greater than zero.",
+            }
+
+        option_sl = trade.get("option_sl")
+        option_target = trade.get("option_target")
+
+        if option_sl is None or option_target is None:
+            return {
+                "status": "ERROR",
+                "reason": "option_sl and option_target are required.",
+            }
+
+        try:
+            option_sl = float(option_sl)
+            option_target = float(option_target)
+        except (TypeError, ValueError):
+            return {
+                "status": "ERROR",
+                "reason": "SL and target must be numeric values.",
+            }
+
+        if option_sl <= 0 or option_target <= 0:
+            return {
+                "status": "ERROR",
+                "reason": "SL and target must be greater than zero.",
+            }
+
+        if option_sl >= option_target:
+            return {
+                "status": "ERROR",
+                "reason": "For a BUY option, SL must be below target.",
+            }
+
+        symbol = trade.get("symbol", "N/A")
+
+        if current_option_price <= option_sl:
+            return {
+                "status": "EXIT",
+                "reason": "STOP_LOSS",
+                "symbol": symbol,
+                "current_option_price": current_option_price,
+            }
+
+        if current_option_price >= option_target:
+            return {
+                "status": "EXIT",
+                "reason": "TARGET",
+                "symbol": symbol,
+                "current_option_price": current_option_price,
+            }
+
+        return {
+            "status": "MONITORING",
+            "reason": "No exit condition triggered.",
+            "symbol": symbol,
+            "current_option_price": current_option_price,
+        }
+
+
+==================== trade_exit_monitor.py ====================
+from typing import Any, Dict
+
+from trade_exit_checker import TradeExitChecker
+
+
+class TradeExitMonitor:
+    """Checks active trade exit conditions without placing orders."""
+
+    def __init__(self) -> None:
+        self.exit_checker = TradeExitChecker()
+
+    def monitor_trade(
+        self,
+        trade: Dict[str, Any],
+        current_option_price: float,
+    ) -> Dict[str, Any]:
+
+        if not isinstance(trade, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Trade data must be a dictionary.",
+            }
+
+        if current_option_price <= 0:
+            return {
+                "status": "ERROR",
+                "reason": "Current option price must be greater than zero.",
+            }
+
+        return self.exit_checker.check_exit(
+            trade=trade,
+            current_option_price=current_option_price,
+        )
+
+
+==================== trade_exit_monitor_loop.py ====================
+import time
+from typing import Any, Callable, Dict
+
+from trade_exit_monitor import TradeExitMonitor
+
+
+class TradeExitMonitorLoop:
+    """
+    Repeatedly checks an active trade's exit conditions.
+
+    This module does not fetch market data or place/close orders.
+    Provide callbacks for retrieving the active trade and latest
+    option price.
+    """
+
+    def __init__(
+        self,
+        get_active_trade: Callable[[], Dict[str, Any]],
+        get_current_option_price: Callable[[Dict[str, Any]], float],
+        on_exit_signal: Callable[[Dict[str, Any]], None],
+        interval_seconds: float = 1.0,
+    ) -> None:
+        if interval_seconds <= 0:
+            raise ValueError("interval_seconds must be greater than zero.")
+
+        self.get_active_trade = get_active_trade
+        self.get_current_option_price = get_current_option_price
+        self.on_exit_signal = on_exit_signal
+        self.interval_seconds = interval_seconds
+        self.monitor = TradeExitMonitor()
+        self.running = False
+
+    def run_once(self) -> Dict[str, Any]:
+        trade = self.get_active_trade()
+
+        if not trade:
+            return {
+                "status": "NO_ACTIVE_TRADE",
+                "reason": "No active trade found.",
+            }
+
+        current_price = self.get_current_option_price(trade)
+
+        result = self.monitor.monitor_trade(
+            trade=trade,
+            current_option_price=current_price,
+        )
+
+        if result.get("status") == "EXIT":
+            self.on_exit_signal(result)
+
+        return result
+
+    def start(self) -> None:
+        self.running = True
+
+        while self.running:
+            self.run_once()
+            time.sleep(self.interval_seconds)
+
+    def stop(self) -> None:
+        self.running = False
+
+
+==================== trade_exit_signal_handler.py ====================
+from typing import Any, Callable, Dict
+
+
+class TradeExitSignalHandler:
+    """
+    Handles exit signals from the trade monitor.
+
+    This module records and forwards exit signals only.
+    It does not place or close orders.
+    """
+
+    def __init__(
+        self,
+        notify_callback: Callable[[Dict[str, Any]], None],
+    ) -> None:
+        self.notify_callback = notify_callback
+        self.last_signal = None
+
+    def handle_signal(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Exit signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal does not indicate an exit.",
+            }
+
+        self.last_signal = signal
+        self.notify_callback(signal)
+
+        return {
+            "status": "HANDLED",
+            "signal": signal,
+        }
+
+    def get_last_signal(self):
+        return self.last_signal

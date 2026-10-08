@@ -1,0 +1,469 @@
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+for folder in (PROJECT_ROOT, PROJECT_ROOT / "Entry", PROJECT_ROOT / "exit", PROJECT_ROOT / "report"):
+    folder_path = str(folder)
+    if folder_path not in sys.path:
+        sys.path.insert(0, folder_path)
+import config
+from datetime import datetime, timedelta
+
+from config_loader import load_project_config
+from kite_client import create_kite_client
+from historical_data import fetch_historical_data
+from option_data_pull import fetch_sensex_options
+from option_chain_engine import analyze_option_chain
+from strike_selector import select_option
+from live_option_feed import start_live_option_feed
+from indicator_engine import calculate_indicators
+from oi_engine import analyze_oi_data
+from market_engine import analyze_market_structure
+from liquidity_greeks_engine import analyze_liquidity_greeks
+from pivot_engine import calculate_pivot_points
+from price_action_engine import analyze_price_action
+from multi_timeframe_engine import analyze_multi_timeframe
+from market_structure_engine import analyze_market_structure as analyze_candle_structure
+from market_status_engine import get_market_status
+from fii_dii_engine import analyze_fii_dii
+from entry_timing_engine import confirm_entry_candle
+from confluence_engine import calculate_confluence_score
+from chart_pattern_engine import detect_candle_patterns
+from active_trade_manager import ActiveTradeManager
+from support_resistance_engine import calculate_support_resistance
+from reversal_engine import detect_reversal
+from volume_engine import analyze_volume
+from veto_engine import check_trade_vetoes
+from trade_lifecycle_manager import TradeLifecycleManager
+from trade_history_storage import TradeHistoryStorage
+from trade_history import TradeHistory
+from trade_price_monitor import TradePriceMonitor
+from trade_recovery import TradeRecovery
+from trade_monitor_loop import TradeMonitorLoop
+from trade_state_storage import TradeStateStorage
+from trade_monitor import TradeMonitor
+from trade_engine import decide_trade
+from telegram_engine import send_telegram_message
+from google_sheets_engine import append_google_sheet_row
+from excel_report import save_trade_report
+from dashboard import generate_dashboard
+from daily_trade_summary import DailyTradeSummary
+from daily_trade_filter import DailyTradeFilter
+from daily_summary_storage import DailySummaryStorage
+from daily_summary import DailySummary
+from daily_report_validator import DailyReportValidator
+from daily_report_service import DailyReportService
+from daily_report_sender import DailyReportSender
+from daily_report_scheduler import DailyReportScheduler
+from daily_report_runner import DailyReportRunner
+from daily_report_pipeline import DailyReportPipeline
+from daily_report_loop import DailyReportLoop
+from daily_report_job import DailyReportJob
+from daily_report_google_sheets import DailyReportGoogleSheets
+from daily_report_formatter import DailyReportFormatter
+from daily_report_engine import DailyReportEngine
+from daily_report_dispatcher import DailyReportDispatcher
+from daily_report_delivery import DailyReportDelivery
+from daily_report_archive import DailyReportArchive
+from trade_exit_signal_handler import TradeExitSignalHandler
+from trade_exit_monitor_loop import TradeExitMonitorLoop
+from trade_exit_monitor import TradeExitMonitor
+from trade_exit_checker import TradeExitChecker
+from trade_exit_alert_status import TradeExitAlertStatus
+from trade_exit_alert_service import TradeExitAlertService
+from trade_exit_alert_sender import TradeExitAlertSender
+from trade_exit_alert_runner import TradeExitAlertRunner
+from trade_exit_alert_pipeline import TradeExitAlertPipeline
+from trade_exit_alert_manager import TradeExitAlertManager
+from trade_exit_alert_logger import TradeExitAlertLogger
+from trade_exit_alert_integration import TradeExitAlertIntegration
+from trade_exit_alert_formatter import TradeExitAlertFormatter
+from trade_exit_alert_deduplicator import TradeExitAlertDeduplicator
+from trade_exit_alert_controller import TradeExitAlertController
+from trade_exit_alert_config import TradeExitAlertConfig
+from threading import Thread
+
+
+# Separate candle history for each selected option token
+CANDLE_HISTORY = {}
+ACTIVE_TRADE_MANAGER = ActiveTradeManager()
+
+ACTIVE_TRADE_STATE_STORAGE = TradeStateStorage()
+TRADE_HISTORY_STORAGE = TradeHistoryStorage()
+TRADE_HISTORY = TradeHistory()
+
+
+def handle_finalized_candle(candle):
+    """Receive finalized 1-minute candles and calculate indicators."""
+    token = candle["instrument_token"]
+
+    history = CANDLE_HISTORY.setdefault(token, [])
+    history.append(candle)
+
+    # Keep recent candles in memory
+    if len(history) > 500:
+        del history[:-500]
+
+    indicators = calculate_indicators(history)
+
+    print(
+        "CANDLE_CALLBACK_RECEIVED",
+        "TOKEN:", token,
+        "TIME:", candle["minute"].strftime("%H:%M"),
+        "O:", candle["open"],
+        "H:", candle["high"],
+        "L:", candle["low"],
+        "C:", candle["close"],
+        "V:", candle["volume"],
+    )
+
+    print(
+        "INDICATORS",
+        "TOKEN:", token,
+        "CANDLES:", indicators["candle_count"],
+        "EMA5:", indicators["ema_5"],
+        "EMA13:", indicators["ema_13"],
+        "EMA26:", indicators["ema_26"],
+        "RSI14:", indicators["rsi_14"],
+    )
+
+    # Analyze live option candle volume and reversal
+    volume_analysis = analyze_volume(history)
+    print("LIVE_OPTION_VOLUME_ANALYSIS:", volume_analysis)
+
+    reversal_analysis = detect_reversal(history)
+    print("LIVE_OPTION_REVERSAL_ANALYSIS:", reversal_analysis)
+
+
+
+def main():
+    load_project_config()
+
+    print(f"Project: {config.PROJECT_NAME}")
+    print(f"Trading Time: {config.TRADING_START} - {config.TRADING_END}")
+    print(f"Analysis Timeframe: {config.ANALYSIS_TIMEFRAME}")
+    print(f"Entry Timeframe: {config.ENTRY_TIMEFRAME}")
+    print(f"Minimum Entry Score: {config.MIN_ENTRY_SCORE}")
+    print(f"Risk Per Trade: ₹{config.MAX_RISK_PER_TRADE_INR}")
+    print(f"Trading Mode: {config.TRADING_MODE}")
+    print(f"Auto Order Placement: {config.AUTO_PLACE_ORDERS}")
+
+    kite = create_kite_client()
+    kite.profile()
+    print("KITE_CONNECTION_OK")
+
+    # Daily report stack: compatible adapters for function-based engines.
+    class _TelegramAdapter:
+        def send_message(self, message):
+            return send_telegram_message(message)
+
+    class _GoogleSheetsAdapter:
+        def send_row(self, row):
+            return append_google_sheet_row(row)
+
+    daily_scheduler = DailyReportScheduler()
+    daily_summary = DailySummary()
+    daily_summary_storage = DailySummaryStorage()
+    daily_report_engine = DailyReportEngine(
+        summary_engine=daily_summary,
+        summary_storage=daily_summary_storage,
+    )
+
+    daily_pipeline = DailyReportPipeline(
+        trade_filter=DailyTradeFilter(),
+        report_engine=daily_report_engine,
+        validator=DailyReportValidator(),
+        archive=DailyReportArchive(),
+    )
+
+    daily_dispatcher = DailyReportDispatcher(
+        telegram_sender=DailyReportSender(
+            formatter=DailyReportFormatter(),
+            telegram_engine=_TelegramAdapter(),
+        ),
+        google_sheets_sender=DailyReportGoogleSheets(
+            sheets_engine=_GoogleSheetsAdapter(),
+        ),
+    )
+
+    daily_service = DailyReportService(
+        pipeline=daily_pipeline,
+        dispatcher=daily_dispatcher,
+    )
+
+    daily_job = DailyReportJob(
+        scheduler=daily_scheduler,
+        report_service=daily_service,
+    )
+
+    daily_report_loop = DailyReportLoop(
+        report_job=daily_job,
+        trades_provider=TRADE_HISTORY.get_all_trades,
+        interval_seconds=30,
+    )
+
+    daily_report_thread = Thread(
+        target=daily_report_loop.run_forever,
+        name="daily-report-loop",
+        daemon=True,
+    )
+    daily_report_thread.start()
+    print("DAILY_REPORT_LOOP_STARTED")
+
+
+    # Load persisted closed-trade history
+    saved_history = TRADE_HISTORY_STORAGE.load()
+    for saved_trade in saved_history:
+        TRADE_HISTORY.add_trade(saved_trade)
+
+    # Restore active trade, if one was saved previously
+    recovery = TradeRecovery(
+        trade_manager=ACTIVE_TRADE_MANAGER,
+        storage=ACTIVE_TRADE_STATE_STORAGE,
+    )
+    recovered_trade = recovery.recover()
+    print("TRADE_RECOVERY:", recovered_trade)
+
+    lifecycle = TradeLifecycleManager(
+        active_trade_manager=ACTIVE_TRADE_MANAGER,
+        trade_state_storage=ACTIVE_TRADE_STATE_STORAGE,
+        trade_history=TRADE_HISTORY,
+        trade_history_storage=TRADE_HISTORY_STORAGE,
+    )
+
+    trade_monitor = TradeMonitor(ACTIVE_TRADE_MANAGER)
+    print("ACTIVE_TRADE_STATUS:", trade_monitor.get_status())
+
+    def get_trade_ltp(trade):
+        symbol = trade.get("tradingsymbol")
+        if not symbol:
+            raise ValueError("Active trade is missing tradingsymbol.")
+
+        quote_key = symbol if ":" in symbol else f"BFO:{symbol}"
+        quote = kite.ltp([quote_key])
+        if quote_key not in quote:
+            raise RuntimeError(f"LTP not returned for {quote_key}")
+
+        return float(quote[quote_key]["last_price"])
+
+    trade_price_monitor = TradePriceMonitor(
+        trade_manager=ACTIVE_TRADE_MANAGER,
+        ltp_provider=get_trade_ltp,
+    )
+
+    try:
+        price_status = trade_price_monitor.get_price_status()
+        print("ACTIVE_TRADE_PRICE_STATUS:", price_status)
+    except Exception as exc:
+        print("ACTIVE_TRADE_PRICE_MONITOR_ERROR:", exc)
+
+    # Trade exit alert configuration and state
+    EXIT_ALERT_CONFIG = TradeExitAlertConfig()
+    EXIT_ALERT_DEDUPLICATOR = TradeExitAlertDeduplicator()
+    EXIT_ALERT_STATUS = TradeExitAlertStatus()
+
+    # Alert callback: currently logs/prints the alert message.
+    # Connect your Telegram sender here when its exact function is available.
+    def send_exit_message(message):
+        print("TRADE_EXIT_TELEGRAM_MESSAGE:")
+        print(message)
+        return {"status": "PRINTED_ONLY"}
+
+    EXIT_ALERT_INTEGRATION = TradeExitAlertIntegration(send_exit_message)
+
+    def handle_exit_alert(signal):
+        if EXIT_ALERT_DEDUPLICATOR.is_duplicate(signal):
+            EXIT_ALERT_STATUS.update("DUPLICATE", "Repeated exit signal ignored.")
+            print("TRADE_EXIT_ALERT_DUPLICATE:", signal)
+            return
+
+        result = EXIT_ALERT_INTEGRATION.on_exit_signal(signal)
+        EXIT_ALERT_STATUS.update(
+            result.get("status", "UNKNOWN"),
+            result.get("reason", ""),
+        )
+        print("TRADE_EXIT_ALERT_RESULT:", result)
+
+    EXIT_SIGNAL_HANDLER = TradeExitSignalHandler(handle_exit_alert)
+
+    # Continuous premium-based exit monitoring.
+    # Requires active trade fields: option_sl and option_target.
+    EXIT_MONITOR_LOOP = TradeExitMonitorLoop(
+        get_active_trade=ACTIVE_TRADE_MANAGER.get_active_trade,
+        get_current_option_price=get_trade_ltp,
+        on_exit_signal=EXIT_SIGNAL_HANDLER.handle_signal,
+        interval_seconds=1.0,
+    )
+
+    if ACTIVE_TRADE_MANAGER.has_active_trade():
+        EXIT_MONITOR_THREAD = Thread(
+            target=EXIT_MONITOR_LOOP.start,
+            name="trade-exit-monitor",
+            daemon=True,
+        )
+        EXIT_MONITOR_THREAD.start()
+        print("TRADE_EXIT_MONITOR_STARTED")
+    else:
+        print("TRADE_EXIT_MONITOR_NOT_STARTED: No active trade.")
+
+
+
+    # Fetch Sensex historical candles
+    instruments = kite.instruments("BSE")
+    sensex = [
+        item for item in instruments
+        if item.get("tradingsymbol") == "SENSEX"
+        or item.get("name") == "SENSEX"
+    ]
+
+    if not sensex:
+        raise RuntimeError("SENSEX instrument not found.")
+
+    token = sensex[0]["instrument_token"]
+    to_date = datetime.now()
+    from_date = to_date - timedelta(days=5)
+
+    candles = fetch_historical_data(
+        kite=kite,
+        instrument_token=token,
+        from_date=from_date,
+        to_date=to_date,
+        interval=config.ANALYSIS_TIMEFRAME,
+    )
+
+    print("HISTORICAL_FETCH_OK")
+    print("CANDLE_COUNT:", len(candles))
+
+    # Analyze Sensex market structure from historical candles
+    market_analysis = analyze_market_structure(candles)
+    print("MARKET_STRUCTURE_ANALYSIS:", market_analysis)
+
+    # Current Indian market session status
+    market_status = get_market_status()
+    print("MARKET_STATUS:", market_status)
+
+    # Analyze latest-candle market structure separately
+    candle_structure = analyze_candle_structure(candles)
+    print("CANDLE_MARKET_STRUCTURE:", candle_structure)
+
+    # Calculate Sensex support and resistance from historical candles
+    support_resistance = calculate_support_resistance(candles)
+    print("SUPPORT_RESISTANCE_ANALYSIS:", support_resistance)
+
+    # These require valid trade-decision inputs that are not available yet.
+    print("VETO_ENGINE_SKIPPED: Mandatory live confirmation checks are not ready.")
+    print("RISK_MANAGER_SKIPPED: Requires option-premium entry and stop-loss values.")
+
+
+    # Fetch 15-minute candles for multi-timeframe comparison
+    candles_15m = fetch_historical_data(
+        kite=kite,
+        instrument_token=token,
+        from_date=from_date,
+        to_date=to_date,
+        interval="15minute",
+    )
+
+    print("15M_CANDLE_COUNT:", len(candles_15m))
+
+    multi_timeframe = analyze_multi_timeframe(
+        candles_15m=candles_15m,
+        candles_5m=candles,
+    )
+    print("MULTI_TIMEFRAME_ANALYSIS:", multi_timeframe)
+
+    # These engines need genuine inputs not yet produced by the current pipeline.
+    print("FII_DII_SKIPPED: Real fii_net and dii_net data not available.")
+    print("CONFLUENCE_SKIPPED: All 8 component scores are not yet available.")
+    print("ENTRY_TIMING_SKIPPED: Direction and reference level are not yet confirmed.")
+
+    # Analyze Sensex price action using historical candles
+    price_action = analyze_price_action(candles)
+    print("PRICE_ACTION_ANALYSIS:", price_action)
+
+    # Analyze candle patterns from historical Sensex candles
+    chart_patterns = detect_candle_patterns(candles)
+    print("CHART_PATTERN_ANALYSIS:", chart_patterns)
+
+    # Report current active-trade manager state
+    print("ACTIVE_TRADE_EXISTS:", ACTIVE_TRADE_MANAGER.has_active_trade())
+    print("ACTIVE_TRADE:", ACTIVE_TRADE_MANAGER.get_active_trade())
+
+    # Calculate pivots from the previous available trading session
+    candles_by_date = {}
+    for candle in candles:
+        candle_date = candle["date"].date()
+        candles_by_date.setdefault(candle_date, []).append(candle)
+
+    trading_dates = sorted(candles_by_date)
+
+    if len(trading_dates) >= 2:
+        previous_session_date = trading_dates[-2]
+        previous_session_candles = candles_by_date[previous_session_date]
+
+        previous_day = {
+            "high": max(float(c["high"]) for c in previous_session_candles),
+            "low": min(float(c["low"]) for c in previous_session_candles),
+            "close": float(previous_session_candles[-1]["close"]),
+        }
+
+        pivot_analysis = calculate_pivot_points(previous_day)
+        print("PIVOT_SESSION_DATE:", previous_session_date)
+        print("PIVOT_ANALYSIS:", pivot_analysis)
+    else:
+        print("PIVOT_SKIPPED: Not enough distinct trading dates.")
+
+    # Fetch nearby Sensex option quotes
+    option_data = fetch_sensex_options(kite, strike_range=200)
+
+    print("SENSEX_SPOT:", option_data["spot"])
+    print("SELECTED_EXPIRY:", option_data["expiry"])
+    print("ATM_STRIKE:", option_data["atm_strike"])
+
+    # Validate fetched options
+    summary = analyze_option_chain(option_data["options"])
+    print("OPTION_CHAIN_SUMMARY:", summary)
+
+    # Analyze call/put open interest and PCR
+    oi_summary = analyze_oi_data(option_data["options"])
+    print("OI_ANALYSIS:", oi_summary)
+
+    # Select ATM CE and PE from fetched records
+    selected_tokens = []
+
+    for option_type in ("CE", "PE"):
+        result = select_option(
+            options=option_data["options"],
+            target_strike=option_data["atm_strike"],
+            option_type=option_type,
+        )
+
+        if result["status"] == "OK":
+            selected = result["option"]
+            selected_tokens.append(selected["instrument_token"])
+
+            print(
+                f"ATM_{option_type}:",
+                selected["tradingsymbol"],
+                "| Strike:", selected["strike"],
+                "| LTP:", selected["last_price"],
+            )
+        else:
+            print(f"ATM_{option_type}: NO_MATCH")
+
+    if selected_tokens:
+        start_live_option_feed(
+            kite,
+            selected_tokens,
+            on_candle=handle_finalized_candle,
+        )
+    else:
+        print("LIVE_FEED_SKIPPED: No ATM option tokens selected.")
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+

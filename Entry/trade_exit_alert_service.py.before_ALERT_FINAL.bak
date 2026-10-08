@@ -1,0 +1,44 @@
+from typing import Any, Dict
+
+from trade_exit_alert_logger import TradeExitAlertLogger
+from trade_exit_alert_sender import TradeExitAlertSender
+
+
+class TradeExitAlertService:
+    """Logs and sends trade exit alerts."""
+
+    def __init__(self, send_message) -> None:
+        self.logger = TradeExitAlertLogger()
+        self.sender = TradeExitAlertSender(send_message)
+
+    def process_exit_signal(
+        self,
+        signal: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not isinstance(signal, dict):
+            return {
+                "status": "ERROR",
+                "reason": "Exit signal must be a dictionary.",
+            }
+
+        if signal.get("status") != "EXIT":
+            return {
+                "status": "IGNORED",
+                "reason": "Signal is not an exit signal.",
+            }
+
+        try:
+            log_result = self.logger.log_signal(signal)
+            send_result = self.sender.send_exit_alert(signal)
+
+            return {
+                "status": "PROCESSED",
+                "log_result": log_result,
+                "send_result": send_result,
+            }
+
+        except Exception as exc:
+            return {
+                "status": "ERROR",
+                "reason": str(exc),
+            }
