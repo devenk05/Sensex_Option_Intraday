@@ -905,6 +905,71 @@ def _live_dashboard_updater(
 
         time.sleep(1)
 
+def _build_confluence_component_scores(
+    *,
+    market_analysis,
+    multi_timeframe,
+    support_resistance,
+    price_action,
+    volume_analysis,
+    pivot_analysis,
+    cepe_comparison,
+):
+    """Build deterministic 0-100 scores from genuine analysis outputs only."""
+    scores = {}
+
+    market = str((market_analysis or {}).get("trend", "")).upper()
+    alignment = str((multi_timeframe or {}).get("alignment", "")).upper()
+    if market in {"UP", "DOWN"} and alignment == "ALIGNED":
+        scores["market_structure"] = 100.0
+    elif market in {"UP", "DOWN"}:
+        scores["market_structure"] = 70.0
+
+    sr = support_resistance or {}
+    if sr.get("status") == "OK":
+        try:
+            support = float(sr["support"])
+            resistance = float(sr["resistance"])
+            if resistance > support:
+                scores["support_resistance"] = 100.0
+        except (KeyError, TypeError, ValueError):
+            pass
+
+    pa = str((price_action or {}).get("signal", "")).upper()
+    if pa in {"BULLISH_BREAKOUT", "BEARISH_BREAKDOWN"}:
+        scores["price_action"] = 100.0
+    elif pa in {"BULLISH", "BEARISH"}:
+        scores["price_action"] = 75.0
+
+    pivot_state = (pivot_analysis or {}).get("state", {})
+    try:
+        pivot_score = float(pivot_state.get("score"))
+        scores["pivot_points"] = max(0.0, min(100.0, pivot_score))
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        volume_ratio = float((volume_analysis or {}).get("volume_ratio"))
+        if volume_ratio >= 1.5:
+            scores["volume_analysis"] = 100.0
+        elif volume_ratio >= 1.2:
+            scores["volume_analysis"] = 80.0
+        elif volume_ratio >= 1.0:
+            scores["volume_analysis"] = 60.0
+        else:
+            scores["volume_analysis"] = 30.0
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(cepe_comparison, dict):
+        if cepe_comparison.get("status") == "CONFIRMED":
+            scores["atm_ce_pe_strength"] = 100.0
+        elif cepe_comparison.get("candidate_direction"):
+            scores["atm_ce_pe_strength"] = 50.0
+
+    return scores
+
+
 def _generate_live_dashboard(
     *,
     market_analysis,
@@ -1632,6 +1697,20 @@ def main():
         print("STATUS:", cepe_comparison.get("status"))
         print("REASON:", cepe_comparison.get("reason"))
         print("============================================================")
+
+        confluence_component_scores = _build_confluence_component_scores(
+            market_analysis=market_analysis,
+            multi_timeframe=multi_timeframe,
+            support_resistance=support_resistance,
+            price_action=price_action,
+            volume_analysis=_cepe_volume,
+            pivot_analysis=pivot_analysis,
+            cepe_comparison=cepe_comparison,
+        )
+        confluence_result = calculate_confluence_score(confluence_component_scores)
+        entry_score = confluence_result.get("score")
+        print("CONFLUENCE_COMPONENT_SCORES:", confluence_component_scores)
+        print("CONFLUENCE_RESULT:", confluence_result)
 
     except Exception as cepe_exc:
         print(
