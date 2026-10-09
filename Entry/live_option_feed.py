@@ -248,7 +248,9 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                     "high": price,
                     "low": price,
                     "close": price,
-                    "start_cumulative_volume": cumulative_volume,
+                    # The first observed candle has no prior-minute baseline,
+                    # so its exact volume cannot be calculated reliably.
+                    "start_cumulative_volume": None,
                     "last_cumulative_volume": cumulative_volume,
                 }
                 continue
@@ -256,13 +258,17 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
             if minute > current["minute"]:
                 finalize_candle(token, current)
 
+                # volume_traded is cumulative for the trading day. Use the
+                # last cumulative value from the previous candle as this
+                # candle's baseline, not the first tick of the new minute.
+                previous_cumulative_volume = current["last_cumulative_volume"]
                 current_candles[token] = {
                     "minute": minute,
                     "open": price,
                     "high": price,
                     "low": price,
                     "close": price,
-                    "start_cumulative_volume": cumulative_volume,
+                    "start_cumulative_volume": previous_cumulative_volume,
                     "last_cumulative_volume": cumulative_volume,
                 }
             else:
