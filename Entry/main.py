@@ -668,7 +668,13 @@ def handle_finalized_candle(candle):
     )
 
     try:
-        volume_analysis = analyze_volume(history)
+        # The first observed option candle can have unknown volume because
+        # no previous-minute cumulative-volume baseline is available.
+        # Exclude unknown-volume candles rather than passing None to the engine.
+        volume_candles = [
+            item for item in history if item.get("volume") is not None
+        ]
+        volume_analysis = analyze_volume(volume_candles)
         print("LIVE_OPTION_VOLUME_ANALYSIS:", volume_analysis)
     except Exception as exc:
         print("LIVE_OPTION_VOLUME_ERROR:", repr(exc))
