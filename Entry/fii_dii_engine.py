@@ -72,27 +72,63 @@ def fetch_fii_dii_data(timeout: int = 15) -> dict[str, Any]:
                 errors.append(f"{api_url}: empty or unexpected response")
                 continue
 
-            row = rows[0]
-            if not isinstance(row, dict):
-                errors.append(f"{api_url}: first row is not an object")
+            if not all(isinstance(row, dict) for row in rows):
+                errors.append(f"{api_url}: rows contain an unexpected format")
                 continue
 
-            try:
-                fii_net = _number(row.get("fiinet", row.get("fii_net")), "fiinet")
-                dii_net = _number(row.get("diinet", row.get("dii_net")), "diinet")
-                fii_buy = _number(row.get("fiibuy", row.get("fii_buy", 0)), "fiibuy")
-                fii_sell = _number(row.get("fiisell", row.get("fii_sell", 0)), "fiisell")
-                dii_buy = _number(row.get("diibuy", row.get("dii_buy", 0)), "diibuy")
-                dii_sell = _number(row.get("diisell", row.get("dii_sell", 0)), "diisell")
-            except (TypeError, ValueError) as exc:
-                errors.append(f"{api_url}: {exc}")
-                continue
+            # NSE has served two schemas for this endpoint:
+            # (1) one combined row with fiinet/diinet fields; and
+            # (2) separate category rows with buyValue/sellValue/netValue.
+            combined = next(
+                (row for row in rows if "fiinet" in row or "fii_net" in row),
+                None,
+            )
+            if combined is not None:
+                try:
+                    fii_net = _number(combined.get("fiinet", combined.get("fii_net")), "fiinet")
+                    dii_net = _number(combined.get("diinet", combined.get("dii_net")), "diinet")
+                    fii_buy = _number(combined.get("fiibuy", combined.get("fii_buy", 0)), "fiibuy")
+                    fii_sell = _number(combined.get("fiisell", combined.get("fii_sell", 0)), "fiisell")
+                    dii_buy = _number(combined.get("diibuy", combined.get("dii_buy", 0)), "diibuy")
+                    dii_sell = _number(combined.get("diisell", combined.get("dii_sell", 0)), "diisell")
+                except (TypeError, ValueError) as exc:
+                    errors.append(f"{api_url}: {exc}")
+                    continue
+                data_date = combined.get("date") or combined.get("tradedate") or combined.get("tradeDate")
+            else:
+                def category_name(row):
+                    return str(row.get("category", row.get("categoryName", ""))).strip().upper()
+
+                fii_row = next(
+                    (row for row in rows if category_name(row) in {"FII", "FII/FPI", "FPI"}),
+                    None,
+                )
+                dii_row = next(
+                    (row for row in rows if category_name(row) == "DII"),
+                    None,
+                )
+                if fii_row is None or dii_row is None:
+                    errors.append(
+                        f"{api_url}: unrecognized NSE schema; keys={sorted(rows[0].keys())}"
+                    )
+                    continue
+                try:
+                    fii_net = _number(fii_row.get("netValue", fii_row.get("net_value")), "FII netValue")
+                    dii_net = _number(dii_row.get("netValue", dii_row.get("net_value")), "DII netValue")
+                    fii_buy = _number(fii_row.get("buyValue", fii_row.get("buy_value")), "FII buyValue")
+                    fii_sell = _number(fii_row.get("sellValue", fii_row.get("sell_value")), "FII sellValue")
+                    dii_buy = _number(dii_row.get("buyValue", dii_row.get("buy_value")), "DII buyValue")
+                    dii_sell = _number(dii_row.get("sellValue", dii_row.get("sell_value")), "DII sellValue")
+                except (TypeError, ValueError) as exc:
+                    errors.append(f"{api_url}: {exc}")
+                    continue
+                data_date = fii_row.get("date") or dii_row.get("date")
 
             return {
                 "source": "NSE",
                 "segment": "CASH_MARKET",
                 "data_type": "DAILY_NOT_INTRADAY",
-                "date": row.get("date") or row.get("tradedate") or row.get("tradeDate"),
+                "date": data_date,
                 "fii_buy": fii_buy,
                 "fii_sell": fii_sell,
                 "fii_net": fii_net,
