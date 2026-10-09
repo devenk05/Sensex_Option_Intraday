@@ -1746,6 +1746,35 @@ def main():
         confluence_result = calculate_confluence_score(confluence_component_scores)
         entry_score = confluence_result.get("score")
         print("CONFLUENCE_COMPONENT_SCORES:", confluence_component_scores)
+        if "fii_dii" in confluence_component_scores:
+            print(
+                "FII_DII_CONFLUENCE_SCORE:",
+                {
+                    "score": confluence_component_scores["fii_dii"],
+                    "weight_percent": 5,
+                    "market_trend": (market_analysis or {}).get("trend"),
+                    "data_date": (fii_dii_analysis or {}).get("date"),
+                    "data_type": (fii_dii_analysis or {}).get("data_type"),
+                },
+            )
+        else:
+            print(
+                "FII_DII_CONFLUENCE_SCORE: NOT_INCLUDED",
+                {
+                    "reason": (
+                        "FII_DII_DATA_UNAVAILABLE"
+                        if not isinstance(fii_dii_analysis, dict)
+                        else "MARKET_TREND_NOT_UP_OR_DOWN"
+                        if str((market_analysis or {}).get("trend", "")).upper()
+                        not in {"UP", "DOWN"}
+                        else "FII_DII_NET_FIELDS_UNAVAILABLE"
+                    ),
+                    "market_trend": (market_analysis or {}).get("trend"),
+                    "data_date": (fii_dii_analysis or {}).get("date")
+                    if isinstance(fii_dii_analysis, dict)
+                    else None,
+                },
+            )
         print("CONFLUENCE_RESULT:", confluence_result)
 
         CURRENT_SETUP_DECISION = run_locked_decision_flow(
