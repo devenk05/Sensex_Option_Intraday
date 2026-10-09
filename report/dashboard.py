@@ -1186,12 +1186,14 @@ td {{
             "SENSEX",
             _number(spot),
             "Live Spot",
+            "sensex-spot-card",
         )}
 
         {_metric_card(
             "MARKET STATUS",
             _status_badge(status),
             f"Updated: {timestamp}",
+            "market-status-card",
         )}
 
         {_metric_card(
@@ -1200,6 +1202,7 @@ td {{
             f'{escape(_direction_label(market_bias))}'
             f'</span>',
             "Structure + price action",
+            "market-bias-card",
         )}
 
         {_metric_card(
@@ -1212,6 +1215,7 @@ td {{
             "ATM STRIKE",
             _number(atm_strike, 0),
             "Selected Sensex strike",
+            "atm-strike-card",
         )}
 
         {_metric_card(
@@ -1544,8 +1548,10 @@ async function updateSensex30Live() {{
         const data = await response.json();
 
         for (const stock of (data.stocks || [])) {{
-            const row = document.querySelector(
-                'tr[data-symbol="' + stock.symbol + '"]'
+            const row = Array.from(
+                document.querySelectorAll("tr[data-symbol]")
+            ).find(
+                row => row.dataset.symbol === String(stock.symbol)
             );
 
             if (!row) continue;
@@ -1593,22 +1599,52 @@ async function updateDashboardLive() {{
 
         const data = await response.json();
 
-        const spotElement = document.querySelector(".sensex-spot-value");
+        const spotElement = document.querySelector(
+            ".sensex-spot-card .metric-value"
+        );
         if (spotElement && data.spot != null) {{
             spotElement.textContent = data.spot;
         }}
 
-        const biasElement = document.querySelector(".market-bias-value");
+        const biasElement = document.querySelector(
+            ".market-bias-card .metric-value > span"
+        );
         if (biasElement && data.market_bias) {{
-            biasElement.textContent = data.market_bias;
+            const bias = String(data.market_bias).toUpperCase();
+            biasElement.textContent = bias.replace(/_/g, " ");
+            biasElement.classList.remove("bullish", "bearish", "neutral");
+            if (["BULLISH", "BUY", "CALL", "UP", "POSITIVE"].some(
+                word => bias.includes(word)
+            )) {{
+                biasElement.classList.add("bullish");
+            }} else if (["BEARISH", "SELL", "PUT", "DOWN", "NEGATIVE"].some(
+                word => bias.includes(word)
+            )) {{
+                biasElement.classList.add("bearish");
+            }} else {{
+                biasElement.classList.add("neutral");
+            }}
         }}
 
-        const statusElement = document.querySelector(".market-status-value");
+        const statusElement = document.querySelector(
+            ".market-status-card .metric-value .status-badge"
+        );
         if (statusElement && data.status) {{
-            statusElement.textContent = data.status;
+            const status = String(data.status).toUpperCase();
+            statusElement.textContent = status.replace(/_/g, " ");
+            statusElement.classList.remove("positive", "warning", "neutral");
+            if (["TRADING", "ACTIVE", "CONFIRMED", "ALIGNED", "OK", "LIVE"].includes(status)) {{
+                statusElement.classList.add("positive");
+            }} else if (["CLOSED", "WAIT", "PENDING", "NOT_CONFIRMED", "NO_TRADE"].includes(status)) {{
+                statusElement.classList.add("warning");
+            }} else {{
+                statusElement.classList.add("neutral");
+            }}
         }}
 
-        const atmElement = document.querySelector(".atm-strike-value");
+        const atmElement = document.querySelector(
+            ".atm-strike-card .metric-value"
+        );
         if (atmElement && data.atm_strike != null) {{
             atmElement.textContent = data.atm_strike;
         }}
