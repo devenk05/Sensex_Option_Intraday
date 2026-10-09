@@ -136,6 +136,30 @@ def fetch_sensex_options(
             or 0
         )
 
+        # Kite quote depth supplies real bid/ask prices and quantities.
+        depth = quote.get("depth") or {}
+        buy_levels = depth.get("buy") or []
+        sell_levels = depth.get("sell") or []
+        best_bid_level = buy_levels[0] if buy_levels else {}
+        best_ask_level = sell_levels[0] if sell_levels else {}
+
+        def _depth_number(value):
+            try:
+                return float(value) if value is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        bid = _depth_number(best_bid_level.get("price"))
+        ask = _depth_number(best_ask_level.get("price"))
+        bid_quantity = _depth_number(best_bid_level.get("quantity"))
+        ask_quantity = _depth_number(best_ask_level.get("quantity"))
+        total_bid_quantity = sum(
+            float(level.get("quantity") or 0) for level in buy_levels
+        )
+        total_ask_quantity = sum(
+            float(level.get("quantity") or 0) for level in sell_levels
+        )
+
         records.append(
             {
                 "tradingsymbol":
@@ -155,6 +179,13 @@ def fetch_sensex_options(
 
                 "last_price":
                     current,
+
+                "bid": bid,
+                "ask": ask,
+                "bid_quantity": bid_quantity,
+                "ask_quantity": ask_quantity,
+                "total_bid_quantity": total_bid_quantity,
+                "total_ask_quantity": total_ask_quantity,
 
                 "previous_close":
                     previous_close,
