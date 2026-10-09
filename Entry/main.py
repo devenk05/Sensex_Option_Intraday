@@ -1674,8 +1674,12 @@ def main():
     # Greeks/IV remain unavailable unless an actual source supplies them.
     # ============================================================
     try:
-        ce_liquidity = analyze_liquidity_greeks(ce)
-        pe_liquidity = analyze_liquidity_greeks(pe)
+        # Use the real spot, strike, expiry, option type and current quote
+        # to solve IV and derive Greeks. These are model estimates, not Kite fields.
+        ce_greeks_input = {**ce, "spot": option_data.get("spot")}
+        pe_greeks_input = {**pe, "spot": option_data.get("spot")}
+        ce_liquidity = analyze_liquidity_greeks(ce_greeks_input)
+        pe_liquidity = analyze_liquidity_greeks(pe_greeks_input)
         valid_liquidity_scores = [
             float(item["liquidity_score"])
             for item in (ce_liquidity, pe_liquidity)
@@ -1691,13 +1695,20 @@ def main():
             "score_basis": "REAL_BID_ASK_SPREAD",
             "greeks_status": (
                 "AVAILABLE"
-                if all(
-                    item.get("greeks_status") == "AVAILABLE"
-                    for item in (ce_liquidity, pe_liquidity)
+                if len([
+                    item for item in (ce_liquidity, pe_liquidity)
                     if item.get("status") == "OK"
-                ) and bool(valid_liquidity_scores)
-                else "NOT_PROVIDED_BY_KITE_QUOTE"
+                    and item.get("greeks_status") == "AVAILABLE"
+                ]) == 2
+                else "PARTIAL"
+                if any(
+                    item.get("status") == "OK"
+                    and item.get("greeks_status") == "AVAILABLE"
+                    for item in (ce_liquidity, pe_liquidity)
+                )
+                else "UNAVAILABLE"
             ),
+            "greeks_method": "BLACK_SCHOLES_ESTIMATE_FROM_MARKET_MID",
             "valid_legs": len(valid_liquidity_scores),
             "ce": ce_liquidity,
             "pe": pe_liquidity,
