@@ -106,6 +106,8 @@ LIVE_ANALYSIS_STATE = {
     "oi_summary": {},
     "option_data": {},
     "option_summary": {},
+    "live_5m": {},
+    "live_5m_last_completed": None,
 }
 
 # ============================================================
@@ -575,9 +577,26 @@ def handle_finalized_candle(candle):
         try:
             completed_5m = _aggregate_live_1m_into_5m(candle)
 
+            # Keep the currently forming 5-minute candle visible to the dashboard.
+            # Analysis below still refreshes only after a 5-minute candle completes.
+            if LIVE_5M_CURRENT is not None:
+                live_5m_snapshot = {
+                    key: value
+                    for key, value in LIVE_5M_CURRENT.items()
+                    if not key.startswith("_")
+                }
+                live_5m_snapshot["status"] = "FORMING"
+                live_5m_snapshot["minute_count"] = LIVE_5M_CURRENT.get(
+                    "_minute_count", 0
+                )
+                LIVE_ANALYSIS_STATE["live_5m"] = live_5m_snapshot
+
             # Do NOT refresh 5-minute analysis on every 1-minute candle.
             # Refresh only when a 5-minute candle is complete.
             if completed_5m is not None:
+                LIVE_ANALYSIS_STATE["live_5m_last_completed"] = (
+                    completed_5m["minute"].strftime("%Y-%m-%d %H:%M")
+                )
                 live_5m = list(LIVE_5M_CANDLE_HISTORY)
 
                 if len(live_5m) >= 2:
