@@ -207,10 +207,33 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
             # =====================================================
             # OPTION LIVE TICK
             # =====================================================
+            depth = tick.get("depth") or {}
+            buy_levels = depth.get("buy") or []
+            sell_levels = depth.get("sell") or []
+            best_bid_level = buy_levels[0] if buy_levels else {}
+            best_ask_level = sell_levels[0] if sell_levels else {}
+
+            def _safe_number(value):
+                try:
+                    return float(value) if value is not None else None
+                except (TypeError, ValueError):
+                    return None
+
             LIVE_TICK_STATE[token] = {
                 "instrument_token": token,
                 "last_price": price,
                 "volume_traded": cumulative_volume,
+                "bid": _safe_number(best_bid_level.get("price")),
+                "ask": _safe_number(best_ask_level.get("price")),
+                "bid_quantity": _safe_number(best_bid_level.get("quantity")),
+                "ask_quantity": _safe_number(best_ask_level.get("quantity")),
+                "total_bid_quantity": sum(
+                    float(level.get("quantity") or 0) for level in buy_levels
+                ),
+                "total_ask_quantity": sum(
+                    float(level.get("quantity") or 0) for level in sell_levels
+                ),
+                "depth_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
 
