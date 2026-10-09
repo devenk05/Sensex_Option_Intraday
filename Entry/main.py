@@ -915,6 +915,7 @@ def _build_confluence_component_scores(
     pivot_analysis,
     cepe_comparison,
     fii_dii_analysis=None,
+    liquidity_greeks_analysis=None,
 ):
     """Build deterministic 0-100 scores from genuine analysis outputs only."""
     scores = {}
@@ -967,6 +968,16 @@ def _build_confluence_component_scores(
             scores["atm_ce_pe_strength"] = 100.0
         elif cepe_comparison.get("candidate_direction"):
             scores["atm_ce_pe_strength"] = 50.0
+
+    liquidity = liquidity_greeks_analysis or {}
+    try:
+        liquidity_score = float(liquidity.get("score"))
+        if liquidity.get("status") == "OK":
+            scores["liquidity_greeks"] = max(
+                0.0, min(100.0, liquidity_score)
+            )
+    except (TypeError, ValueError):
+        pass
 
     # Include FII/DII only when genuine NSE data was fetched.
     # Positive score means the latest daily flow supports the market direction.
@@ -1146,7 +1157,7 @@ def _generate_live_dashboard(
         "volume_analysis": None,
         "gap_context": None,
         "fii_dii": None,
-        "liquidity_greeks": None,
+        "liquidity_greeks": LIVE_ANALYSIS_STATE.get("liquidity_greeks"),
 
         "ce": ce,
         "pe": pe,
@@ -1659,6 +1670,49 @@ def main():
             print(f"ATM_{option_type}: NO_MATCH")
 
     # ============================================================
+    # OPTION LIQUIDITY FROM REAL BID/ASK DEPTH
+    # Greeks/IV remain unavailable unless an actual source supplies them.
+    # ============================================================
+    try:
+        ce_liquidity = analyze_liquidity_greeks(ce)
+        pe_liquidity = analyze_liquidity_greeks(pe)
+        valid_liquidity_scores = [
+            float(item["liquidity_score"])
+            for item in (ce_liquidity, pe_liquidity)
+            if item.get("status") == "OK"
+            and item.get("liquidity_score") is not None
+        ]
+        liquidity_greeks_analysis = {
+            "status": "OK" if valid_liquidity_scores else "NO_DATA",
+            "score": (
+                round(sum(valid_liquidity_scores) / len(valid_liquidity_scores), 2)
+                if valid_liquidity_scores else None
+            ),
+            "score_basis": "REAL_BID_ASK_SPREAD",
+            "greeks_status": (
+                "AVAILABLE"
+                if all(
+                    item.get("greeks_status") == "AVAILABLE"
+                    for item in (ce_liquidity, pe_liquidity)
+                    if item.get("status") == "OK"
+                ) and bool(valid_liquidity_scores)
+                else "NOT_PROVIDED_BY_KITE_QUOTE"
+            ),
+            "valid_legs": len(valid_liquidity_scores),
+            "ce": ce_liquidity,
+            "pe": pe_liquidity,
+        }
+        LIVE_ANALYSIS_STATE["liquidity_greeks"] = liquidity_greeks_analysis
+        print("LIQUIDITY_GREEKS_ANALYSIS:", liquidity_greeks_analysis)
+    except Exception as liquidity_exc:
+        liquidity_greeks_analysis = {
+            "status": "ERROR",
+            "reason": repr(liquidity_exc),
+        }
+        LIVE_ANALYSIS_STATE["liquidity_greeks"] = liquidity_greeks_analysis
+        print("LIQUIDITY_GREEKS_ERROR:", repr(liquidity_exc))
+
+    # ============================================================
     # LIVE CE/PE RELATIVE BEHAVIOUR - DIAGNOSTIC ONLY
     # ============================================================
 
@@ -1742,10 +1796,21 @@ def main():
             pivot_analysis=pivot_analysis,
             cepe_comparison=cepe_comparison,
             fii_dii_analysis=fii_dii_analysis,
+            liquidity_greeks_analysis=liquidity_greeks_analysis,
         )
         confluence_result = calculate_confluence_score(confluence_component_scores)
         entry_score = confluence_result.get("score")
         print("CONFLUENCE_COMPONENT_SCORES:", confluence_component_scores)
+        print(
+            "LIQUIDITY_GREEKS_CONFLUENCE_SCORE:",
+            {
+                "score": confluence_component_scores.get("liquidity_greeks"),
+                "weight_percent": 5,
+                "status": (liquidity_greeks_analysis or {}).get("status"),
+                "greeks_status": (liquidity_greeks_analysis or {}).get("greeks_status"),
+                "valid_legs": (liquidity_greeks_analysis or {}).get("valid_legs", 0),
+            },
+        )
         if "fii_dii" in confluence_component_scores:
             print(
                 "FII_DII_CONFLUENCE_SCORE:",
