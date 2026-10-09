@@ -1,4 +1,4 @@
-﻿import subprocess
+import subprocess
 import json
 import sys
 from pathlib import Path
@@ -30,7 +30,7 @@ from multi_timeframe_engine import analyze_multi_timeframe
 from market_structure_engine import analyze_market_structure as analyze_candle_structure
 from market_status_engine import get_market_status
 from PostMarket.daily_csv_generator import DailyCSVGenerator
-from fii_dii_engine import analyze_fii_dii
+from fii_dii_engine import analyze_fii_dii, fetch_fii_dii_data
 from entry_timing_engine import confirm_entry_candle
 from confluence_engine import calculate_confluence_score
 from trade_decision_flow import compare_ce_pe
@@ -914,6 +914,7 @@ def _build_confluence_component_scores(
     volume_analysis,
     pivot_analysis,
     cepe_comparison,
+    fii_dii_analysis=None,
 ):
     """Build deterministic 0-100 scores from genuine analysis outputs only."""
     scores = {}
@@ -966,6 +967,29 @@ def _build_confluence_component_scores(
             scores["atm_ce_pe_strength"] = 100.0
         elif cepe_comparison.get("candidate_direction"):
             scores["atm_ce_pe_strength"] = 50.0
+
+    # Include FII/DII only when genuine NSE data was fetched.
+    # Positive score means the latest daily flow supports the market direction.
+    fii_dii = fii_dii_analysis or {}
+    fii_net = fii_dii.get("fii_net")
+    dii_net = fii_dii.get("dii_net")
+    if fii_net is not None and dii_net is not None and market in {"UP", "DOWN"}:
+        try:
+            fii_value = float(fii_net)
+            dii_value = float(dii_net)
+            supportive = lambda value: value > 0 if market == "UP" else value < 0
+            fii_supports = supportive(fii_value)
+            dii_supports = supportive(dii_value)
+            if fii_supports and dii_supports:
+                scores["fii_dii"] = 100.0
+            elif fii_supports or dii_supports:
+                scores["fii_dii"] = 75.0
+            elif fii_value == 0 and dii_value == 0:
+                scores["fii_dii"] = 50.0
+            else:
+                scores["fii_dii"] = 25.0
+        except (TypeError, ValueError):
+            pass
 
     return scores
 
@@ -1414,8 +1438,18 @@ def main():
         volume_analysis = None
         print("VOLUME_ANALYSIS_ERROR:", repr(volume_exc))
 
-    # These engines need genuine inputs not yet produced by the current pipeline.
-    print("FII_DII_SKIPPED: Real fii_net and dii_net data not available.")
+    # Fetch the latest available official NSE daily FII/DII cash-market data.
+    # These figures are daily, not live intraday flow; on fetch failure,
+    # leave the component unavailable rather than inventing a score.
+    fii_dii_analysis = None
+    try:
+        fii_dii_raw = fetch_fii_dii_data()
+        fii_dii_analysis = analyze_fii_dii(fii_dii_raw)
+        LIVE_ANALYSIS_STATE["fii_dii"] = fii_dii_analysis
+        print("FII_DII_ANALYSIS:", fii_dii_analysis)
+    except Exception as fii_dii_exc:
+        LIVE_ANALYSIS_STATE["fii_dii"] = None
+        print("FII_DII_FETCH_ERROR:", repr(fii_dii_exc))
 
     # ============================================================
     # Stage 2: PIVOT POINTS V2
@@ -1707,6 +1741,7 @@ def main():
             volume_analysis=_cepe_volume,
             pivot_analysis=pivot_analysis,
             cepe_comparison=cepe_comparison,
+            fii_dii_analysis=fii_dii_analysis,
         )
         confluence_result = calculate_confluence_score(confluence_component_scores)
         entry_score = confluence_result.get("score")
