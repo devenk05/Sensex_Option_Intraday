@@ -1671,7 +1671,7 @@ def main():
         pivot_analysis = None
 
     # Fetch nearby Sensex option quotes
-    option_data = fetch_sensex_options(kite, strike_range=200)
+    option_data = fetch_sensex_options(kite, strike_range=500)
 
     print("SENSEX_SPOT:", option_data["spot"])
     print("SELECTED_EXPIRY:", option_data["expiry"])
