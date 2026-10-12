@@ -823,11 +823,11 @@ def _live_dashboard_updater(
                 or {}
             )
 
-            # Keep the existing market-bias logic.
+            # Normalize common engine direction labels for the dashboard.
             market_bias = "NEUTRAL"
             for source in (
                 dashboard_analysis["market_analysis"],
-                LIVE_ANALYSIS_STATE.get("multi_timeframe") or multi_timeframe,
+                dashboard_analysis["multi_timeframe"],
                 dashboard_analysis["candle_structure"],
                 dashboard_analysis["price_action"],
             ):
@@ -838,11 +838,25 @@ def _live_dashboard_updater(
                         or source.get("trend")
                         or source.get("structure")
                         or ""
-                    ).upper()
+                    ).strip().upper().replace("_", " ")
 
-                    if direction in {"BULLISH", "BEARISH"}:
-                        market_bias = direction
+                    if direction in {"BULLISH", "UP", "UPTREND", "POSITIVE", "BUY", "CALL"}:
+                        market_bias = "BULLISH"
                         break
+                    if direction in {"BEARISH", "DOWN", "DOWNTREND", "NEGATIVE", "SELL", "PUT"}:
+                        market_bias = "BEARISH"
+                        break
+
+            # Publish the current decision alongside the live market fields.
+            current_decision = globals().get("CURRENT_SETUP_DECISION")
+            if not isinstance(current_decision, dict):
+                current_decision = {}
+
+            # dict.get(key, fallback) does not use the fallback when the
+            # key exists with None, so explicitly check the live tick.
+            live_spot = LIVE_SENSEX_TICK_STATE.get("last_price")
+            if live_spot is None:
+                live_spot = option_data.get("spot")
 
             # 1. Build consolidated live state for frontend.
             dashboard_data = {
@@ -851,40 +865,30 @@ def _live_dashboard_updater(
                 "live_5m": LIVE_ANALYSIS_STATE.get("live_5m") or {},
                 "live_option": live_option,
                 "live_sensex": dict(LIVE_SENSEX_TICK_STATE),
-                "spot": LIVE_SENSEX_TICK_STATE.get(
-                    "last_price",
-                    option_data.get("spot"),
-                ),
+                "spot": live_spot,
+                "sensex_price": live_spot,
                 "status": (
                     market_status.get("status", "UNKNOWN")
                     if isinstance(market_status, dict)
                     else str(market_status)
                 ),
+                "market_status": market_status,
                 "market_bias": market_bias,
                 "atm_strike": option_data.get("atm_strike"),
                 "expiry": option_data.get("expiry"),
+                "entry_score": current_decision.get("entry_score"),
+                "decision_status": current_decision.get("status", "WAIT"),
+                "decision": current_decision,
                 "market_analysis": dashboard_analysis["market_analysis"],
-                "multi_timeframe": (
-                    LIVE_ANALYSIS_STATE.get("multi_timeframe")
-                    or multi_timeframe
-                ),
+                "multi_timeframe": dashboard_analysis["multi_timeframe"],
                 "candle_structure": dashboard_analysis["candle_structure"],
                 "support_resistance": dashboard_analysis["support_resistance"],
                 "price_action": dashboard_analysis["price_action"],
-                "pivot_analysis": (
-                    LIVE_ANALYSIS_STATE.get("pivot_analysis")
-                    or pivot_analysis
-                ),
-                "volume_analysis": LIVE_ANALYSIS_STATE.get("volume_analysis"),
-                "oi_summary": (
-                    LIVE_ANALYSIS_STATE.get("oi_summary")
-                    or oi_summary
-                ),
-                "option_summary": (
-                    LIVE_ANALYSIS_STATE.get("option_summary")
-                    or option_summary
-                ),
-                "sensex": LIVE_SENSEX_TICK_STATE,
+                "pivot_analysis": dashboard_analysis["pivot_analysis"],
+                "volume_analysis": dashboard_analysis["volume_analysis"],
+                "oi_summary": dashboard_analysis["oi_summary"],
+                "option_summary": dashboard_analysis["option_summary"],
+                "sensex": dict(LIVE_SENSEX_TICK_STATE),
             }
 
             # 2. Save live JSON every second.
