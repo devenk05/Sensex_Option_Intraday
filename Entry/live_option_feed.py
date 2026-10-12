@@ -17,14 +17,15 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
 
     ticker = KiteTicker(kite.api_key, kite.access_token)
 
-    # SENSEX30 live stock ticks disabled.
-    # Keep only selected options + SENSEX index token subscribed.
-    sensex30_tokens = []
+    # Subscribe to selected options, SENSEX index, and Sensex 30 equities.
+    # Keep token order stable and avoid duplicate subscriptions.
+    sensex30_tokens = list(sensex30_tokens or [])
 
     all_tokens = list(
         dict.fromkeys(
             list(instrument_tokens)
             + ([sensex_token] if sensex_token else [])
+            + sensex30_tokens
         )
     )
 
