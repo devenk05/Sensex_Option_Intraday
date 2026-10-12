@@ -891,6 +891,23 @@ def _live_dashboard_updater(
                 "sensex": dict(LIVE_SENSEX_TICK_STATE),
             }
 
+            # Keep nearby option-chain premiums live in the dashboard JSON.
+            live_option_data = dashboard_analysis.get("option_data") or option_data or {}
+            live_options = []
+            for option in (live_option_data.get("options") or []):
+                if not isinstance(option, dict):
+                    continue
+                row = dict(option)
+                token = row.get("instrument_token")
+                tick = LIVE_TICK_STATE.get(token) if token is not None else None
+                if isinstance(tick, dict) and tick.get("last_price") is not None:
+                    row["ltp"] = tick["last_price"]
+                    row["last_price"] = tick["last_price"]
+                live_options.append(row)
+
+            dashboard_data["option_chain"] = live_options
+            dashboard_data["options"] = live_options
+
             # 2. Save live JSON every second.
             live_state_path = PROJECT_ROOT / "dashboard" / "live_state.json"
             live_state_path.write_text(
