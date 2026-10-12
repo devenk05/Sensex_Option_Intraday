@@ -426,7 +426,7 @@ def generate_dashboard(
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
-<head>`r`n<meta charset="UTF-8">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -1115,17 +1115,17 @@ td {{
     </div>
 
     <div class="nav-item">
-        <span class="nav-icon">â—ˆ</span>
+        <span class="nav-icon">▦</span>
         Market
     </div>
 
     <div class="nav-item">
-        <span class="nav-icon">â–£Â</span>
+        <span class="nav-icon">◈</span>
         Option Chain
     </div>
 
     <div class="nav-item">
-        <span class="nav-icon">â†—</span>
+        <span class="nav-icon">↗</span>
         Signals
     </div>
 
