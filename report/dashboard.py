@@ -1611,26 +1611,57 @@ function updateOptionChainLive(data) {{
         return;
     }}
 
-    body.innerHTML = options.slice(0, 15).map(option => {{
+    // Group separate CE and PE records into a single row for each strike.
+    const grouped = new Map();
+    for (const option of options) {{
+        const strikeValue = Number(option.strike);
+        if (!Number.isFinite(strikeValue)) continue;
+        const key = String(strikeValue);
+        if (!grouped.has(key)) {{
+            grouped.set(key, {{
+                strike: strikeValue, ce_ltp: null, ce_oi: null,
+                pe_ltp: null, pe_oi: null, types: new Set()
+            }});
+        }}
+        const row = grouped.get(key);
         const type = String(option.option_type || option.type || "").toUpperCase();
-        const strike = formatLiveNumber(option.strike, 2);
-        const ltp = option.ltp ?? option.last_price ?? null;
-        const ceLtp = type === "BOTH" ? option.ce_ltp : (type === "CE" ? ltp : null);
-        const peLtp = type === "BOTH" ? option.pe_ltp : (type === "PE" ? ltp : null);
-        const ceOi = type === "BOTH" ? option.ce_oi : (type === "CE" ? option.oi : null);
-        const peOi = type === "BOTH" ? option.pe_oi : (type === "PE" ? option.oi : null);
-        const cell = value => value === null || value === undefined || value === "" ? "—" : formatLiveNumber(value, 2);
-        const oiCell = value => value === null || value === undefined || value === "" ? "—" : formatLiveNumber(value, 0);
-        return '<tr>' +
-            '<td>' + strike + '</td>' +
-            '<td class="ce-text">' + cell(ceLtp) + '</td>' +
-            '<td>' + oiCell(ceOi) + '</td>' +
-            '<td class="atm-cell">' + strike + '</td>' +
-            '<td class="pe-text">' + cell(peLtp) + '</td>' +
-            '<td>' + oiCell(peOi) + '</td>' +
-            '<td>' + type + '</td>' +
-            '</tr>';
-    }}).join("");
+        row.types.add(type);
+
+        if (type === "BOTH") {{
+            for (const field of ["ce_ltp", "ce_oi", "pe_ltp", "pe_oi"]) {{
+                if (option[field] !== null && option[field] !== undefined) row[field] = option[field];
+            }}
+        }} else if (type === "CE" || type === "PE") {{
+            const prefix = type.toLowerCase();
+            const ltp = option.ltp ?? option.last_price ?? null;
+            if (ltp !== null) row[prefix + "_ltp"] = ltp;
+            if (option.oi !== null && option.oi !== undefined) row[prefix + "_oi"] = option.oi;
+        }}
+    }}
+
+    const cell = value => value === null || value === undefined || value === ""
+        ? "—" : formatLiveNumber(value, 2);
+    const oiCell = value => value === null || value === undefined || value === ""
+        ? "—" : formatLiveNumber(value, 0);
+
+    body.innerHTML = Array.from(grouped.values())
+        .sort((a, b) => b.strike - a.strike)
+        .slice(0, 15)
+        .map(option => {{
+            const strike = formatLiveNumber(option.strike, 2);
+            const type = option.types.has("BOTH") ||
+                (option.types.has("CE") && option.types.has("PE")) ? "BOTH" :
+                Array.from(option.types).join("/");
+            return '<tr>' +
+                '<td>' + strike + '</td>' +
+                '<td class="ce-text">' + cell(option.ce_ltp) + '</td>' +
+                '<td>' + oiCell(option.ce_oi) + '</td>' +
+                '<td class="atm-cell">' + strike + '</td>' +
+                '<td class="pe-text">' + cell(option.pe_ltp) + '</td>' +
+                '<td>' + oiCell(option.pe_oi) + '</td>' +
+                '<td>' + type + '</td>' +
+                '</tr>';
+        }}).join("");
 }}
 
 async function updateDashboardLive() {{
