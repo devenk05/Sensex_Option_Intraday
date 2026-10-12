@@ -204,6 +204,9 @@ def _aggregate_live_1m_into_5m(candle):
 ACTIVE_TRADE_MANAGER = ActiveTradeManager()
 
 # Final live trade lifecycle state
+LIVE_FINALIZED = False
+CURRENT_SETUP_DECISION = None
+NEARBY_CURRENT_CANDIDATE = None
 EXIT_MONITOR_LOOP = None
 EXIT_MONITOR_THREAD = None
 
