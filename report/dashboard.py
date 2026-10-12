@@ -295,73 +295,62 @@ def _option_chain(options: Any) -> str:
         </tr>
         """
 
-    rows = ""
+    # Combine separate CE and PE records into one row per strike.
+    grouped: dict[float, dict[str, Any]] = {}
+    for raw_option in options:
+        option = _dict(raw_option)
+        strike = option.get("strike")
+        try:
+            strike_key = float(strike)
+        except (TypeError, ValueError):
+            continue
 
-    for option in options[:15]:
-        option = _dict(option)
-
+        row = grouped.setdefault(
+            strike_key,
+            {"strike": strike, "ce_ltp": None, "ce_oi": None,
+             "pe_ltp": None, "pe_oi": None, "types": set()},
+        )
         option_type = str(
-            option.get("option_type", option.get("type", "—"))
+            option.get("option_type", option.get("type", ""))
         ).upper()
+        row["types"].add(option_type)
 
-        rows += f"""
+        if option_type == "BOTH":
+            for target, source in (
+                ("ce_ltp", "ce_ltp"), ("ce_oi", "ce_oi"),
+                ("pe_ltp", "pe_ltp"), ("pe_oi", "pe_oi"),
+            ):
+                if option.get(source) is not None:
+                    row[target] = option.get(source)
+        elif option_type in {"CE", "PE"}:
+            prefix = option_type.lower()
+            ltp = option.get("ltp")
+            if ltp is None:
+                ltp = option.get("last_price")
+            if ltp is not None:
+                row[f"{prefix}_ltp"] = ltp
+            if option.get("oi") is not None:
+                row[f"{prefix}_oi"] = option.get("oi")
+
+    rows = []
+    for strike, option in sorted(grouped.items(), reverse=True)[:15]:
+        types = option["types"]
+        row_type = "BOTH" if {"CE", "PE"}.issubset(types) else "/".join(sorted(types))
+        rows.append(f"""
         <tr>
-            <td>{_safe(option.get("strike"))}</td>
-            <td class="ce-text">
-                {_number(
-                    option.get("ce_ltp")
-                    if option_type == "BOTH"
-                    else (
-                        option.get("ltp")
-                        if option.get("ltp") is not None
-                        else option.get("last_price")
-                    )
-                    if option_type == "CE"
-                    else None
-                )}
-            </td>
-            <td>
-                {_number(
-                    option.get("ce_oi")
-                    if option_type == "BOTH"
-                    else option.get("oi")
-                    if option_type == "CE"
-                    else None,
-                    0,
-                )}
-            </td>
-            <td class="atm-cell">
-                {_safe(option.get("strike"))}
-            </td>
-            <td class="pe-text">
-                {_number(
-                    option.get("pe_ltp")
-                    if option_type == "BOTH"
-                    else (
-                        option.get("ltp")
-                        if option.get("ltp") is not None
-                        else option.get("last_price")
-                    )
-                    if option_type == "PE"
-                    else None
-                )}
-            </td>
-            <td>
-                {_number(
-                    option.get("pe_oi")
-                    if option_type == "BOTH"
-                    else option.get("oi")
-                    if option_type == "PE"
-                    else None,
-                    0,
-                )}
-            </td>
-            <td>{escape(option_type)}</td>
+            <td>{_safe(option["strike"])}</td>
+            <td class="ce-text">{_number(option["ce_ltp"])}</td>
+            <td>{_number(option["ce_oi"], 0)}</td>
+            <td class="atm-cell">{_safe(option["strike"])}</td>
+            <td class="pe-text">{_number(option["pe_ltp"])}</td>
+            <td>{_number(option["pe_oi"], 0)}</td>
+            <td>{escape(row_type)}</td>
         </tr>
-        """
+        """)
 
-    return rows
-
+    return "".join(rows) if rows else """
+        <tr><td colspan="7" class="empty-table">Option chain data unavailable</td></tr>
+    """
 
 def generate_dashboard(
     data: dict[str, Any],
