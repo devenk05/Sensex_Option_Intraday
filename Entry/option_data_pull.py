@@ -6,7 +6,7 @@ from kiteconnect import KiteConnect
 
 def fetch_sensex_options(
     kite: KiteConnect,
-    strike_range: float = 200,
+    strike_range: float = 500,
 ) -> dict[str, Any]:
     """Fetch nearest-expiry Sensex ATM and nearby CE/PE quotes.
 
@@ -65,13 +65,21 @@ def fetch_sensex_options(
         ),
     )
 
+    # Keep ten nearby strike prices (not merely ten CE/PE contracts).
+    # A 500-point window gives enough candidates around ATM; choose the
+    # ten closest unique strikes so the dashboard shows ten strike rows.
+    nearby_strikes = sorted(
+        (
+            strike for strike in strikes
+            if abs(strike - atm_strike) <= strike_range
+        ),
+        key=lambda strike: (abs(strike - atm_strike), strike),
+    )[:10]
+    selected_strikes = set(nearby_strikes)
     selected = [
         item
         for item in expiry_options
-        if abs(
-            float(item["strike"])
-            - atm_strike
-        ) <= strike_range
+        if float(item["strike"]) in selected_strikes
     ]
 
     symbols = [
