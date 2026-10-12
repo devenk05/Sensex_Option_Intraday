@@ -1477,7 +1477,7 @@ td {{
                     </tr>
                 </thead>
 
-                <tbody>
+                <tbody id="option-chain-body">
                     {_option_chain(options)}
                 </tbody>
 
@@ -1612,6 +1612,38 @@ async function updateSensex30Live() {{
     }}
 }}
 
+function updateOptionChainLive(data) {{
+    const body = document.getElementById("option-chain-body");
+    if (!body) return;
+
+    const options = data.option_chain || data.options || [];
+    if (!Array.isArray(options) || options.length === 0) {{
+        body.innerHTML = '<tr><td colspan="7" class="empty-table">Option chain data unavailable</td></tr>';
+        return;
+    }}
+
+    body.innerHTML = options.slice(0, 15).map(option => {{
+        const type = String(option.option_type || option.type || "").toUpperCase();
+        const strike = formatLiveNumber(option.strike, 2);
+        const ltp = option.ltp ?? option.last_price ?? null;
+        const ceLtp = type === "BOTH" ? option.ce_ltp : (type === "CE" ? ltp : null);
+        const peLtp = type === "BOTH" ? option.pe_ltp : (type === "PE" ? ltp : null);
+        const ceOi = type === "BOTH" ? option.ce_oi : (type === "CE" ? option.oi : null);
+        const peOi = type === "BOTH" ? option.pe_oi : (type === "PE" ? option.oi : null);
+        const cell = value => value === null || value === undefined || value === "" ? "—" : formatLiveNumber(value, 2);
+        const oiCell = value => value === null || value === undefined || value === "" ? "—" : formatLiveNumber(value, 0);
+        return '<tr>' +
+            '<td>' + strike + '</td>' +
+            '<td class="ce-text">' + cell(ceLtp) + '</td>' +
+            '<td>' + oiCell(ceOi) + '</td>' +
+            '<td class="atm-cell">' + strike + '</td>' +
+            '<td class="pe-text">' + cell(peLtp) + '</td>' +
+            '<td>' + oiCell(peOi) + '</td>' +
+            '<td>' + type + '</td>' +
+            '</tr>';
+    }}).join("");
+}}
+
 async function updateDashboardLive() {{
     try {{
         const response = await fetch("live_state.json?ts=" + Date.now(), {{
@@ -1621,6 +1653,7 @@ async function updateDashboardLive() {{
         if (!response.ok) return;
 
         const data = await response.json();
+        updateOptionChainLive(data);
 
         const spotElement = document.querySelector(
             ".sensex-spot-card .metric-value"
