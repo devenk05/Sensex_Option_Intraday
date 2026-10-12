@@ -1240,7 +1240,7 @@ td {{
 
         <div class="section-title">
             <h2>Multi-Timeframe Analysis</h2>
-            <span>15M â†’ 5M â†’ 1M</span>
+            <span>15M → 5M → 1M</span>
         </div>
 
         <div class="analysis-grid">
