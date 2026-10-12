@@ -1,4 +1,4 @@
-	import unittest
+import unittest
 from datetime import datetime
 
 from trade_exit_alert_status import TradeExitAlertStatus
