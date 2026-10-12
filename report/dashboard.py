@@ -52,6 +52,9 @@ def _status_badge(value: Any) -> str:
         "ALIGNED",
         "OK",
         "LIVE",
+        "TRADE_CANDIDATE",
+        "BUY_CALL",
+        "BUY_PUT",
     }:
         css = "positive"
     elif text in {
@@ -1209,6 +1212,7 @@ td {{
             "AI ENTRY SCORE",
             _safe(entry_score),
             "Minimum required: 80",
+            "entry-score-card",
         )}
 
         {_metric_card(
@@ -1222,6 +1226,7 @@ td {{
             "DECISION",
             _status_badge(decision_status),
             "Current setup status",
+            "decision-card",
         )}
 
     </section>
@@ -1647,6 +1652,29 @@ async function updateDashboardLive() {{
         );
         if (atmElement && data.atm_strike != null) {{
             atmElement.textContent = data.atm_strike;
+        }}
+
+        const scoreElement = document.querySelector(
+            ".entry-score-card .metric-value"
+        );
+        if (scoreElement && data.entry_score != null) {{
+            scoreElement.textContent = data.entry_score;
+        }}
+
+        const decisionElement = document.querySelector(
+            ".decision-card .metric-value .status-badge"
+        );
+        if (decisionElement && data.decision_status) {{
+            const decision = String(data.decision_status).toUpperCase();
+            decisionElement.textContent = decision.replace(/_/g, " ");
+            decisionElement.classList.remove("positive", "warning", "neutral");
+            if (["TRADE_CANDIDATE", "BUY_CALL", "BUY_PUT", "CONFIRMED", "ALIGNED"].includes(decision)) {{
+                decisionElement.classList.add("positive");
+            }} else if (["WAIT", "PENDING", "NOT_CONFIRMED", "NO_TRADE", "REJECTED"].includes(decision)) {{
+                decisionElement.classList.add("warning");
+            }} else {{
+                decisionElement.classList.add("neutral");
+            }}
         }}
 
     }} catch (error) {{
