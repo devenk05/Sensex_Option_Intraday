@@ -311,7 +311,11 @@ def _option_chain(options: Any) -> str:
                 {_number(
                     option.get("ce_ltp")
                     if option_type == "BOTH"
-                    else option.get("ltp")
+                    else (
+                        option.get("ltp")
+                        if option.get("ltp") is not None
+                        else option.get("last_price")
+                    )
                     if option_type == "CE"
                     else None
                 )}
@@ -333,7 +337,11 @@ def _option_chain(options: Any) -> str:
                 {_number(
                     option.get("pe_ltp")
                     if option_type == "BOTH"
-                    else option.get("ltp")
+                    else (
+                        option.get("ltp")
+                        if option.get("ltp") is not None
+                        else option.get("last_price")
+                    )
                     if option_type == "PE"
                     else None
                 )}
@@ -1542,6 +1550,16 @@ td {{
 </div>
 
 <script>
+function formatLiveNumber(value, digits = 2) {{
+    if (value === null || value === undefined || value === "") return "—";
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "—";
+    return number.toLocaleString("en-IN", {{
+        minimumFractionDigits: 0,
+        maximumFractionDigits: digits
+    }});
+}}
+
 async function updateSensex30Live() {{
     try {{
         const response = await fetch("live_sensex30.json?ts=" + Date.now(), {{
@@ -1566,7 +1584,7 @@ async function updateSensex30Live() {{
             const changeCell = row.querySelector(".sensex30-change");
             const closeCell = row.querySelector(".sensex30-close");
 
-            if (openCell) openCell.textContent = stock.open ?? "—";
+            if (openCell) openCell.textContent = formatLiveNumber(stock.open);
 
             if (ltpCell) {{
                 ltpCell.innerHTML =
@@ -1575,7 +1593,7 @@ async function updateSensex30Live() {{
 
             if (changeCell) {{
                 const value = Number(stock.change || 0);
-                changeCell.textContent = stock.change ?? "—";
+                changeCell.textContent = formatLiveNumber(stock.change);
                 changeCell.classList.remove("ce-text", "pe-text");
 
                 if (value > 0) {{
@@ -1586,7 +1604,7 @@ async function updateSensex30Live() {{
             }}
 
             if (closeCell) {{
-                closeCell.textContent = stock.last_close ?? "—";
+                closeCell.textContent = formatLiveNumber(stock.last_close);
             }}
         }}
     }} catch (error) {{
