@@ -784,7 +784,7 @@ td {
     
 
         
-    <div class="metric-card ">
+    <div class="metric-card entry-score-card">
         <div class="metric-title">AI ENTRY SCORE</div>
         <div class="metric-value">—</div>
         <div class="metric-subtitle">Minimum required: 80</div>
@@ -800,7 +800,7 @@ td {
     
 
         
-    <div class="metric-card ">
+    <div class="metric-card decision-card">
         <div class="metric-title">DECISION</div>
         <div class="metric-value"><span class="status-badge warning">WAIT</span></div>
         <div class="metric-subtitle">Current setup status</div>
@@ -818,7 +818,7 @@ td {
 
         <div class="section-title">
             <h2>Multi-Timeframe Analysis</h2>
-            <span>15M â†’ 5M â†’ 1M</span>
+            <span>15M → 5M → 1M</span>
         </div>
 
         <div class="analysis-grid">
@@ -1931,6 +1931,29 @@ async function updateDashboardLive() {
         );
         if (atmElement && data.atm_strike != null) {
             atmElement.textContent = data.atm_strike;
+        }
+
+        const scoreElement = document.querySelector(
+            ".entry-score-card .metric-value"
+        );
+        if (scoreElement && data.entry_score != null) {
+            scoreElement.textContent = data.entry_score;
+        }
+
+        const decisionElement = document.querySelector(
+            ".decision-card .metric-value .status-badge"
+        );
+        if (decisionElement && data.decision_status) {
+            const decision = String(data.decision_status).toUpperCase();
+            decisionElement.textContent = decision.replace(/_/g, " ");
+            decisionElement.classList.remove("positive", "warning", "neutral");
+            if (["TRADE_CANDIDATE", "BUY_CALL", "BUY_PUT", "CONFIRMED", "ALIGNED"].includes(decision)) {
+                decisionElement.classList.add("positive");
+            } else if (["WAIT", "PENDING", "NOT_CONFIRMED", "NO_TRADE", "REJECTED"].includes(decision)) {
+                decisionElement.classList.add("warning");
+            } else {
+                decisionElement.classList.add("neutral");
+            }
         }
 
     } catch (error) {
