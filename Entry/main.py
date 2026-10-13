@@ -565,6 +565,41 @@ TRADE_HISTORY_STORAGE = TradeHistoryStorage()
 TRADE_HISTORY = TradeHistory()
 
 
+def _aggregate_completed_5m_to_15m(live_5m):
+    """Aggregate only complete groups of three 5-minute candles into 15m candles."""
+    grouped = {}
+    for candle in live_5m:
+        minute = candle.get("minute")
+        if minute is None:
+            continue
+        bucket = minute.replace(
+            minute=(minute.minute // 15) * 15,
+            second=0,
+            microsecond=0,
+        )
+        grouped.setdefault(bucket, []).append(candle)
+
+    result = []
+    for bucket in sorted(grouped):
+        group = sorted(grouped[bucket], key=lambda item: item.get("minute"))
+        expected = [
+            bucket,
+            bucket + timedelta(minutes=5),
+            bucket + timedelta(minutes=10),
+        ]
+        if len(group) != 3 or [item.get("minute") for item in group] != expected:
+            continue
+        result.append({
+            "date": bucket,
+            "open": float(group[0]["open"]),
+            "high": max(float(item["high"]) for item in group),
+            "low": min(float(item["low"]) for item in group),
+            "close": float(group[-1]["close"]),
+            "volume": sum(float(item.get("volume") or 0) for item in group),
+        })
+    return result
+
+
 def _evaluate_live_setup_on_completed_5m(live_5m):
     """Recompute the recommendation decision after each completed live 5m candle."""
     global CURRENT_SETUP_DECISION, NEARBY_CURRENT_CANDIDATE, LATEST_ENTRY_SCORE
@@ -587,8 +622,11 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             volume_analysis = None
             print("LIVE_DECISION_VOLUME_WARNING:", repr(exc))
 
+        completed_15m = _aggregate_completed_5m_to_15m(live_5m)
+        if not completed_15m:
+            completed_15m = LIVE_ANALYSIS_STATE.get("candles_15m") or []
         multi_timeframe = analyze_multi_timeframe(
-            candles_15m=LIVE_ANALYSIS_STATE.get("candles_15m") or [],
+            candles_15m=completed_15m,
             candles_5m=live_5m,
         )
         LIVE_ANALYSIS_STATE.update({
@@ -1790,6 +1828,12 @@ def main():
             try:
                 candle_minute = candle_date.replace(second=0, microsecond=0)
                 if candle_minute.minute % 5 != 0:
+                    continue
+                now_minute = datetime.now().replace(second=0, microsecond=0)
+                current_bucket = now_minute.replace(
+                    minute=(now_minute.minute // 5) * 5
+                )
+                if candle_minute >= current_bucket:
                     continue
                 seeded_5m.append({
                     "instrument_token": token,
