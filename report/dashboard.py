@@ -195,35 +195,35 @@ def _option_card(
         pass
 
     return f"""
-    <div class="option-card {css}">
+    <div class="option-card {css}" id="atm-option-{css}" data-option-type="{option_type.upper()}">
         <div class="option-header">
             <span>{escape(title)}</span>
             <span class="option-type">{escape(option_type.upper())}</span>
         </div>
 
-        <div class="option-price">
+        <div class="option-price" data-field="ltp">
             ₹{_number(ltp)}
         </div>
 
         <div class="option-grid">
             <div>
                 <span>Strike</span>
-                <strong>{_number(strike, 0)}</strong>
+                <strong data-field="strike">{_number(strike, 0)}</strong>
             </div>
 
             <div>
                 <span>Change</span>
-                <strong>{escape(change_text)}</strong>
+                <strong data-field="change">{escape(change_text)}</strong>
             </div>
 
             <div>
                 <span>OI</span>
-                <strong>{_number(oi, 0)}</strong>
+                <strong data-field="oi">{_number(oi, 0)}</strong>
             </div>
 
             <div>
                 <span>Volume</span>
-                <strong>{_number(volume, 0)}</strong>
+                <strong data-field="volume">{_number(volume, 0)}</strong>
             </div>
         </div>
     </div>
@@ -1601,6 +1601,42 @@ async function updateSensex30Live() {{
     }}
 }}
 
+function updateAtmOptionMomentum(data) {{
+    const optionCards = [
+        ["ce", data.ce || data.atm_ce || data.call_option],
+        ["pe", data.pe || data.atm_pe || data.put_option]
+    ];
+
+    for (const [side, option] of optionCards) {{
+        if (!option || typeof option !== "object") continue;
+        const card = document.getElementById("atm-option-" + side);
+        if (!card) continue;
+
+        const value = (keys) => {{
+            for (const key of keys) {{
+                if (option[key] !== null && option[key] !== undefined && option[key] !== "") {{
+                    return option[key];
+                }}
+            }}
+            return null;
+        }};
+        const setField = (name, keys, formatter = formatLiveNumber) => {{
+            const element = card.querySelector('[data-field="' + name + '"]');
+            const raw = value(keys);
+            if (element && raw !== null) element.textContent = formatter(raw);
+        }};
+
+        setField("ltp", ["ltp", "last_price", "last_1m_close"], v => "₹" + formatLiveNumber(v, 2));
+        setField("strike", ["strike"], v => formatLiveNumber(v, 0));
+        setField("change", ["change_percent", "premium_change_percent"], v => {{
+            const n = Number(v);
+            return Number.isFinite(n) ? (n > 0 ? "+" : "") + n.toFixed(2) + "%" : "—";
+        }});
+        setField("oi", ["oi", "open_interest"], v => formatLiveNumber(v, 0));
+        setField("volume", ["volume", "volume_traded", "minute_volume"], v => formatLiveNumber(v, 0));
+    }}
+}}
+
 function updateOptionChainLive(data) {{
     const body = document.getElementById("option-chain-body");
     if (!body) return;
@@ -1674,6 +1710,7 @@ async function updateDashboardLive() {{
 
         const data = await response.json();
         updateOptionChainLive(data);
+        updateAtmOptionMomentum(data);
 
         const spotElement = document.querySelector(
             ".sensex-spot-card .metric-value"
