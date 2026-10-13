@@ -2123,8 +2123,8 @@ def main():
 
         # Complete final-decision wiring:
         # register a recommendation only when the locked flow reaches
-        # TRADE_CANDIDATE. The existing one-minute confirmation gate remains
-        # enforced inside run_locked_decision_flow().
+        # TRADE_CANDIDATE. One-minute analysis remains visible but optional;
+        # CE/PE, reversal/continuation, score and trade-management gates remain.
         if (
             isinstance(CURRENT_SETUP_DECISION, dict)
             and CURRENT_SETUP_DECISION.get("status") == "TRADE_CANDIDATE"

@@ -661,32 +661,27 @@ def run_locked_decision_flow(
             direction=direction,
         )
 
-    if not one_minute_confirmed:
-        return {
-            "status": "READY_FOR_1M_CONFIRMATION",
-            "action": None,
-            "direction": direction,
-            "reason": "CE_PE_AND_LEVEL_FLOW_CONFIRMED_WAITING_FOR_1M",
-            "entry_score": None,
-            "stages": stages,
-            "flow_order": [
-                "GAP_CONTEXT",
-                "MARKET_ANALYSIS",
-                "CE_PE_COMPARISON",
-                "PIVOT_SR_LOCATION",
-                "REVERSAL_CONTINUATION",
-                "ONE_MINUTE_CONFIRMATION",
-                "FINAL_SCORE",
-                "TRADE_WAIT",
-            ],
+    # 1-minute confirmation is observational only; it must not block entry.
+    # Keep its state visible in the decision stages for dashboard/debugging.
+    stages.append(
+        {
+            "stage": "ONE_MINUTE_OBSERVATION",
+            "status": "CONFIRMED" if one_minute_confirmed else "SKIPPED_OPTIONAL",
+            "required": False,
+            "reason": (
+                "1M_DIRECTION_CONFIRMED"
+                if one_minute_confirmed
+                else "1M_OPTIONAL_NOT_BLOCKING_ENTRY"
+            ),
         }
+    )
 
     if entry_score is None:
         return {
             "status": "READY_FOR_FINAL_SCORE",
             "action": None,
             "direction": direction,
-            "reason": "1M_CONFIRMATION_PASSED_SCORE_PENDING",
+            "reason": "ENTRY_SCORE_PENDING_1M_OPTIONAL",
             "entry_score": None,
             "stages": stages,
             "flow_order": [
@@ -695,7 +690,7 @@ def run_locked_decision_flow(
                 "CE_PE_COMPARISON",
                 "PIVOT_SR_LOCATION",
                 "REVERSAL_CONTINUATION",
-                "ONE_MINUTE_CONFIRMATION",
+                "ONE_MINUTE_OBSERVATION_OPTIONAL",
                 "FINAL_SCORE",
                 "TRADE_WAIT",
             ],
@@ -724,7 +719,7 @@ def run_locked_decision_flow(
             "CE_PE_COMPARISON",
             "PIVOT_SR_LOCATION",
             "REVERSAL_CONTINUATION",
-            "ONE_MINUTE_CONFIRMATION",
+            "ONE_MINUTE_OBSERVATION_OPTIONAL",
             "FINAL_SCORE",
             "TRADE_WAIT",
         ],
