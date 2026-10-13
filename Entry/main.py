@@ -620,10 +620,11 @@ def handle_finalized_candle(candle):
                     direction_matches_mtf = (
                         mtf_aligned and raw_direction == direction_15m
                     )
-                    entry_confirmed = (
-                        direction_matches_mtf
-                        and signal in {"BULLISH_BREAKOUT", "BEARISH_BREAKDOWN"}
-                    )
+                    # The 1-minute candle is the entry-timing check.
+                    # Once 15m and 5m agree, accept a directional 1m candle
+                    # aligned with that direction; requiring a strict breakout
+                    # of only the immediately previous candle was too restrictive.
+                    entry_confirmed = direction_matches_mtf
                     LIVE_ANALYSIS_STATE["one_minute_analysis"] = {
                         "status": one_minute_pa.get("status", "UNKNOWN"),
                         "direction": raw_direction if direction_matches_mtf else "WAIT",
@@ -631,9 +632,9 @@ def handle_finalized_candle(candle):
                         "signal": signal,
                         "entry_confirmed": entry_confirmed,
                         "reason": (
-                            "1M_BREAKOUT_ALIGNED_WITH_15M_5M"
+                            "1M_DIRECTION_ALIGNED_WITH_15M_5M"
                             if entry_confirmed
-                            else "WAITING_FOR_1M_BREAKOUT_AND_MTF_ALIGNMENT"
+                            else "WAITING_FOR_DIRECTIONAL_1M_CANDLE_AND_MTF_ALIGNMENT"
                         ),
                         "direction_15m": direction_15m or "UNKNOWN",
                         "direction_5m": direction_5m or "UNKNOWN",
