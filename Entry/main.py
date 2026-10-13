@@ -2109,7 +2109,9 @@ def main():
             min_entry_score=float(config.MIN_ENTRY_SCORE),
             support_resistance=support_resistance,
             gap_context=None,
-            one_minute_confirmed=False,
+            one_minute_confirmed=bool(
+                (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("entry_confirmed")
+            ),
         )
         NEARBY_CURRENT_CANDIDATE = (
             CURRENT_SETUP_DECISION.get("candidate")
