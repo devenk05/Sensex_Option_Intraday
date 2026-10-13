@@ -911,6 +911,47 @@ def _live_dashboard_updater(
             dashboard_data["option_chain"] = live_options
             dashboard_data["options"] = live_options
 
+            # Publish the selected ATM CE/PE contracts separately for the
+            # ATM Option Momentum cards. Prices use the freshest WebSocket tick.
+            try:
+                atm_value = float(option_data.get("atm_strike"))
+            except (TypeError, ValueError):
+                atm_value = None
+
+            for side in ("CE", "PE"):
+                selected_option = None
+                if atm_value is not None:
+                    for row in live_options:
+                        row_type = str(
+                            row.get("option_type") or row.get("type") or ""
+                        ).upper()
+                        try:
+                            row_strike = float(row.get("strike"))
+                        except (TypeError, ValueError):
+                            continue
+                        if row_type == side and row_strike == atm_value:
+                            selected_option = row
+                            break
+
+                if selected_option is not None:
+                    dashboard_data[side.lower()] = {
+                        "strike": selected_option.get("strike"),
+                        "ltp": selected_option.get(
+                            "ltp", selected_option.get("last_price")
+                        ),
+                        "last_price": selected_option.get(
+                            "last_price", selected_option.get("ltp")
+                        ),
+                        "oi": selected_option.get("oi"),
+                        "volume": selected_option.get(
+                            "volume", selected_option.get("volume_traded")
+                        ),
+                        "change_percent": selected_option.get(
+                            "change_percent",
+                            selected_option.get("premium_change_percent"),
+                        ),
+                    }
+
             # 2. Save live JSON every second.
             live_state_path = PROJECT_ROOT / "dashboard" / "live_state.json"
             live_state_path.write_text(
