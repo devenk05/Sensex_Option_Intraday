@@ -134,7 +134,14 @@ def check_reversal_continuation(
         else None
     )
 
-    if direction and _normalise(direction) != bias:
+    # CE/PE labels represent option sides, not market-bias names.
+    # Normalize the option side before comparing it with BULLISH/BEARISH.
+    direction_bias = {
+        "CE": "BULLISH",
+        "PE": "BEARISH",
+    }.get(_normalise(direction), _normalise(direction))
+
+    if direction and direction_bias != bias:
         return {
             "stage": "REVERSAL_CONTINUATION",
             "status": "NOT_CONFIRMED",
