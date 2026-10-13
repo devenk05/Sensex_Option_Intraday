@@ -94,6 +94,7 @@ from threading import Thread
 # Separate candle history for each selected option token and the Sensex index.
 CANDLE_HISTORY = {}
 SENSEX_INSTRUMENT_TOKEN = None
+LATEST_ENTRY_SCORE = None
 
 LIVE_ANALYSIS_STATE = {
     "market_analysis": {},
@@ -957,7 +958,11 @@ def _live_dashboard_updater(
                 "market_bias": market_bias,
                 "atm_strike": option_data.get("atm_strike"),
                 "expiry": option_data.get("expiry"),
-                "entry_score": current_decision.get("entry_score"),
+                "entry_score": (
+                    LATEST_ENTRY_SCORE
+                    if LATEST_ENTRY_SCORE is not None
+                    else current_decision.get("entry_score")
+                ),
                 "decision_status": current_decision.get("status", "WAIT"),
                 "decision": current_decision,
                 "market_analysis": dashboard_analysis["market_analysis"],
@@ -1372,7 +1377,7 @@ def _generate_live_dashboard(
 def main():
     global EXIT_MONITOR_LOOP, EXIT_MONITOR_THREAD
     global CURRENT_SETUP_DECISION, NEARBY_CURRENT_CANDIDATE
-    global SENSEX_INSTRUMENT_TOKEN
+    global SENSEX_INSTRUMENT_TOKEN, LATEST_ENTRY_SCORE
     load_project_config()
 
     print(f"Project: {config.PROJECT_NAME}")
@@ -2042,6 +2047,11 @@ def main():
         )
         confluence_result = calculate_confluence_score(confluence_component_scores)
         entry_score = confluence_result.get("score")
+        try:
+            LATEST_ENTRY_SCORE = round(float(entry_score), 2) if entry_score is not None else None
+        except (TypeError, ValueError):
+            LATEST_ENTRY_SCORE = None
+        print("DASHBOARD_ENTRY_SCORE_UPDATED:", LATEST_ENTRY_SCORE)
         print("CONFLUENCE_COMPONENT_SCORES:", confluence_component_scores)
         print(
             "LIQUIDITY_GREEKS_CONFLUENCE_SCORE:",
