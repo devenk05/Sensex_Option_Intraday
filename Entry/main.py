@@ -98,6 +98,9 @@ LATEST_ENTRY_SCORE = None
 
 LIVE_ANALYSIS_STATE = {
     "market_analysis": {},
+    "candles_15m": [],
+    "fii_dii": None,
+    "liquidity_greeks": None,
     "market_status": {},
     "candle_structure": {},
     "support_resistance": {},
@@ -562,6 +565,196 @@ TRADE_HISTORY_STORAGE = TradeHistoryStorage()
 TRADE_HISTORY = TradeHistory()
 
 
+def _aggregate_completed_5m_to_15m(live_5m):
+    """Aggregate only complete groups of three 5-minute candles into 15m candles."""
+    grouped = {}
+    for candle in live_5m:
+        minute = candle.get("minute")
+        if minute is None:
+            continue
+        bucket = minute.replace(
+            minute=(minute.minute // 15) * 15,
+            second=0,
+            microsecond=0,
+        )
+        grouped.setdefault(bucket, []).append(candle)
+
+    result = []
+    for bucket in sorted(grouped):
+        group = sorted(grouped[bucket], key=lambda item: item.get("minute"))
+        expected = [
+            bucket,
+            bucket + timedelta(minutes=5),
+            bucket + timedelta(minutes=10),
+        ]
+        if len(group) != 3 or [item.get("minute") for item in group] != expected:
+            continue
+        result.append({
+            "date": bucket,
+            "open": float(group[0]["open"]),
+            "high": max(float(item["high"]) for item in group),
+            "low": min(float(item["low"]) for item in group),
+            "close": float(group[-1]["close"]),
+            "volume": sum(float(item.get("volume") or 0) for item in group),
+        })
+    return result
+
+
+def _evaluate_live_setup_on_completed_5m(live_5m):
+    """Recompute the recommendation decision after each completed live 5m candle."""
+    global CURRENT_SETUP_DECISION, NEARBY_CURRENT_CANDIDATE, LATEST_ENTRY_SCORE
+
+    if ACTIVE_TRADE_MANAGER.has_active_trade() or LIVE_FINALIZED:
+        print("LIVE_DECISION_SKIPPED: ACTIVE_TRADE_LOCK")
+        return
+    if len(live_5m) < 20:
+        print("LIVE_DECISION_SKIPPED: INSUFFICIENT_5M_HISTORY", len(live_5m))
+        return
+
+    try:
+        market_analysis = analyze_market_structure(live_5m)
+        candle_structure = analyze_candle_structure(live_5m)
+        support_resistance = calculate_support_resistance(live_5m)
+        price_action = analyze_price_action(live_5m)
+        try:
+            volume_analysis = analyze_volume(live_5m)
+        except Exception as exc:
+            volume_analysis = None
+            print("LIVE_DECISION_VOLUME_WARNING:", repr(exc))
+
+        completed_15m = _aggregate_completed_5m_to_15m(live_5m)
+        if not completed_15m:
+            completed_15m = LIVE_ANALYSIS_STATE.get("candles_15m") or []
+        multi_timeframe = analyze_multi_timeframe(
+            candles_15m=completed_15m,
+            candles_5m=live_5m,
+        )
+        LIVE_ANALYSIS_STATE.update({
+            "market_analysis": market_analysis,
+            "candle_structure": candle_structure,
+            "support_resistance": support_resistance,
+            "price_action": price_action,
+            "volume_analysis": volume_analysis,
+            "multi_timeframe": multi_timeframe,
+        })
+
+        option_data = LIVE_ANALYSIS_STATE.get("option_data") or {}
+        options = []
+        for item in option_data.get("options") or []:
+            if not isinstance(item, dict):
+                continue
+            row = dict(item)
+            token_value = row.get("instrument_token")
+            tick = (
+                LIVE_TICK_STATE.get(token_value)
+                or LIVE_TICK_STATE.get(str(token_value))
+            ) if token_value is not None else None
+            if isinstance(tick, dict):
+                if tick.get("last_price") is not None:
+                    row["last_price"] = tick["last_price"]
+                    row["ltp"] = tick["last_price"]
+                if tick.get("volume_traded") is not None:
+                    row["volume"] = tick["volume_traded"]
+            options.append(row)
+
+        if not options:
+            print("LIVE_DECISION_SKIPPED: OPTION_CHAIN_UNAVAILABLE")
+            return
+
+        ce_result = select_option(
+            options=options,
+            target_strike=option_data.get("atm_strike"),
+            option_type="CE",
+        )
+        pe_result = select_option(
+            options=options,
+            target_strike=option_data.get("atm_strike"),
+            option_type="PE",
+        )
+        ce = ce_result.get("option") if ce_result.get("status") == "OK" else {}
+        pe = pe_result.get("option") if pe_result.get("status") == "OK" else {}
+        if not ce or not pe:
+            print("LIVE_DECISION_SKIPPED: ATM_CE_PE_UNAVAILABLE")
+            return
+
+        oi_summary = LIVE_ANALYSIS_STATE.get("oi_summary") or {}
+        pivot_analysis = LIVE_ANALYSIS_STATE.get("pivot_analysis") or {}
+        fii_dii_analysis = LIVE_ANALYSIS_STATE.get("fii_dii")
+        liquidity_greeks_analysis = LIVE_ANALYSIS_STATE.get("liquidity_greeks")
+        cepe_market = derive_market_bias(multi_timeframe, candle_structure)
+        cepe_comparison = compare_ce_pe(
+            market_bias=cepe_market.get("bias", "NEUTRAL"),
+            pivot_analysis=pivot_analysis,
+            price_action=price_action,
+            volume_analysis=volume_analysis or {},
+            oi_summary=oi_summary,
+            ce=ce,
+            pe=pe,
+        )
+        component_scores = _build_confluence_component_scores(
+            market_analysis=market_analysis,
+            multi_timeframe=multi_timeframe,
+            support_resistance=support_resistance,
+            price_action=price_action,
+            volume_analysis=volume_analysis or {},
+            pivot_analysis=pivot_analysis,
+            cepe_comparison=cepe_comparison,
+            fii_dii_analysis=fii_dii_analysis,
+            liquidity_greeks_analysis=liquidity_greeks_analysis,
+        )
+        confluence = calculate_confluence_score(component_scores)
+        entry_score = confluence.get("score")
+        try:
+            LATEST_ENTRY_SCORE = (
+                round(float(entry_score), 2) if entry_score is not None else None
+            )
+        except (TypeError, ValueError):
+            LATEST_ENTRY_SCORE = None
+        spot = LIVE_SENSEX_TICK_STATE.get("last_price") or option_data.get("spot")
+
+        CURRENT_SETUP_DECISION = run_locked_decision_flow(
+            multi_timeframe=multi_timeframe,
+            candle_structure=candle_structure,
+            spot=spot,
+            pivot_analysis=pivot_analysis,
+            price_action=price_action,
+            volume_analysis=volume_analysis or {},
+            oi_summary=oi_summary,
+            ce=ce,
+            pe=pe,
+            chart_pattern=None,
+            entry_score=entry_score,
+            min_entry_score=float(config.MIN_ENTRY_SCORE),
+            support_resistance=support_resistance,
+            gap_context=None,
+            one_minute_confirmed=bool(
+                (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("entry_confirmed")
+            ),
+        )
+        NEARBY_CURRENT_CANDIDATE = (
+            CURRENT_SETUP_DECISION.get("candidate")
+            if isinstance(CURRENT_SETUP_DECISION, dict) else None
+        )
+        print("LIVE_DECISION_RECALCULATED:", {
+            "candle": live_5m[-1].get("minute"),
+            "score": LATEST_ENTRY_SCORE,
+            "cepe_status": cepe_comparison.get("status"),
+            "candidate_direction": cepe_comparison.get("candidate_direction"),
+            "decision": CURRENT_SETUP_DECISION,
+        })
+        if (
+            isinstance(CURRENT_SETUP_DECISION, dict)
+            and CURRENT_SETUP_DECISION.get("status") == "TRADE_CANDIDATE"
+        ):
+            if not _register_live_trade(
+                CURRENT_SETUP_DECISION,
+                NEARBY_CURRENT_CANDIDATE,
+            ):
+                print("LIVE_DECISION_TRADE_REGISTRATION_FAILED")
+    except Exception as exc:
+        print("LIVE_DECISION_RECALCULATION_ERROR:", repr(exc))
+
+
 def handle_finalized_candle(candle):
     """Receive finalized candles and refresh live analysis state."""
     token = candle["instrument_token"]
@@ -710,6 +903,7 @@ def handle_finalized_candle(candle):
                         "LIVE_5M_ANALYSIS_REFRESHED:",
                         completed_5m["minute"].strftime("%H:%M"),
                     )
+                    _evaluate_live_setup_on_completed_5m(live_5m)
 
         except Exception as exc:
             print("LIVE_5M_ANALYSIS_REFRESH_ERROR:", repr(exc))
@@ -1624,6 +1818,36 @@ def main():
                 "volume": item.get("volume"),
             })
         CANDLE_HISTORY[token] = seeded_history[-500:]
+        # Seed completed historical 5m candles as context; trade registration
+        # still waits for a newly completed live WebSocket 5m candle.
+        seeded_5m = []
+        for item in candles or []:
+            candle_date = item.get("date") or item.get("minute")
+            if candle_date is None:
+                continue
+            try:
+                candle_minute = candle_date.replace(second=0, microsecond=0)
+                if candle_minute.minute % 5 != 0:
+                    continue
+                now_minute = datetime.now().replace(second=0, microsecond=0)
+                current_bucket = now_minute.replace(
+                    minute=(now_minute.minute // 5) * 5
+                )
+                if candle_minute >= current_bucket:
+                    continue
+                seeded_5m.append({
+                    "instrument_token": token,
+                    "minute": candle_minute,
+                    "open": float(item["open"]),
+                    "high": float(item["high"]),
+                    "low": float(item["low"]),
+                    "close": float(item["close"]),
+                    "volume": item.get("volume") or 0,
+                })
+            except (KeyError, TypeError, ValueError):
+                continue
+        LIVE_5M_CANDLE_HISTORY[:] = seeded_5m[-500:]
+        print("LIVE_5M_HISTORY_SEEDED:", len(LIVE_5M_CANDLE_HISTORY))
         print(
             "SENSEX_1M_HISTORY_SEEDED:",
             "FETCHED:", len(one_minute_candles or []),
@@ -1674,6 +1898,10 @@ def main():
         candles_5m=candles,
     )
     LIVE_ANALYSIS_STATE["multi_timeframe"] = multi_timeframe
+    LIVE_ANALYSIS_STATE["candles_15m"] = list(candles_15m or [])
+    LIVE_ANALYSIS_STATE["market_analysis"] = market_analysis
+    LIVE_ANALYSIS_STATE["candle_structure"] = candle_structure
+    LIVE_ANALYSIS_STATE["support_resistance"] = support_resistance
     print("MULTI_TIMEFRAME_ANALYSIS:", multi_timeframe)
     # Analyze historical price action and volume
     price_action = analyze_price_action(candles)
@@ -1808,6 +2036,7 @@ def main():
             # ----------------------------------------------------
 
             pivot_analysis = pivot_engine.get_report()
+            LIVE_ANALYSIS_STATE["pivot_analysis"] = pivot_analysis
 
             print(
                 "PIVOT_ENGINE_VERSION:",
@@ -1871,9 +2100,12 @@ def main():
     # Validate fetched options
     summary = analyze_option_chain(option_data["options"])
     print("OPTION_CHAIN_SUMMARY:", summary)
+    LIVE_ANALYSIS_STATE["option_data"] = option_data
+    LIVE_ANALYSIS_STATE["option_summary"] = summary
 
     # Analyze call/put open interest and PCR
     oi_summary = analyze_oi_data(option_data["options"])
+    LIVE_ANALYSIS_STATE["oi_summary"] = oi_summary
     print("OI_ANALYSIS:", oi_summary)
 
     # Select ATM CE and PE from fetched records
@@ -2121,19 +2353,15 @@ def main():
         )
         print("FINAL_DECISION:", CURRENT_SETUP_DECISION)
 
-        # Complete final-decision wiring:
-        # register a recommendation only when the locked flow reaches
-        # TRADE_CANDIDATE. One-minute analysis remains visible but optional;
-        # CE/PE, reversal/continuation, score and trade-management gates remain.
-        if (
-            isinstance(CURRENT_SETUP_DECISION, dict)
-            and CURRENT_SETUP_DECISION.get("status") == "TRADE_CANDIDATE"
-        ):
-            if not _register_live_trade(
-                CURRENT_SETUP_DECISION,
-                NEARBY_CURRENT_CANDIDATE,
-            ):
-                print("FINAL_DECISION_TRADE_REGISTRATION_FAILED")
+        # Startup analysis is diagnostic only. Do not register from a
+        # historical snapshot; registration happens after a live 5m close.
+        print("STARTUP_DECISION_NOT_REGISTERED: WAITING_FOR_LIVE_5M_CLOSE")
+        CURRENT_SETUP_DECISION = {
+            "status": "WAIT",
+            "reason": "WAITING_FOR_LIVE_5M_CLOSE",
+            "entry_score": entry_score,
+        }
+        NEARBY_CURRENT_CANDIDATE = None
 
     except Exception as cepe_exc:
         print(
