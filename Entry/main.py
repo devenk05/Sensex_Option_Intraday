@@ -903,9 +903,15 @@ def _live_dashboard_updater(
                 row = dict(option)
                 token = row.get("instrument_token")
                 tick = LIVE_TICK_STATE.get(token) if token is not None else None
-                if isinstance(tick, dict) and tick.get("last_price") is not None:
-                    row["ltp"] = tick["last_price"]
-                    row["last_price"] = tick["last_price"]
+                if isinstance(tick, dict):
+                    if tick.get("last_price") is not None:
+                        row["ltp"] = tick["last_price"]
+                        row["last_price"] = tick["last_price"]
+                    # Use live KiteTicker cumulative traded volume when available.
+                    # Keep the previous value if the feed has no volume field.
+                    if tick.get("volume_traded") is not None:
+                        row["volume"] = tick["volume_traded"]
+                        row["volume_traded"] = tick["volume_traded"]
                 live_options.append(row)
 
             dashboard_data["option_chain"] = live_options
