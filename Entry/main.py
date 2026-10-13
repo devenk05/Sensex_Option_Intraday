@@ -91,8 +91,9 @@ from trade_exit_alert_config import TradeExitAlertConfig
 from threading import Thread
 
 
-# Separate candle history for each selected option token
+# Separate candle history for each selected option token and the Sensex index.
 CANDLE_HISTORY = {}
+SENSEX_INSTRUMENT_TOKEN = None
 
 LIVE_ANALYSIS_STATE = {
     "market_analysis": {},
@@ -582,14 +583,14 @@ def handle_finalized_candle(candle):
     )
 
     # Sensex index candle -> refresh 1-minute entry analysis and build live 5-minute candles.
-    expected_sensex_token = LIVE_SENSEX_TICK_STATE.get("instrument_token")
+    expected_sensex_token = SENSEX_INSTRUMENT_TOKEN
     print(
         "LIVE_1M_GATE_CHECK:",
         "CALLBACK_TOKEN:", token,
         "SENSEX_STATE_TOKEN:", expected_sensex_token,
         "HISTORY_COUNT:", len(history),
     )
-    if token == expected_sensex_token:
+    if expected_sensex_token is not None and int(token) == int(expected_sensex_token):
         try:
             # Keep 1m diagnostics isolated so they cannot block 5m aggregation.
             if len(history) >= 2:
@@ -1371,6 +1372,7 @@ def _generate_live_dashboard(
 def main():
     global EXIT_MONITOR_LOOP, EXIT_MONITOR_THREAD
     global CURRENT_SETUP_DECISION, NEARBY_CURRENT_CANDIDATE
+    global SENSEX_INSTRUMENT_TOKEN
     load_project_config()
 
     print(f"Project: {config.PROJECT_NAME}")
@@ -1551,7 +1553,9 @@ def main():
     if not sensex:
         raise RuntimeError("SENSEX instrument not found.")
 
-    token = sensex[0]["instrument_token"]
+    token = int(sensex[0]["instrument_token"])
+    SENSEX_INSTRUMENT_TOKEN = token
+    print("SENSEX_ANALYSIS_TOKEN_SET:", SENSEX_INSTRUMENT_TOKEN)
 
     # Sensex 30 equity instruments
     sensex30_instruments = get_sensex30_instruments(instruments)
@@ -1582,6 +1586,50 @@ def main():
 
     print("HISTORICAL_FETCH_OK")
     print("CANDLE_COUNT:", len(candles))
+
+    # Seed the Sensex 1-minute history from Kite historical candles.
+    # The live WebSocket then appends each finalized minute, so 1M analysis
+    # does not have to wait for two new live candles after every restart.
+    try:
+        one_minute_candles = fetch_historical_data(
+            kite=kite,
+            instrument_token=token,
+            from_date=from_date,
+            to_date=to_date,
+            interval="minute",
+        )
+        current_minute_key = datetime.now().strftime("%Y-%m-%d %H:%M")
+        seeded_history = []
+        for item in one_minute_candles or []:
+            candle_date = item.get("date")
+            if candle_date is None:
+                continue
+            candle_minute_key = candle_date.strftime("%Y-%m-%d %H:%M")
+            # Do not seed the currently forming minute; the WebSocket owns it.
+            if candle_minute_key >= current_minute_key:
+                continue
+            seeded_history.append({
+                "instrument_token": token,
+                "minute": candle_date.replace(second=0, microsecond=0),
+                "open": float(item["open"]),
+                "high": float(item["high"]),
+                "low": float(item["low"]),
+                "close": float(item["close"]),
+                "volume": item.get("volume"),
+            })
+        CANDLE_HISTORY[token] = seeded_history[-500:]
+        print(
+            "SENSEX_1M_HISTORY_SEEDED:",
+            "FETCHED:", len(one_minute_candles or []),
+            "STORED:", len(CANDLE_HISTORY[token]),
+            "LATEST:", (
+                CANDLE_HISTORY[token][-1]["minute"].strftime("%Y-%m-%d %H:%M")
+                if CANDLE_HISTORY[token] else None
+            ),
+        )
+    except Exception as exc:
+        print("SENSEX_1M_HISTORY_SEED_ERROR:", repr(exc))
+        CANDLE_HISTORY.setdefault(token, [])
 
     # Analyze Sensex market structure from historical candles
     market_analysis = analyze_market_structure(candles)
