@@ -1604,6 +1604,7 @@ def main():
         candles_15m=candles_15m,
         candles_5m=candles,
     )
+    LIVE_ANALYSIS_STATE["multi_timeframe"] = multi_timeframe
     print("MULTI_TIMEFRAME_ANALYSIS:", multi_timeframe)
     # Analyze historical price action and volume
     price_action = analyze_price_action(candles)
