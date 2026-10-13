@@ -582,63 +582,78 @@ def handle_finalized_candle(candle):
     )
 
     # Sensex index candle -> refresh 1-minute entry analysis and build live 5-minute candles.
-    if token == LIVE_SENSEX_TICK_STATE.get("instrument_token"):
+    expected_sensex_token = LIVE_SENSEX_TICK_STATE.get("instrument_token")
+    print(
+        "LIVE_1M_GATE_CHECK:",
+        "CALLBACK_TOKEN:", token,
+        "SENSEX_STATE_TOKEN:", expected_sensex_token,
+        "HISTORY_COUNT:", len(history),
+    )
+    if token == expected_sensex_token:
         try:
-            # Use only finalized Sensex 1-minute candles. The latest candle is
-            # compared with the previous candle; no synthetic 1m values are made.
+            # Keep 1m diagnostics isolated so they cannot block 5m aggregation.
             if len(history) >= 2:
-                one_minute_pa = analyze_price_action(history[-20:])
-                one_minute_structure = analyze_candle_structure(history[-20:])
-                mtf = (
-                    LIVE_ANALYSIS_STATE.get("multi_timeframe")
-                    or {}
-                )
-                direction_15m = str(
-                    mtf.get("direction_15m") or mtf.get("trend_15m") or ""
-                ).upper()
-                direction_5m = str(
-                    mtf.get("direction_5m") or mtf.get("trend_5m") or ""
-                ).upper()
-                signal = str(one_minute_pa.get("signal", "UNKNOWN")).upper()
-                if signal.startswith("BULLISH"):
-                    one_minute_direction = "BULLISH"
-                elif signal.startswith("BEARISH"):
-                    one_minute_direction = "BEARISH"
-                else:
-                    one_minute_direction = "WAIT"
+                try:
+                    one_minute_pa = analyze_price_action(history[-20:])
+                    one_minute_structure = analyze_candle_structure(history[-20:])
+                    mtf = LIVE_ANALYSIS_STATE.get("multi_timeframe") or {}
+                    direction_15m = str(
+                        mtf.get("direction_15m") or mtf.get("trend_15m") or ""
+                    ).upper()
+                    direction_5m = str(
+                        mtf.get("direction_5m") or mtf.get("trend_5m") or ""
+                    ).upper()
+                    signal = str(one_minute_pa.get("signal", "UNKNOWN")).upper()
+                    if signal.startswith("BULLISH"):
+                        raw_direction = "BULLISH"
+                    elif signal.startswith("BEARISH"):
+                        raw_direction = "BEARISH"
+                    else:
+                        raw_direction = "WAIT"
 
-                mtf_aligned = (
-                    direction_15m in {"BULLISH", "BEARISH"}
-                    and direction_15m == direction_5m
+                    mtf_aligned = (
+                        direction_15m in {"BULLISH", "BEARISH"}
+                        and direction_15m == direction_5m
+                    )
+                    direction_matches_mtf = (
+                        mtf_aligned and raw_direction == direction_15m
+                    )
+                    entry_confirmed = (
+                        direction_matches_mtf
+                        and signal in {"BULLISH_BREAKOUT", "BEARISH_BREAKDOWN"}
+                    )
+                    LIVE_ANALYSIS_STATE["one_minute_analysis"] = {
+                        "status": one_minute_pa.get("status", "UNKNOWN"),
+                        "direction": raw_direction if direction_matches_mtf else "WAIT",
+                        "raw_direction": raw_direction,
+                        "signal": signal,
+                        "entry_confirmed": entry_confirmed,
+                        "reason": (
+                            "1M_BREAKOUT_ALIGNED_WITH_15M_5M"
+                            if entry_confirmed
+                            else "WAITING_FOR_1M_BREAKOUT_AND_MTF_ALIGNMENT"
+                        ),
+                        "direction_15m": direction_15m or "UNKNOWN",
+                        "direction_5m": direction_5m or "UNKNOWN",
+                        "mtf_aligned": mtf_aligned,
+                        "latest_close": one_minute_pa.get("latest_close"),
+                        "previous_high": one_minute_pa.get("previous_high"),
+                        "previous_low": one_minute_pa.get("previous_low"),
+                        "structure": one_minute_structure.get("structure", "UNKNOWN"),
+                        "candle_time": candle["minute"].strftime("%Y-%m-%d %H:%M"),
+                    }
+                    print(
+                        "LIVE_1M_ENTRY_ANALYSIS:",
+                        LIVE_ANALYSIS_STATE["one_minute_analysis"],
+                    )
+                except Exception as exc:
+                    print("LIVE_1M_ANALYSIS_ERROR:", repr(exc))
+            else:
+                print(
+                    "LIVE_1M_WAITING_FOR_HISTORY:",
+                    "HISTORY_COUNT:", len(history),
+                    "REQUIRED:", 2,
                 )
-                direction_matches_mtf = (
-                    mtf_aligned and one_minute_direction == direction_15m
-                )
-                entry_confirmed = (
-                    direction_matches_mtf
-                    and signal in {"BULLISH_BREAKOUT", "BEARISH_BREAKDOWN"}
-                )
-                LIVE_ANALYSIS_STATE["one_minute_analysis"] = {
-                    "status": one_minute_pa.get("status", "UNKNOWN"),
-                    "direction": one_minute_direction if direction_matches_mtf else "WAIT",
-                    "raw_direction": one_minute_direction,
-                    "signal": signal,
-                    "entry_confirmed": entry_confirmed,
-                    "reason": (
-                        "1M_BREAKOUT_ALIGNED_WITH_15M_5M"
-                        if entry_confirmed
-                        else "WAITING_FOR_1M_BREAKOUT_AND_MTF_ALIGNMENT"
-                    ),
-                    "direction_15m": direction_15m or "UNKNOWN",
-                    "direction_5m": direction_5m or "UNKNOWN",
-                    "mtf_aligned": mtf_aligned,
-                    "latest_close": one_minute_pa.get("latest_close"),
-                    "previous_high": one_minute_pa.get("previous_high"),
-                    "previous_low": one_minute_pa.get("previous_low"),
-                    "structure": one_minute_structure.get("structure", "UNKNOWN"),
-                    "candle_time": candle["minute"].strftime("%Y-%m-%d %H:%M"),
-                }
-                print("LIVE_1M_ENTRY_ANALYSIS:", LIVE_ANALYSIS_STATE["one_minute_analysis"])
 
             completed_5m = _aggregate_live_1m_into_5m(candle)
 
