@@ -2356,6 +2356,12 @@ def main():
         # Startup analysis is diagnostic only. Do not register from a
         # historical snapshot; registration happens after a live 5m close.
         print("STARTUP_DECISION_NOT_REGISTERED: WAITING_FOR_LIVE_5M_CLOSE")
+        CURRENT_SETUP_DECISION = {
+            "status": "WAIT",
+            "reason": "WAITING_FOR_LIVE_5M_CLOSE",
+            "entry_score": entry_score,
+        }
+        NEARBY_CURRENT_CANDIDATE = None
 
     except Exception as cepe_exc:
         print(
