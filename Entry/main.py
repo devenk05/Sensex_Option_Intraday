@@ -10,6 +10,7 @@ for folder in (PROJECT_ROOT, PROJECT_ROOT / "Entry", PROJECT_ROOT / "exit", PROJ
         sys.path.insert(0, folder_path)
 import config
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from config_loader import load_project_config
 from kite_client import create_kite_client
@@ -612,6 +613,15 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
 
     if ACTIVE_TRADE_MANAGER.has_active_trade() or LIVE_FINALIZED:
         print("LIVE_DECISION_SKIPPED: ACTIVE_TRADE_LOCK")
+        return
+
+    # Gate NEW recommendations by India market time. Exit monitoring runs independently.
+    now_ist = datetime.now(ZoneInfo(config.TIMEZONE)).time()
+    if now_ist < config.TRADING_START:
+        print("LIVE_DECISION_SKIPPED: BEFORE_TRADING_START", now_ist)
+        return
+    if now_ist >= config.NO_NEW_RECOMMENDATIONS_AFTER:
+        print("LIVE_DECISION_SKIPPED: AFTER_RECOMMENDATION_CUTOFF", now_ist)
         return
     if len(live_5m) < 20:
         print("LIVE_DECISION_SKIPPED: INSUFFICIENT_5M_HISTORY", len(live_5m))
