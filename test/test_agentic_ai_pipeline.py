@@ -28,13 +28,21 @@ class AgenticAIPipelineVerificationTests(unittest.TestCase):
             and node.func.id == "dispatch_agent_review"
         ]
         self.assertEqual(len(dispatch), 1, "Live 5m decision must dispatch exactly one advisory review call.")
-        keyword_names = {kw.arg for kw in dispatch[0].keywords}
-        self.assertTrue({
+        self.assertEqual(len(dispatch[0].args), 1)
+        context_node = dispatch[0].args[0]
+        self.assertIsInstance(context_node, ast.Dict, "JARVIS context must be passed as a dictionary.")
+        context_keys = {
+            key.value for key in context_node.keys
+            if isinstance(key, ast.Constant) and isinstance(key.value, str)
+        }
+        required_keys = {
             "decision", "entry_score", "minimum_score", "market_analysis",
             "candle_structure", "multi_timeframe", "price_action",
             "cepe_comparison", "active_trade", "option_chain_available",
             "one_minute_confirmed", "risk_limit_inr",
-        }.issubset(keyword_names))
+        }
+        self.assertTrue(required_keys.issubset(context_keys),
+                        f"Missing context fields: {sorted(required_keys - context_keys)}")
 
     def test_synthetic_live_context_survives_review_with_expected_fields(self):
         context = {
