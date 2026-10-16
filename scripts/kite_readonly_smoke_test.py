@@ -9,13 +9,9 @@ import threading
 
 
 def _read_credential(name):
-    value = os.getenv(name, "")
-    # Remove accidental spaces/newlines copied at the beginning or end.
-    value = value.strip()
+    value = os.getenv(name, "").strip()
     if not value:
         return None, f"{name} is empty or not configured"
-    # Do not silently alter a credential containing internal whitespace; fail
-    # safely and identify only the variable name, never its value.
     if any(char.isspace() for char in value):
         return None, f"{name} contains internal whitespace/newline characters"
     return value, None
@@ -40,7 +36,8 @@ def main():
         return 1
 
     try:
-        instruments = kite.instruments("BSE")
+        # Index rows may not be returned by the exchange-filtered instrument dump.
+        instruments = kite.instruments()
         sensex = next(
             (
                 item for item in instruments
@@ -49,11 +46,16 @@ def main():
             ),
             None,
         )
-        if sensex is None:
-            print("LIVE_TICK: FAIL — SENSEX index instrument token was not found in Kite BSE instruments.")
-            return 1
+        if sensex is not None:
+            instrument_token = int(sensex["instrument_token"])
+        else:
+            # Fallback to the same SENSEX symbol that is already validated by kite.ltp().
+            quote = kite.ltp("BSE:SENSEX").get("BSE:SENSEX", {})
+            instrument_token = int(quote.get("instrument_token") or 0)
+            if not instrument_token:
+                print("LIVE_TICK: FAIL — Kite returned the SENSEX LTP but no instrument token was available.")
+                return 1
 
-        instrument_token = int(sensex["instrument_token"])
         ticker = KiteTicker(key, token)
         received = threading.Event()
         outcome = {"tick": None, "error": None}
