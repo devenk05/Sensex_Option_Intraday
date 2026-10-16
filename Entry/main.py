@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from config_loader import load_project_config
+from live_recommendation_gate import recommendation_time_gate_reason, score_gate_reason
 from kite_client import create_kite_client
 from historical_data import fetch_historical_data
 from option_data_pull import fetch_sensex_options
@@ -424,24 +425,18 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
         print("TRADE_REGISTRATION_IGNORED: Current trade already finalized.")
         return False
 
-    # Final safety gate: every registration path must obey the IST session
-    # cutoff, even if it bypasses the 5-minute evaluator.
-    now_ist = datetime.now(ZoneInfo(config.TIMEZONE)).time()
-    if now_ist < config.TRADING_START:
-        print("TRADE_REGISTRATION_REJECTED: BEFORE_TRADING_START", now_ist)
-        return False
-    if now_ist >= config.NO_NEW_RECOMMENDATIONS_AFTER:
-        print("TRADE_REGISTRATION_REJECTED: AFTER_RECOMMENDATION_CUTOFF", now_ist)
+    # Final safety gate: every registration path obeys the IST session window.
+    time_gate_reason = recommendation_time_gate_reason()
+    if time_gate_reason:
+        print("TRADE_REGISTRATION_REJECTED:", time_gate_reason)
         return False
 
-    # Enforce the minimum score at the registration boundary as well.
-    try:
-        registration_score = float(final_decision.get("entry_score"))
-    except (AttributeError, TypeError, ValueError):
-        registration_score = None
-    if registration_score is None or registration_score < float(config.MIN_ENTRY_SCORE):
+    # Enforce the configured minimum score at the registration boundary.
+    registration_score = final_decision.get("entry_score") if isinstance(final_decision, dict) else None
+    score_gate = score_gate_reason(registration_score, config.MIN_ENTRY_SCORE)
+    if score_gate:
         print(
-            "TRADE_REGISTRATION_REJECTED: SCORE_BELOW_MINIMUM",
+            "TRADE_REGISTRATION_REJECTED:", score_gate,
             {"score": registration_score, "minimum": config.MIN_ENTRY_SCORE},
         )
         return False
@@ -637,13 +632,10 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
         print("LIVE_DECISION_SKIPPED: ACTIVE_TRADE_LOCK")
         return
 
-    # Gate NEW recommendations by India market time. Exit monitoring runs independently.
-    now_ist = datetime.now(ZoneInfo(config.TIMEZONE)).time()
-    if now_ist < config.TRADING_START:
-        print("LIVE_DECISION_SKIPPED: BEFORE_TRADING_START", now_ist)
-        return
-    if now_ist >= config.NO_NEW_RECOMMENDATIONS_AFTER:
-        print("LIVE_DECISION_SKIPPED: AFTER_RECOMMENDATION_CUTOFF", now_ist)
+    # Gate NEW recommendations by IST. Exit monitoring runs independently.
+    time_gate_reason = recommendation_time_gate_reason()
+    if time_gate_reason:
+        print("LIVE_DECISION_SKIPPED:", time_gate_reason)
         return
     if len(live_5m) < 20:
         print("LIVE_DECISION_SKIPPED: INSUFFICIENT_5M_HISTORY", len(live_5m))
