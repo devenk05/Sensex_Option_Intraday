@@ -8,11 +8,25 @@ import sys
 import threading
 
 
+def _read_credential(name):
+    value = os.getenv(name, "")
+    # Remove accidental spaces/newlines copied at the beginning or end.
+    value = value.strip()
+    if not value:
+        return None, f"{name} is empty or not configured"
+    # Do not silently alter a credential containing internal whitespace; fail
+    # safely and identify only the variable name, never its value.
+    if any(char.isspace() for char in value):
+        return None, f"{name} contains internal whitespace/newline characters"
+    return value, None
+
+
 def main():
-    key = os.getenv("KITE_API_KEY")
-    token = os.getenv("KITE_ACCESS_TOKEN")
-    if not key or not token:
-        print("KITE_SMOKE_TEST: BLOCKED — KITE_API_KEY / KITE_ACCESS_TOKEN are not configured.")
+    key, key_error = _read_credential("KITE_API_KEY")
+    token, token_error = _read_credential("KITE_ACCESS_TOKEN")
+    errors = [error for error in (key_error, token_error) if error]
+    if errors:
+        print("KITE_SMOKE_TEST: BLOCKED — " + "; ".join(errors) + ".")
         return 2
 
     try:
