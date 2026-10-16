@@ -35,6 +35,12 @@ from entry_timing_engine import confirm_entry_candle
 from confluence_engine import calculate_confluence_score
 from trade_decision_flow import compare_ce_pe
 from trade_decision_flow import compare_ce_pe, derive_market_bias, run_locked_decision_flow
+
+try:
+    from AgenticAI import dispatch_agent_review
+except Exception as agentic_import_error:
+    dispatch_agent_review = None
+    print("JARVIS_AGENTIC_AI_IMPORT_WARNING:", type(agentic_import_error).__name__, str(agentic_import_error)[:200])
 from chart_pattern_engine import detect_candle_patterns
 from active_trade_manager import ActiveTradeManager
 from support_resistance_engine import calculate_support_resistance
@@ -742,6 +748,32 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             "candidate_direction": cepe_comparison.get("candidate_direction"),
             "decision": CURRENT_SETUP_DECISION,
         })
+        # Advisory-only JARVIS review; it cannot alter the deterministic decision.
+        if dispatch_agent_review is not None:
+            try:
+                dispatch_agent_review({
+                    "decision": CURRENT_SETUP_DECISION,
+                    "entry_score": entry_score,
+                    "minimum_score": float(config.MIN_ENTRY_SCORE),
+                    "market_analysis": market_analysis,
+                    "candle_structure": candle_structure,
+                    "multi_timeframe": multi_timeframe,
+                    "support_resistance": support_resistance,
+                    "price_action": price_action,
+                    "volume_analysis": volume_analysis or {},
+                    "cepe_comparison": cepe_comparison,
+                    "oi_summary": oi_summary,
+                    "pivot_analysis": pivot_analysis,
+                    "active_trade": ACTIVE_TRADE_MANAGER.has_active_trade(),
+                    "option_chain_available": bool(options),
+                    "one_minute_confirmed": bool(
+                        (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("entry_confirmed")
+                    ),
+                    "risk_limit_inr": 1000,
+                })
+            except Exception as agentic_dispatch_error:
+                print("JARVIS_AGENT_DISPATCH_WARNING:", type(agentic_dispatch_error).__name__,
+                      str(agentic_dispatch_error)[:200])
         if (
             isinstance(CURRENT_SETUP_DECISION, dict)
             and CURRENT_SETUP_DECISION.get("status") == "TRADE_CANDIDATE"
