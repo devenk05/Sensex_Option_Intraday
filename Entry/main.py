@@ -424,6 +424,28 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
         print("TRADE_REGISTRATION_IGNORED: Current trade already finalized.")
         return False
 
+    # Final safety gate: every registration path must obey the IST session
+    # cutoff, even if it bypasses the 5-minute evaluator.
+    now_ist = datetime.now(ZoneInfo(config.TIMEZONE)).time()
+    if now_ist < config.TRADING_START:
+        print("TRADE_REGISTRATION_REJECTED: BEFORE_TRADING_START", now_ist)
+        return False
+    if now_ist >= config.NO_NEW_RECOMMENDATIONS_AFTER:
+        print("TRADE_REGISTRATION_REJECTED: AFTER_RECOMMENDATION_CUTOFF", now_ist)
+        return False
+
+    # Enforce the minimum score at the registration boundary as well.
+    try:
+        registration_score = float(final_decision.get("entry_score"))
+    except (AttributeError, TypeError, ValueError):
+        registration_score = None
+    if registration_score is None or registration_score < float(config.MIN_ENTRY_SCORE):
+        print(
+            "TRADE_REGISTRATION_REJECTED: SCORE_BELOW_MINIMUM",
+            {"score": registration_score, "minimum": config.MIN_ENTRY_SCORE},
+        )
+        return False
+
     trade = _build_live_trade(final_decision, candidate)
 
     if trade is None:
