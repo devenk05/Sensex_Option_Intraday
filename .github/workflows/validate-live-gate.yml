@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [fix/live-recommendation-time-gate]
+    branches: [main, fix/live-recommendation-time-gate]
 
 jobs:
   python-validation:
@@ -22,7 +22,7 @@ jobs:
         run: python -m pip install --upgrade pip pytest
 
       - name: Compile Python modules
-        run: python -m compileall -q Entry AgenticAI MarketData PostMarket exit report
+        run: python -m compileall -q Entry AgenticAI MarketData PostMarket exit report scripts
 
       - name: Run repository tests
         env:
