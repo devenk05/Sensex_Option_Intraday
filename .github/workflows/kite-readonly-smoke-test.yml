@@ -28,6 +28,13 @@ jobs:
       - name: Install Kite client
         run: python -m pip install --upgrade pip kiteconnect
 
+      - name: Compare credential fingerprints (values are never printed)
+        env:
+          KITE_API_KEY: ${{ secrets.KITE_API_KEY }}
+          KITE_ACCESS_TOKEN: ${{ secrets.KITE_ACCESS_TOKEN }}
+        run: |
+          python -c "import os,hashlib; [(lambda n,v: print(n, 'MISSING' if not v else 'length='+str(len(v.strip()))+' sha256='+hashlib.sha256(v.strip().encode()).hexdigest()[:16]))(n,os.getenv(n,'')) for n in ('KITE_API_KEY','KITE_ACCESS_TOKEN')]"
+
       - name: Verify Kite authentication and SENSEX quote (read-only)
         env:
           KITE_API_KEY: ${{ secrets.KITE_API_KEY }}
