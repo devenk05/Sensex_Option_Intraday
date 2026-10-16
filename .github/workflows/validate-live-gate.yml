@@ -26,5 +26,5 @@ jobs:
 
       - name: Run repository tests
         env:
-          PYTHONPATH: Entry:.
+          PYTHONPATH: Entry:.:exit
         run: python -m pytest -q test test_nearby_strike_reversal_integration.py
