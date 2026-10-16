@@ -1,0 +1,30 @@
+name: Validate live recommendation gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [fix/live-recommendation-time-gate]
+
+jobs:
+  python-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test runner
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Compile Python modules
+        run: python -m compileall -q Entry AgenticAI MarketData PostMarket exit report
+
+      - name: Run repository tests
+        env:
+          PYTHONPATH: Entry:.:exit
+        run: python -m pytest -q test test_nearby_strike_reversal_integration.py

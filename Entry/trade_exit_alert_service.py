@@ -98,6 +98,7 @@ class TradeExitAlertService:
                     "status": "PROCESSED",
                     "log_result": log_result,
                     "send_result": last_send_result,
+                    "attempts": attempt + 1,
                 }
 
             # Always call sleep between attempts,
@@ -107,6 +108,7 @@ class TradeExitAlertService:
 
         return {
             "status": "ERROR",
+            "attempts": total_attempts,
             "reason": last_send_result.get(
                 "reason",
                 "Telegram alert sending failed.",

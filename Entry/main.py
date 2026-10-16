@@ -10,8 +10,10 @@ for folder in (PROJECT_ROOT, PROJECT_ROOT / "Entry", PROJECT_ROOT / "exit", PROJ
         sys.path.insert(0, folder_path)
 import config
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from config_loader import load_project_config
+from live_recommendation_gate import recommendation_time_gate_reason, score_gate_reason
 from kite_client import create_kite_client
 from historical_data import fetch_historical_data
 from option_data_pull import fetch_sensex_options
@@ -423,6 +425,22 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
         print("TRADE_REGISTRATION_IGNORED: Current trade already finalized.")
         return False
 
+    # Final safety gate: every registration path obeys the IST session window.
+    time_gate_reason = recommendation_time_gate_reason()
+    if time_gate_reason:
+        print("TRADE_REGISTRATION_REJECTED:", time_gate_reason)
+        return False
+
+    # Enforce the configured minimum score at the registration boundary.
+    registration_score = final_decision.get("entry_score") if isinstance(final_decision, dict) else None
+    score_gate = score_gate_reason(registration_score, config.MIN_ENTRY_SCORE)
+    if score_gate:
+        print(
+            "TRADE_REGISTRATION_REJECTED:", score_gate,
+            {"score": registration_score, "minimum": config.MIN_ENTRY_SCORE},
+        )
+        return False
+
     trade = _build_live_trade(final_decision, candidate)
 
     if trade is None:
@@ -612,6 +630,12 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
 
     if ACTIVE_TRADE_MANAGER.has_active_trade() or LIVE_FINALIZED:
         print("LIVE_DECISION_SKIPPED: ACTIVE_TRADE_LOCK")
+        return
+
+    # Gate NEW recommendations by IST. Exit monitoring runs independently.
+    time_gate_reason = recommendation_time_gate_reason()
+    if time_gate_reason:
+        print("LIVE_DECISION_SKIPPED:", time_gate_reason)
         return
     if len(live_5m) < 20:
         print("LIVE_DECISION_SKIPPED: INSUFFICIENT_5M_HISTORY", len(live_5m))
