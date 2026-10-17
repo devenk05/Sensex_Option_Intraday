@@ -898,6 +898,43 @@ input, textarea, select { color: var(--text); }
   .metrics > .entry-score-card { grid-column: 1 !important; }
 }
 
+
+/* User-requested desktop composition: keep the six metric cards in one row at all viewport widths.
+   Narrow viewports can scroll horizontally instead of collapsing cards into a vertical stack. */
+.metrics {
+  display: grid !important;
+  grid-template-columns: 210px 210px 210px minmax(440px, 2fr) 210px 210px !important;
+  grid-auto-flow: row !important;
+  align-items: stretch !important;
+  gap: 12px !important;
+  width: max-content !important;
+  min-width: 100% !important;
+  overflow: visible !important;
+}
+.metrics > .metric-card,
+.metrics > .entry-score-card,
+.metrics > .sensex-spot-card,
+.metrics > .market-status-card,
+.metrics > .market-bias-card,
+.metrics > .atm-strike-card,
+.metrics > .decision-card {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+.metrics > .entry-score-card { min-width: 440px !important; }
+.main { overflow-x: auto; }
+@media (max-width: 760px) {
+  .metrics {
+    grid-template-columns: 210px 210px 210px minmax(440px, 2fr) 210px 210px !important;
+    width: max-content !important;
+  }
+  .metrics > .entry-score-card { grid-column: auto !important; }
+}
+
 </style>
 </head>
 
