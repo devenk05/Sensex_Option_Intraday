@@ -935,6 +935,54 @@ input, textarea, select { color: var(--text); }
   .metrics > .entry-score-card { grid-column: auto !important; }
 }
 
+
+/* Corrective fluid layout: six cards share the available main-panel width without forced horizontal overflow */
+@media (min-width: 761px) {
+  .main { min-width: 0 !important; overflow-x: visible !important; }
+  .metrics {
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    grid-template-columns:
+      minmax(112px, 1fr)
+      minmax(112px, 1fr)
+      minmax(112px, 1fr)
+      minmax(340px, 2.2fr)
+      minmax(112px, 1fr)
+      minmax(112px, 1fr) !important;
+    gap: 10px !important;
+    overflow: visible !important;
+    align-items: stretch !important;
+  }
+  .metrics > .metric-card,
+  .metrics > .entry-score-card,
+  .metrics > .sensex-spot-card,
+  .metrics > .market-status-card,
+  .metrics > .market-bias-card,
+  .metrics > .atm-strike-card,
+  .metrics > .decision-card {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .metrics > .entry-score-card { min-width: 0 !important; }
+  .sensex-spot-card .sensex-open-change { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 4px !important; }
+  .sensex-spot-card .sensex-open-change > div { min-width: 0; overflow-wrap: anywhere; }
+  .score-radial-map { width: 100%; }
+}
+@media (min-width: 761px) and (max-width: 1150px) {
+  .metrics { grid-template-columns: minmax(105px,1fr) minmax(105px,1fr) minmax(105px,1fr) minmax(310px,2fr) minmax(105px,1fr) minmax(105px,1fr) !important; gap: 7px !important; }
+  .metrics > .metric-card { padding: 10px !important; }
+  .score-radial-map { height: 350px !important; min-height: 350px !important; }
+  .score-node { width: 90px !important; }
+  .score-node-name { font-size: 8px !important; }
+  .score-node > strong { font-size: 18px !important; }
+  .score-ai-core { width: 95px !important; }
+}
+
 </style>
 </head>
 
