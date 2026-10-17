@@ -704,6 +704,32 @@ input, textarea, select { color: var(--text); }
 .jarvis-chat-foot { padding:0 13px 10px; color:#6f8da2; font-size:9px; text-align:center; }
 @media (max-width:760px) { .sidebar { width:68px; padding:18px 8px; } .logo { padding:5px 4px 22px; font-size:0; } .logo-mark { flex:0 0 35px; } .nav-title, .nav-item span:not(.nav-icon), .sidebar-footer { display:none; } .nav-item { justify-content:center; padding:12px 4px; } .main { padding:18px 12px 100px; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .jarvis-chat { right:14px; bottom:88px; } .jarvis-chat-launcher { right:16px; bottom:15px; } }
 
+
+/* Live AI score breakdown */
+.entry-score-card { grid-column: span 2; }
+.score-breakdown-heading { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:16px; margin-bottom:9px; font-size:11px; letter-spacing:.08em; font-weight:700; color:var(--text-secondary, #9bb4c9); }
+.score-breakdown-note { font-size:10px; letter-spacing:0; font-weight:500; text-align:right; }
+.score-breakdown-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px; }
+.score-component { min-width:0; padding:10px; border:1px solid rgba(105,155,190,.22); border-radius:10px; background:rgba(10,27,43,.72); display:flex; flex-direction:column; gap:5px; }
+.score-component-name { color:#b5c8d8; font-size:11px; line-height:1.3; min-height:28px; }
+.score-component strong { color:#e8f5ff; font-size:22px; line-height:1.1; }
+.score-component strong small { color:#829caf; font-size:10px; font-weight:500; margin-left:3px; }
+.score-component > small { color:#829caf; font-size:10px; }
+.score-track { height:4px; overflow:hidden; border-radius:6px; background:rgba(130,156,176,.18); margin-top:3px; }
+.score-track i { display:block; height:100%; border-radius:6px; background:#64748b; transition:width .25s ease; }
+.score-component.strong { border-color:rgba(34,211,153,.35); }
+.score-component.strong strong { color:#34d399; }
+.score-component.strong .score-track i { background:#22c993; }
+.score-component.moderate { border-color:rgba(250,204,21,.28); }
+.score-component.moderate strong { color:#facc15; }
+.score-component.moderate .score-track i { background:#eab308; }
+.score-component.weak strong { color:#fb7185; }
+.score-component.weak .score-track i { background:#f43f5e; }
+.score-component.unavailable { opacity:.72; }
+.score-breakdown-status { margin-top:9px; font-size:10px; color:#829caf; }
+@media (max-width:900px) { .entry-score-card { grid-column:span 2; } .score-breakdown-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:520px) { .entry-score-card { grid-column:span 1; } .score-breakdown-heading { align-items:flex-start; flex-direction:column; } .score-breakdown-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
 </style>
 </head>
 
@@ -834,7 +860,22 @@ input, textarea, select { color: var(--text); }
     <div class="metric-card entry-score-card">
         <div class="metric-title">AI ENTRY SCORE</div>
         <div class="metric-value">—</div>
-        <div class="metric-subtitle">Minimum required: 80</div>
+        <div class="metric-subtitle">Minimum required: 80 · Weighted confluence</div>
+        <div class="score-breakdown-heading">
+            <span>ENGINE CONTRIBUTIONS</span>
+            <span class="score-breakdown-note">Score / 100 · Weight</span>
+        </div>
+        <div id="entry-score-breakdown" class="score-breakdown-grid">
+            <div class="score-component unavailable"><span class="score-component-name">Market Structure</span><strong>—</strong><small>Weight 15%</small><div class="score-track"><i style="width:0%"></i></div></div>
+            <div class="score-component unavailable"><span class="score-component-name">Support / Resistance</span><strong>—</strong><small>Weight 15%</small><div class="score-track"><i style="width:0%"></i></div></div>
+            <div class="score-component unavailable"><span class="score-component-name">Price Action</span><strong>—</strong><small>Weight 20%</small><div class="score-track"><i style="width:0%"></i></div></div>
+            <div class="score-component unavailable"><span class="score-component-name">Pivot Points</span><strong>—</strong><small>Weight 10%</small><div class="score-track"><i style="width:0%"></i></div></div>
+            <div class="score-component unavailable"><span class="score-component-name">Volume Analysis</span><strong>—</strong><small>Weight 10%</small><div class="score-track"><i style="width:0%"></i></div></div>
+            <div class="score-component unavailable"><span class="score-component-name">FII / DII</span><strong>—</strong><small>Weight 5%</small><div class="score-track"><i style="width:0%"></i></div></div>
+            <div class="score-component unavailable"><span class="score-component-name">ATM CE / PE Strength</span><strong>—</strong><small>Weight 20%</small><div class="score-track"><i style="width:0%"></i></div></div>
+            <div class="score-component unavailable"><span class="score-component-name">Liquidity / Greeks</span><strong>—</strong><small>Weight 5%</small><div class="score-track"><i style="width:0%"></i></div></div>
+        </div>
+        <div id="entry-score-breakdown-status" class="score-breakdown-status">Waiting for live component scores…</div>
     </div>
     
 
@@ -2213,7 +2254,47 @@ async function updateDashboardLive() {
             ".entry-score-card .metric-value"
         );
         if (scoreElement && data.entry_score != null) {
-            scoreElement.textContent = data.entry_score;
+            scoreElement.textContent = Number(data.entry_score).toFixed(2);
+        }
+
+        const scoreBreakdown = document.getElementById("entry-score-breakdown");
+        const scoreBreakdownStatus = document.getElementById("entry-score-breakdown-status");
+        if (scoreBreakdown) {
+            const scoreComponents = [
+                ["market_structure", "Market Structure", 15],
+                ["support_resistance", "Support / Resistance", 15],
+                ["price_action", "Price Action", 20],
+                ["pivot_points", "Pivot Points", 10],
+                ["volume_analysis", "Volume Analysis", 10],
+                ["fii_dii", "FII / DII", 5],
+                ["atm_ce_pe_strength", "ATM CE / PE Strength", 20],
+                ["liquidity_greeks", "Liquidity / Greeks", 5]
+            ];
+            const scores = data.entry_score_components || {};
+            scoreBreakdown.innerHTML = scoreComponents.map(([key, label, weight]) => {
+                const raw = scores[key];
+                const numeric = raw !== null && raw !== undefined && raw !== "" &&
+                    Number.isFinite(Number(raw)) ? Math.max(0, Math.min(100, Number(raw))) : null;
+                const shown = numeric === null ? "—" : numeric.toFixed(0);
+                const stateClass = numeric === null ? "unavailable" :
+                    numeric >= 80 ? "strong" : numeric >= 60 ? "moderate" : "weak";
+                const barWidth = numeric === null ? 0 : numeric;
+                return '<div class="score-component ' + stateClass + '">' +
+                    '<span class="score-component-name">' + label + '</span>' +
+                    '<strong>' + shown + '<small>/100</small></strong>' +
+                    '<small>Weight ' + weight + '%</small>' +
+                    '<div class="score-track"><i style="width:' + barWidth + '%"></i></div>' +
+                    '</div>';
+            }).join("");
+            const available = scoreComponents.filter(([key]) =>
+                scores[key] !== null && scores[key] !== undefined &&
+                scores[key] !== "" && Number.isFinite(Number(scores[key]))
+            ).length;
+            if (scoreBreakdownStatus) {
+                scoreBreakdownStatus.textContent = available
+                    ? available + " of 8 engines available · Missing data is shown as —, not zero."
+                    : "Waiting for live component scores…";
+            }
         }
 
         const decisionElement = document.querySelector(
