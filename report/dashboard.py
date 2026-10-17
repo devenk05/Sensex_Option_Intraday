@@ -1085,6 +1085,62 @@ td {{
     }}
 }}
 
+
+/* Layout repair v1: consistent desktop grid and contained radial score map */
+.metrics {{ grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: stretch; gap: 12px; }}
+.metrics > .metric-card {{ min-width: 0; min-height: 150px; height: auto; align-self: stretch; }}
+.metrics > .sensex-spot-card, .metrics > .market-status-card, .metrics > .market-bias-card, .metrics > .atm-strike-card, .metrics > .decision-card {{ grid-column: span 1; }}
+.metrics > .entry-score-card {{ grid-column: span 2; min-height: 0; }}
+.score-radial-map {{ height: 390px; min-height: 390px; overflow: hidden; }}
+.score-radial-map:before {{ width: min(330px, 64%); height: min(330px, 84%); }}
+.score-radial-map:after {{ width: min(220px, 44%); height: min(220px, 56%); }}
+.score-node {{ width: 118px; min-height: 54px; padding: 2px; gap: 3px; }}
+.score-node-name {{ font-size: 10px; line-height: 1.2; }}
+.score-node > strong {{ min-width: 0; min-height: 0; font-size: 23px; }}
+.score-node-market_structure {{ left: 50%; top: 2%; transform: translateX(-50%); }}
+.score-node-volume_analysis {{ left: auto; right: 7%; top: 18%; transform: none; }}
+.score-node-support_resistance {{ right: 1%; top: 44%; }}
+.score-node-fii_dii {{ right: 8%; bottom: 2%; }}
+.score-node-price_action {{ left: 7%; top: 18%; }}
+.score-node-atm_ce_pe_strength {{ left: 1%; top: 44%; }}
+.score-node-pivot_points {{ left: 8%; bottom: 2%; }}
+.score-node-liquidity_greeks {{ left: 50%; bottom: 0; transform: translateX(-50%); }}
+.score-ai-core {{ width: 118px; }}
+.score-ai-core strong {{ font-size: 42px; }}
+.score-breakdown-status {{ min-height: 14px; }}
+.market-intelligence-grid {{ grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); grid-template-rows: repeat(6, minmax(150px, auto)); min-height: 0; }}
+.sensex30-market-panel {{ min-height: 0; }}
+.market-intelligence-grid .analysis-card {{ min-height: 150px; }}
+.analysis-card, .panel, .metric-card {{ overflow-wrap: anywhere; }}
+@media (max-width: 1250px) {{
+  .metrics {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }}
+  .metrics > .entry-score-card {{ grid-column: span 2; grid-row: span 2; }}
+  .score-radial-map {{ height: 390px; }}
+  .market-intelligence-grid {{ grid-template-columns: minmax(0, 1.3fr) minmax(260px, 1fr); }}
+}}
+@media (max-width: 850px) {{
+  .metrics {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+  .metrics > .entry-score-card {{ grid-column: span 2; grid-row: auto; }}
+  .metrics > .metric-card {{ min-height: 125px; }}
+  .score-radial-map {{ height: 370px; min-height: 370px; }}
+  .market-intelligence-grid {{ display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; min-height: 0; }}
+  .sensex30-market-panel, .market-intelligence-grid .analysis-card, .market-intelligence-grid > .analysis-card:nth-child(n) {{ grid-column: 1; grid-row: auto; min-height: 140px; }}
+  .sensex30-market-panel {{ overflow-x: auto; }}
+  .analysis-grid, .option-cards, .lower-grid {{ grid-template-columns: minmax(0, 1fr); }}
+}}
+@media (max-width: 520px) {{
+  .metrics {{ grid-template-columns: minmax(0, 1fr); }}
+  .metrics > .entry-score-card {{ grid-column: span 1; }}
+  .score-radial-map {{ height: 350px; min-height: 350px; }}
+  .score-node {{ width: 92px; }}
+  .score-node-name {{ font-size: 8px; }}
+  .score-node > strong {{ font-size: 18px; }}
+  .score-node-volume_analysis {{ right: 2%; top: 18%; }}
+  .score-node-price_action {{ left: 2%; top: 18%; }}
+  .score-ai-core {{ width: 92px; }}
+  .score-ai-core strong {{ font-size: 34px; }}
+}}
+
 </style>
 </head>
 
