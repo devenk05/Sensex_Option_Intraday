@@ -1,0 +1,36 @@
+name: JARVIS and 1-minute regression checks
+
+on:
+  pull_request:
+    branches:
+      - fix/live-5m-decision-runtime
+    paths:
+      - "AgenticAI/**"
+      - "Entry/main.py"
+      - "Entry/entry_confirmation.py"
+      - "dashboard/index.html"
+      - "test/test_agentic_ai.py"
+      - "test/test_one_minute_entry_confirmation.py"
+      - ".github/workflows/agentic-regression.yml"
+  push:
+    branches:
+      - fix/jarvis-dashboard-review-panel
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test runner
+        run: python -m pip install --upgrade pytest
+      - name: Compile modified Python modules
+        run: python -m py_compile Entry/main.py Entry/entry_confirmation.py AgenticAI/*.py
+      - name: Run 1-minute and JARVIS regression tests
+        env:
+          PYTHONPATH: .:Entry:exit:report
+        run: python -m pytest -q test/test_one_minute_entry_confirmation.py test/test_agentic_ai.py
