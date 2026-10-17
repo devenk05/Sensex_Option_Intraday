@@ -853,6 +853,51 @@ input, textarea, select { color: var(--text); }
   .score-radial-map { height:350px; min-height:350px; }
 }
 
+
+/* Hard guard: preserve the six-card desktop composition instead of squeezing/overlapping it */
+@media (min-width: 761px) {
+  .main { min-width: 0; }
+  .metrics {
+    display: grid !important;
+    grid-template-columns: 210px 210px 210px minmax(440px, 2fr) 210px 210px !important;
+    grid-auto-flow: row;
+    align-items: stretch;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+  .metrics > .metric-card,
+  .metrics > .entry-score-card,
+  .metrics > .sensex-spot-card,
+  .metrics > .market-status-card,
+  .metrics > .market-bias-card,
+  .metrics > .atm-strike-card,
+  .metrics > .decision-card {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    height: auto;
+    box-sizing: border-box;
+  }
+  .metrics > .entry-score-card { min-width: 440px; }
+}
+@media (max-width: 760px) {
+  .metrics {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+  .metrics > .metric-card { min-width: 0; width: auto; grid-column: auto !important; grid-row: auto !important; }
+  .metrics > .entry-score-card { grid-column: 1 / -1 !important; grid-row: auto !important; min-width: 0; }
+  .sensex-spot-card .sensex-open-change > div { overflow-wrap: anywhere; }
+}
+@media (max-width: 520px) {
+  .metrics { grid-template-columns: minmax(0,1fr) !important; }
+  .metrics > .entry-score-card { grid-column: 1 !important; }
+}
+
 </style>
 </head>
 
