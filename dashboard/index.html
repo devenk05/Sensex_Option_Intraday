@@ -662,6 +662,15 @@ td {
     }
 }
 
+
+/* JARVIS advisory review panel */
+.jarvis-review-panel { border: 1px solid var(--border); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); padding: 18px 20px; margin: 14px 0 24px; }
+.jarvis-review-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.jarvis-review-head strong { font-size: 15px; letter-spacing: .4px; }
+.jarvis-review-mode { border-radius: 999px; padding: 5px 10px; background: #e8f0f5; color: #34566d; font-size: 11px; font-weight: 800; }
+.jarvis-review-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--text); }
+.jarvis-review-meta { color: var(--muted); font-size: 11px; margin-top: 10px; }
+
 </style>
 </head>
 
@@ -892,7 +901,23 @@ td {
     <!-- ===================================================== -->
     <!-- ===================================================== -->
     <!-- SENSEX 30 -->
-      <!-- MARKET INTELLIGENCE -->
+  
+    <section class="section" id="jarvis-agent-review-section">
+        <div class="section-title">
+            <h2>JARVIS Agentic AI</h2>
+            <span>Independent advisory review · no order execution</span>
+        </div>
+        <div class="jarvis-review-panel">
+            <div class="jarvis-review-head">
+                <strong id="jarvis-review-headline">Waiting for first completed-candle review</strong>
+                <span class="jarvis-review-mode" id="jarvis-review-mode">ADVISORY ONLY</span>
+            </div>
+            <pre class="jarvis-review-body" id="jarvis-review-body">JARVIS review will appear here after a live 5-minute decision is evaluated.</pre>
+            <div class="jarvis-review-meta" id="jarvis-review-meta">Review status: waiting for data</div>
+        </div>
+    </section>
+
+    <!-- MARKET INTELLIGENCE -->
     <!-- ===================================================== -->
 
     <section class="section">
@@ -2000,6 +2025,44 @@ function updateOneMinuteEntryCard(data) {
     }
 }
 
+
+async function updateJarvisAgentReview() {
+    const bodyEl = document.getElementById("jarvis-review-body");
+    const headlineEl = document.getElementById("jarvis-review-headline");
+    const metaEl = document.getElementById("jarvis-review-meta");
+    const modeEl = document.getElementById("jarvis-review-mode");
+    if (!bodyEl || !headlineEl || !metaEl || !modeEl) return;
+    try {
+        const response = await fetch("latest_agentic_review.json?ts=" + Date.now(), { cache: "no-store" });
+        if (!response.ok) {
+            metaEl.textContent = "Review status: waiting for the next completed 5-minute decision";
+            return;
+        }
+        const review = await response.json();
+        const audit = review.decision_audit || {};
+        const risk = review.risk_review || {};
+        const market = review.market_intelligence || {};
+        const explanation = review.explanation || {};
+        const lines = [
+            "Decision: " + (audit.decision_status || "UNKNOWN"),
+            "Entry score: " + (audit.entry_score ?? "N/A") + " / " + (audit.minimum_score ?? "80"),
+            "Market: " + (explanation.market_summary || market.market_trend || "N/A"),
+            "Decision audit flags:",
+            ...((audit.diagnostic_flags || []).map(flag => "  - " + String(flag))),
+            "Risk guardrail flags:",
+            ...((risk.risk_flags || []).map(flag => "  - " + String(flag))),
+            "Safety: " + (explanation.safety || "Advisory only; deterministic decision remains authoritative.")
+        ];
+        headlineEl.textContent = explanation.headline || "JARVIS diagnostic review";
+        modeEl.textContent = review.mode || "ADVISORY ONLY";
+        bodyEl.textContent = lines.join("\n");
+        metaEl.textContent = "Last review: " + (review.timestamp || "timestamp unavailable") +
+            " · Local LLM: " + ((review.local_llm || {}).status || "disabled / not configured");
+    } catch (error) {
+        metaEl.textContent = "Review status: unable to read JARVIS snapshot";
+    }
+}
+
 async function updateDashboardLive() {
     try {
         const response = await fetch("live_state.json?ts=" + Date.now(), {
@@ -2092,6 +2155,8 @@ async function updateDashboardLive() {
 
 updateDashboardLive();
 setInterval(updateDashboardLive, 1000);
+updateJarvisAgentReview();
+setInterval(updateJarvisAgentReview, 3000);
 updateSensex30Live();
 setInterval(updateSensex30Live, 1000);
 </script>
