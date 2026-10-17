@@ -830,37 +830,23 @@ def handle_finalized_candle(candle):
                     direction_5m = str(
                         mtf.get("direction_5m") or mtf.get("trend_5m") or ""
                     ).upper()
-                    signal = str(one_minute_pa.get("signal", "UNKNOWN")).upper()
-                    if signal.startswith("BULLISH"):
-                        raw_direction = "BULLISH"
-                    elif signal.startswith("BEARISH"):
-                        raw_direction = "BEARISH"
-                    else:
-                        raw_direction = "WAIT"
-
-                    mtf_aligned = (
-                        direction_15m in {"BULLISH", "BEARISH"}
-                        and direction_15m == direction_5m
+                    from entry_confirmation import evaluate_entry_confirmation
+                    confirmation = evaluate_entry_confirmation(
+                        direction_15m=direction_15m,
+                        direction_5m=direction_5m,
+                        signal=one_minute_pa.get("signal", "UNKNOWN"),
                     )
-                    direction_matches_mtf = (
-                        mtf_aligned and raw_direction == direction_15m
-                    )
-                    # The 1-minute candle is the entry-timing check.
-                    # Once 15m and 5m agree, accept a directional 1m candle
-                    # aligned with that direction; requiring a strict breakout
-                    # of only the immediately previous candle was too restrictive.
-                    entry_confirmed = direction_matches_mtf
+                    signal = confirmation["signal"]
+                    raw_direction = confirmation["raw_direction"]
+                    mtf_aligned = confirmation["mtf_aligned"]
+                    entry_confirmed = confirmation["entry_confirmed"]
                     LIVE_ANALYSIS_STATE["one_minute_analysis"] = {
                         "status": one_minute_pa.get("status", "UNKNOWN"),
-                        "direction": raw_direction if direction_matches_mtf else "WAIT",
+                        "direction": confirmation["direction"],
                         "raw_direction": raw_direction,
                         "signal": signal,
                         "entry_confirmed": entry_confirmed,
-                        "reason": (
-                            "1M_DIRECTION_ALIGNED_WITH_15M_5M"
-                            if entry_confirmed
-                            else "WAITING_FOR_DIRECTIONAL_1M_CANDLE_AND_MTF_ALIGNMENT"
-                        ),
+                        "reason": confirmation["reason"],
                         "direction_15m": direction_15m or "UNKNOWN",
                         "direction_5m": direction_5m or "UNKNOWN",
                         "mtf_aligned": mtf_aligned,
