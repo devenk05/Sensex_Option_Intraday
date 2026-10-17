@@ -9,35 +9,26 @@
 <style>
 
 :root {
-    --bg: #f6f1e8;
-    --bg2: #eee7da;
-
-    --panel: #fffdf8;
-    --panel2: #f7f1e6;
-
-    --border: #d8d0c4;
-    --border-bright: #c7cdd6;
-
-    --text: #263238;
-    --muted: #667085;
-
-    --green: #16803a;
-    --green2: #15803d;
-
-    --red: #c0392b;
-    --red2: #b91c1c;
-
-    --yellow: #b7791f;
-    --orange: #f97316;
-
-    --blue: #5b7c99;
-    --blue2: #6f8fa8;
-
-    --cyan: #14b8a6;
-    --purple: #7b8794;
-    --pink: #8b7e74;
-
-    --shadow: 0 12px 35px rgba(55,65,81,.12);
+    --bg: #050b14;
+    --bg2: #081523;
+    --panel: rgba(10, 23, 39, .94);
+    --panel2: rgba(12, 31, 49, .94);
+    --border: rgba(68, 198, 232, .22);
+    --border-bright: rgba(68, 220, 255, .58);
+    --text: #e8f8ff;
+    --muted: #8aa8bc;
+    --green: #4cf0b2;
+    --green2: #20dca0;
+    --red: #ff6b8a;
+    --red2: #f04468;
+    --yellow: #ffd166;
+    --orange: #ff9e64;
+    --blue: #3f9bc6;
+    --blue2: #62c8ee;
+    --cyan: #38e8ff;
+    --purple: #b79bff;
+    --pink: #ff8cce;
+    --shadow: 0 14px 38px rgba(0, 0, 0, .34);
 }
 
 * {
@@ -670,6 +661,48 @@ td {
 .jarvis-review-mode { border-radius: 999px; padding: 5px 10px; background: #e8f0f5; color: #34566d; font-size: 11px; font-weight: 800; }
 .jarvis-review-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--text); }
 .jarvis-review-meta { color: var(--muted); font-size: 11px; margin-top: 10px; }
+
+
+/* JARVIS HUD skin — keeps existing dashboard structure and live-data bindings intact */
+body { background: radial-gradient(ellipse at 50% -15%, #123b57 0, #071321 38%, #03070e 100%) !important; color: var(--text) !important; }
+.sidebar { background: rgba(4, 13, 24, .96) !important; border-right-color: var(--border) !important; box-shadow: 8px 0 32px rgba(0,0,0,.18); }
+.logo-mark { background: rgba(56,232,255,.12) !important; color: var(--cyan) !important; border: 1px solid var(--border-bright); box-shadow: 0 0 22px rgba(56,232,255,.12); }
+.nav-title, .sidebar-footer, .page-title p, .metric-title, .metric-subtitle, .section-title span { color: var(--muted) !important; }
+.nav-item { color: #a9c5d7 !important; transition: .18s ease; }
+.nav-item.active, .nav-item:hover { color: var(--cyan) !important; background: rgba(56,232,255,.09) !important; border: 1px solid var(--border) !important; }
+.metric-card, .card, .analysis-card, .live-status, .panel, .section-card { background: var(--panel) !important; border-color: var(--border) !important; box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.025) !important; backdrop-filter: blur(14px); }
+h1, h2, h3, .metric-value { color: var(--text); }
+.metric-value { text-shadow: 0 0 20px rgba(56,232,255,.08); }
+.status-badge { background: rgba(56,232,255,.10) !important; border: 1px solid var(--border); }
+table { color: var(--text); }
+th { background: rgba(56,232,255,.08) !important; color: #aeeeff !important; }
+td, th { border-color: rgba(92,158,184,.18) !important; }
+tr:hover td { background: rgba(56,232,255,.045); }
+input, textarea, select { color: var(--text); }
+@keyframes jarvisPulse { 0%,100% { box-shadow: 0 0 14px rgba(56,232,255,.14), inset 0 0 14px rgba(56,232,255,.08); } 50% { box-shadow: 0 0 30px rgba(56,232,255,.32), inset 0 0 22px rgba(56,232,255,.15); } }
+.jarvis-chat-launcher { position:fixed; right:24px; bottom:22px; z-index:10001; width:64px; height:64px; border-radius:50%; border:1px solid #58eaff; color:#dffaff; background:radial-gradient(circle at 35% 28%,#1c6785,#061523 70%); font-size:24px; cursor:pointer; animation:jarvisPulse 3s infinite; box-shadow:0 0 25px rgba(56,232,255,.2); }
+.jarvis-chat-launcher:hover { transform:translateY(-2px); }
+.jarvis-chat { position:fixed; right:24px; bottom:98px; z-index:10000; width:min(390px,calc(100vw - 28px)); height:min(570px,calc(100vh - 130px)); display:none; flex-direction:column; overflow:hidden; border:1px solid rgba(56,232,255,.38); border-radius:18px; background:rgba(4,13,25,.97); box-shadow:0 20px 70px rgba(0,0,0,.6),0 0 35px rgba(56,232,255,.10); backdrop-filter:blur(20px); }
+.jarvis-chat.open { display:flex; }
+.jarvis-chat-head { display:flex; align-items:center; gap:11px; padding:15px; border-bottom:1px solid var(--border); background:linear-gradient(110deg,rgba(15,67,91,.72),rgba(5,18,33,.82)); }
+.jarvis-orb { width:38px; height:38px; flex:0 0 auto; display:grid; place-items:center; border-radius:50%; color:var(--cyan); border:1px solid var(--border-bright); background:radial-gradient(circle,rgba(56,232,255,.22),rgba(5,18,33,.8)); box-shadow:0 0 18px rgba(56,232,255,.18); }
+.jarvis-chat-title { font-weight:800; letter-spacing:1.3px; font-size:13px; }
+.jarvis-chat-subtitle { margin-top:4px; font-size:10px; color:var(--muted); letter-spacing:.8px; }
+.jarvis-chat-close { margin-left:auto; border:0; background:transparent; color:var(--muted); font-size:23px; cursor:pointer; }
+.jarvis-chat-messages { flex:1; overflow:auto; padding:14px; display:flex; flex-direction:column; gap:11px; }
+.jarvis-msg { max-width:91%; white-space:pre-wrap; overflow-wrap:anywhere; padding:11px 12px; border-radius:12px; font-size:12px; line-height:1.55; }
+.jarvis-msg.bot { align-self:flex-start; color:#d8f6ff; background:rgba(22,54,74,.7); border:1px solid rgba(56,232,255,.16); border-top-left-radius:4px; }
+.jarvis-msg.user { align-self:flex-end; color:#f3fdff; background:rgba(13,107,130,.42); border:1px solid rgba(56,232,255,.25); border-top-right-radius:4px; }
+.jarvis-chat-suggestions { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 10px; }
+.jarvis-chip { border:1px solid var(--border); background:rgba(56,232,255,.06); color:#aeeeff; border-radius:20px; padding:6px 9px; font-size:10px; cursor:pointer; }
+.jarvis-chip:hover { background:rgba(56,232,255,.14); }
+.jarvis-chat-form { display:flex; gap:7px; padding:11px; border-top:1px solid var(--border); }
+.jarvis-chat-input { min-width:0; flex:1; resize:none; max-height:88px; border:1px solid var(--border); border-radius:10px; outline:none; padding:11px; background:#071321; color:var(--text); font:12px/1.4 inherit; }
+.jarvis-chat-input:focus { border-color:var(--cyan); box-shadow:0 0 0 2px rgba(56,232,255,.08); }
+.jarvis-chat-action { width:39px; flex:0 0 39px; border:1px solid var(--border); border-radius:10px; color:var(--cyan); background:rgba(56,232,255,.08); cursor:pointer; font-size:15px; }
+.jarvis-chat-action:hover { background:rgba(56,232,255,.16); }
+.jarvis-chat-foot { padding:0 13px 10px; color:#6f8da2; font-size:9px; text-align:center; }
+@media (max-width:760px) { .sidebar { width:68px; padding:18px 8px; } .logo { padding:5px 4px 22px; font-size:0; } .logo-mark { flex:0 0 35px; } .nav-title, .nav-item span:not(.nav-icon), .sidebar-footer { display:none; } .nav-item { justify-content:center; padding:12px 4px; } .main { padding:18px 12px 100px; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .jarvis-chat { right:14px; bottom:88px; } .jarvis-chat-launcher { right:16px; bottom:15px; } }
 
 </style>
 </head>
@@ -2171,6 +2204,148 @@ updateJarvisAgentReview();
 setInterval(updateJarvisAgentReview, 3000);
 updateSensex30Live();
 setInterval(updateSensex30Live, 1000);
+</script>
+
+<!-- JARVIS Chat: browser-local, dashboard-aware assistant; no broker actions -->
+<button class="jarvis-chat-launcher" id="jarvis-chat-launcher" aria-label="Open JARVIS chat" title="Talk to JARVIS">✧</button>
+<section class="jarvis-chat" id="jarvis-chat" role="dialog" aria-label="JARVIS AI Chat" aria-modal="false">
+  <header class="jarvis-chat-head">
+    <div class="jarvis-orb" aria-hidden="true">✧</div>
+    <div><div class="jarvis-chat-title">J.A.R.V.I.S.</div><div class="jarvis-chat-subtitle">MARKET ASSISTANT · ADVISORY ONLY</div></div>
+    <button class="jarvis-chat-close" id="jarvis-chat-close" aria-label="Close chat">×</button>
+  </header>
+  <div class="jarvis-chat-messages" id="jarvis-chat-messages" aria-live="polite">
+    <div class="jarvis-msg bot">Hello. JARVIS interface online. I can explain the current dashboard state, market bias, entry score, option-chain snapshot and why the system is waiting. Ask me in Marathi, Hindi or English.</div>
+  </div>
+  <div class="jarvis-chat-suggestions">
+    <button class="jarvis-chip" data-prompt="Market direction काय आहे?">Market direction</button>
+    <button class="jarvis-chip" data-prompt="Entry score आणि decision सांग">Score / decision</button>
+    <button class="jarvis-chip" data-prompt="WAIT का आहे?">Why WAIT?</button>
+  </div>
+  <form class="jarvis-chat-form" id="jarvis-chat-form">
+    <textarea class="jarvis-chat-input" id="jarvis-chat-input" rows="1" placeholder="Ask JARVIS… / JARVIS ला विचारा" aria-label="Message JARVIS"></textarea>
+    <button class="jarvis-chat-action" id="jarvis-chat-mic" type="button" title="Speak to JARVIS" aria-label="Speak to JARVIS">🎙</button>
+    <button class="jarvis-chat-action" type="submit" title="Send message" aria-label="Send message">➤</button>
+  </form>
+  <div class="jarvis-chat-foot">VOICE SUPPORT DEPENDS ON YOUR BROWSER · NO AUTOMATIC ORDERS</div>
+</section>
+
+<script>
+
+(function initJarvisChat() {
+  const panel = document.getElementById("jarvis-chat");
+  const launcher = document.getElementById("jarvis-chat-launcher");
+  const close = document.getElementById("jarvis-chat-close");
+  const form = document.getElementById("jarvis-chat-form");
+  const input = document.getElementById("jarvis-chat-input");
+  const messages = document.getElementById("jarvis-chat-messages");
+  const mic = document.getElementById("jarvis-chat-mic");
+  let liveState = null;
+  let reviewState = null;
+  let recognition = null;
+
+  launcher.addEventListener("click", () => { panel.classList.toggle("open"); if (panel.classList.contains("open")) input.focus(); });
+  close.addEventListener("click", () => panel.classList.remove("open"));
+
+  function addMessage(text, role) {
+    const node = document.createElement("div");
+    node.className = "jarvis-msg " + role;
+    node.textContent = text;
+    messages.appendChild(node);
+    messages.scrollTop = messages.scrollHeight;
+  }
+  async function readJson(file) {
+    try {
+      const r = await fetch(file + "?ts=" + Date.now(), {cache:"no-store"});
+      if (!r.ok) return null;
+      return await r.json();
+    } catch (_) { return null; }
+  }
+  async function refreshContext() {
+    const [live, review] = await Promise.all([readJson("live_state.json"), readJson("latest_agentic_review.json")]);
+    if (live) liveState = live;
+    if (review) reviewState = review;
+  }
+  const val = (obj, keys, fallback="N/A") => {
+    for (const key of keys) if (obj && obj[key] !== undefined && obj[key] !== null && obj[key] !== "") return obj[key];
+    return fallback;
+  };
+  function makeReply(question) {
+    const q = question.toLowerCase();
+    const d = liveState || {};
+    const r = reviewState || {};
+    const audit = r.decision_audit || {};
+    const market = r.market_intelligence || {};
+    const risk = r.risk_review || {};
+    const explanation = r.explanation || {};
+    const bias = val(d, ["market_bias"], val(market, ["market_trend"], "UNKNOWN"));
+    const score = val(d, ["entry_score"], val(audit, ["entry_score"], "N/A"));
+    const decision = val(d, ["decision_status"], val(audit, ["decision_status"], "WAIT"));
+    const spot = val(d, ["spot","sensex_price"], "N/A");
+    const atm = val(d, ["atm_strike"], "N/A");
+    const status = val(d, ["status"], "DATA NOT AVAILABLE");
+    const reviewStatus = val(r, ["status"], "");
+    if (/hello|hi\b|namaskar|नमस्कार|हाय|नमस्ते/.test(q)) return "Hello! JARVIS online आहे. Market direction, score, WAIT reason किंवा CE/PE snapshot बद्दल विचार.";
+    if (/market|direction|दिशा|trend|ट्रेंड|bull|bear/.test(q)) return "Market snapshot\n• Bias: " + String(bias).replace(/_/g," ") + "\n• SENSEX spot: " + spot + "\n• ATM strike: " + atm + "\n• Data status: " + String(status).replace(/_/g," ") + "\n\nही dashboard मधील उपलब्ध माहिती आहे; स्वतःहून future direction ची हमी नाही.";
+    if (/score|स्कोअर|decision|निर्णय|entry/.test(q)) return "Decision snapshot\n• Entry score: " + score + "\n• Decision: " + String(decision).replace(/_/g," ") + "\n• Minimum score: " + val(audit,["minimum_score"],80) + "\n• Review: " + (reviewStatus || "not available") + "\n\nScore एकटाच trade ची हमी देत नाही; deterministic risk/entry checks लागू राहतात.";
+    if (/wait|का थांब|का आहे|reason|कारण|प्रवेश|confirmation|confirm/.test(q)) {
+      const flags = Array.isArray(audit.diagnostic_flags) ? audit.diagnostic_flags.join(", ") : "";
+      const riskFlags = Array.isArray(risk.risk_flags) ? risk.risk_flags.join(", ") : "";
+      return "WAIT / confirmation status\n• Decision: " + String(decision).replace(/_/g," ") + "\n• Explanation: " + val(explanation,["decision_summary","headline"],"No review explanation available") + "\n• Diagnostic flags: " + (flags || "No flags supplied") + "\n• Risk flags: " + (riskFlags || "No risk flags supplied") + "\n\n" + (reviewStatus === "WAITING_FOR_LIVE_REVIEW" ? "पहिला live review अजून आलेला नाही. पूर्ण झालेल्या 5-minute candle नंतर dashboard पुन्हा तपास." : "फक्त score पाहून WAIT override करू नको; actual decision audit तपास.");
+    }
+    if (/option|chain|ce|pe|call|put|strike|ओपन इंटरेस्ट|oi/.test(q)) {
+      const opts = Array.isArray(d.options) ? d.options : (Array.isArray(d.option_chain) ? d.option_chain : []);
+      const summary = opts.slice(0,8).map(o => "Strike " + val(o,["strike","strike_price"],"?") + ": CE " + val(o,["ce_ltp","call_ltp"],"N/A") + " / PE " + val(o,["pe_ltp","put_ltp"],"N/A")).join("\n");
+      return "Option-chain snapshot (available rows)\n" + (summary || "Option-chain rows dashboard JSON मध्ये उपलब्ध नाहीत.") + "\n\nRows: " + opts.length + ". डेटा जुना किंवा अपूर्ण असू शकतो; live timestamp तपास.";
+    }
+    if (/help|काय विचारू|मदत/.test(q)) return "तू असे विचारू शकतोस:\n• Market direction काय आहे?\n• Entry score आणि decision सांग\n• WAIT का आहे?\n• ATM strike आणि option-chain snapshot दाखव\n\nमी dashboard JSON वरून उत्तर देतो. बाह्य AI service/backend जोडलेला नसल्यास हे contextual assistant आहे, general-purpose LLM नाही.";
+    if (/time|timestamp|updated|ताजा|कधी/.test(q)) return "Dashboard data timestamp: " + val(d,["timestamp","updated_at","time"],"live_state.json मध्ये timestamp उपलब्ध नाही") + "\nJARVIS review timestamp: " + val(r,["timestamp"],"review उपलब्ध नाही") + "\nData status: " + status;
+    return "तुझा प्रश्न समजला: “" + question + "”\n\nसध्याच्या build मध्ये मी dashboard च्या live_state.json आणि JARVIS review snapshot वर आधारित Market direction, score/decision, WAIT reason आणि option-chain माहिती सांगू शकतो. या प्रश्नासाठी आवश्यक structured data उपलब्ध नाही. Help लिही किंवा dashboard मधील संबंधित माहिती विचार.";
+  }
+  async function sendMessage(text) {
+    const question = String(text || "").trim();
+    if (!question) return;
+    addMessage(question, "user");
+    input.value = "";
+    addMessage("Checking dashboard snapshot…", "bot");
+    const pending = messages.lastElementChild;
+    await refreshContext();
+    const reply = makeReply(question);
+    pending.textContent = reply;
+    messages.scrollTop = messages.scrollHeight;
+    if (window.speechSynthesis && panel.dataset.speak === "true") {
+      const utterance = new SpeechSynthesisUtterance(reply);
+      utterance.lang = /[\u0900-\u097F]/.test(reply) ? "mr-IN" : "en-IN";
+      window.speechSynthesis.speak(utterance);
+    }
+  }
+  form.addEventListener("submit", e => { e.preventDefault(); sendMessage(input.value); });
+  document.querySelectorAll(".jarvis-chip").forEach(button => button.addEventListener("click", () => sendMessage(button.dataset.prompt)));
+  mic.addEventListener("click", () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      addMessage("या browser मध्ये speech recognition उपलब्ध नाही. Chrome/Edge मध्ये microphone permission देऊन प्रयत्न कर, किंवा typing वापर.", "bot");
+      return;
+    }
+    if (recognition) { recognition.stop(); return; }
+    recognition = new SpeechRecognition();
+    recognition.lang = "mr-IN";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    mic.textContent = "⏺";
+    recognition.onresult = event => { input.value = event.results[0][0].transcript; input.focus(); };
+    recognition.onerror = event => addMessage("Microphone status: " + event.error + ". Permission/settings तपास.", "bot");
+    recognition.onend = () => { recognition = null; mic.textContent = "🎙"; };
+    try { recognition.start(); } catch (_) { recognition = null; mic.textContent = "🎙"; }
+  });
+  // Optional read-aloud mode: double-click the header to toggle speech output.
+  document.querySelector(".jarvis-chat-head").addEventListener("dblclick", () => {
+    panel.dataset.speak = panel.dataset.speak === "true" ? "false" : "true";
+    addMessage("Voice reply " + (panel.dataset.speak === "true" ? "ON" : "OFF") + ". Header वर double-click करून बदलू शकतोस.", "bot");
+  });
+  refreshContext();
+})();
+
 </script>
 </body>
 </html>
