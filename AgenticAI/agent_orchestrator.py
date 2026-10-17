@@ -38,7 +38,14 @@ def _persist_review(review):
     history = agent_config.OUTPUT_DIR / "review_history.jsonl"
     line = dumps(review) + "\n"
     with _WRITE_LOCK:
-        latest.write_text(dumps(review) + "\n", encoding="utf-8")
+        snapshot = dumps(review) + "\n"
+        latest.write_text(snapshot, encoding="utf-8")
+        # Publish a read-only copy under dashboard/, the directory served by the local HTTP server.
+        try:
+            dashboard_snapshot = agent_config.PROJECT_ROOT / "dashboard" / "latest_agentic_review.json"
+            dashboard_snapshot.write_text(snapshot, encoding="utf-8")
+        except OSError as exc:
+            print("JARVIS_DASHBOARD_SNAPSHOT_WARNING:", type(exc).__name__, str(exc)[:160])
         try:
             if history.exists() and history.stat().st_size > agent_config.MAX_JSONL_BYTES:
                 lines = history.read_text(encoding="utf-8", errors="replace").splitlines()
