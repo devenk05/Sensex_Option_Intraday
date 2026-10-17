@@ -52,3 +52,20 @@ def test_persist_review_writes_latest_dashboard_snapshot_and_history(tmp_path, m
     assert json.loads(latest.read_text(encoding="utf-8")) == review
     assert json.loads(dashboard_copy.read_text(encoding="utf-8")) == review
     assert json.loads(history.read_text(encoding="utf-8").splitlines()[-1]) == review
+
+def test_publish_waiting_snapshot_creates_truthful_dashboard_status(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent_config, "PROJECT_ROOT", tmp_path)
+    dashboard = tmp_path / "dashboard"
+
+    review = agent_orchestrator.publish_waiting_snapshot()
+
+    snapshot = dashboard / "latest_agentic_review.json"
+    saved = json.loads(snapshot.read_text(encoding="utf-8"))
+    assert saved == review
+    assert saved["status"] == "WAITING_FOR_LIVE_REVIEW"
+    assert saved["mode"] == "ADVISORY_ONLY"
+    assert saved["risk_review"]["broker_orders_enabled"] is False
+    assert saved["risk_review"]["recommendation_only"] is True
+    assert "No trade recommendation" in saved["explanation"]["safety"]
+    # A waiting UI state is not a completed market review and must not enter history.
+    assert not (tmp_path / "data" / "agentic_ai" / "review_history.jsonl").exists()

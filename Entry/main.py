@@ -37,9 +37,10 @@ from trade_decision_flow import compare_ce_pe
 from trade_decision_flow import compare_ce_pe, derive_market_bias, run_locked_decision_flow
 
 try:
-    from AgenticAI import dispatch_agent_review
+    from AgenticAI import dispatch_agent_review, publish_waiting_snapshot
 except Exception as agentic_import_error:
     dispatch_agent_review = None
+    publish_waiting_snapshot = None
     print("JARVIS_AGENTIC_AI_IMPORT_WARNING:", type(agentic_import_error).__name__, str(agentic_import_error)[:200])
 from chart_pattern_engine import detect_candle_patterns
 from active_trade_manager import ActiveTradeManager
@@ -1592,6 +1593,15 @@ def main():
     global CURRENT_SETUP_DECISION, NEARBY_CURRENT_CANDIDATE
     global SENSEX_INSTRUMENT_TOKEN, LATEST_ENTRY_SCORE
     load_project_config()
+
+    # Publish an honest waiting state immediately so the dashboard never looks
+    # broken merely because no completed 5-minute decision has run yet.
+    if publish_waiting_snapshot is not None:
+        try:
+            publish_waiting_snapshot()
+            print("JARVIS_DASHBOARD_STATUS: WAITING_FOR_LIVE_REVIEW")
+        except Exception as jarvis_dashboard_init_error:
+            print("JARVIS_DASHBOARD_INIT_WARNING:", type(jarvis_dashboard_init_error).__name__, str(jarvis_dashboard_init_error)[:200])
 
     print(f"Project: {config.PROJECT_NAME}")
     print(f"Trading Time: {config.TRADING_START} - {config.TRADING_END}")
