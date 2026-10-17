@@ -868,22 +868,18 @@ td {
     
 
             
-    <div class="analysis-card">
+    <div class="analysis-card" id="one-minute-entry-card">
         <div class="card-header">
             <span>1 MIN ENTRY</span>
-            <span class="mini-dot neutral"></span>
+            <span class="mini-dot neutral" id="one-minute-status-dot"></span>
         </div>
 
-        <div class="analysis-direction neutral">
+        <div class="analysis-direction neutral" id="one-minute-direction">
             WAIT
         </div>
 
-        <div class="detail-list">
-            
-        <div class="empty-state">
-            No detailed analysis available
-        </div>
-        
+        <div class="detail-list" id="one-minute-details">
+            <div class="empty-state">Waiting for live 1-minute analysis...</div>
         </div>
     </div>
     
@@ -1946,6 +1942,64 @@ function updateOptionChainLive(data) {
         }).join("");
 }
 
+function updateOneMinuteEntryCard(data) {
+    const directionEl = document.getElementById("one-minute-direction");
+    const detailsEl = document.getElementById("one-minute-details");
+    const dotEl = document.getElementById("one-minute-status-dot");
+    if (!directionEl || !detailsEl || !dotEl) return;
+
+    const analysis = data && data.one_minute_analysis && typeof data.one_minute_analysis === "object"
+        ? data.one_minute_analysis
+        : {};
+    const direction = String(
+        analysis.direction || data.one_minute_direction || data.entry_direction || "WAIT"
+    ).toUpperCase();
+    const confirmed = analysis.entry_confirmed === true;
+    const signal = String(analysis.signal || "UNKNOWN").replace(/_/g, " ");
+    const status = String(analysis.status || "NO_DATA").replace(/_/g, " ");
+    const reason = String(analysis.reason || "Waiting for live 1-minute analysis").replace(/_/g, " ");
+    const candleTime = analysis.candle_time ? String(analysis.candle_time) : "";
+    const latestClose = analysis.latest_close;
+    const structure = analysis.structure ? String(analysis.structure).replace(/_/g, " ") : "";
+
+    directionEl.textContent = direction;
+    directionEl.classList.remove("bullish", "bearish", "neutral");
+    dotEl.classList.remove("positive", "warning", "neutral");
+
+    if (direction === "BULLISH") {
+        directionEl.classList.add("bullish");
+        dotEl.classList.add(confirmed ? "positive" : "warning");
+    } else if (direction === "BEARISH") {
+        directionEl.classList.add("bearish");
+        dotEl.classList.add(confirmed ? "positive" : "warning");
+    } else {
+        directionEl.classList.add("neutral");
+        dotEl.classList.add("warning");
+    }
+
+    detailsEl.replaceChildren();
+    const rows = [
+        ["Entry confirmation", confirmed ? "CONFIRMED" : "WAIT"],
+        ["Signal", signal],
+        ["Analysis status", status],
+        ["Reason", reason]
+    ];
+    if (structure) rows.push(["Candle structure", structure]);
+    if (latestClose !== undefined && latestClose !== null) rows.push(["Latest close", String(latestClose)]);
+    if (candleTime) rows.push(["Candle time", candleTime]);
+
+    for (const [label, value] of rows) {
+        const row = document.createElement("div");
+        row.className = "detail-row";
+        const labelEl = document.createElement("span");
+        labelEl.textContent = label;
+        const valueEl = document.createElement("strong");
+        valueEl.textContent = value;
+        row.append(labelEl, valueEl);
+        detailsEl.appendChild(row);
+    }
+}
+
 async function updateDashboardLive() {
     try {
         const response = await fetch("live_state.json?ts=" + Date.now(), {
@@ -1956,6 +2010,7 @@ async function updateDashboardLive() {
 
         const data = await response.json();
         updateOptionChainLive(data);
+        updateOneMinuteEntryCard(data);
 
         const spotElement = document.querySelector(
             ".sensex-spot-card .metric-value"
