@@ -1177,6 +1177,9 @@ def _live_dashboard_updater(
                     if LATEST_ENTRY_SCORE is not None
                     else current_decision.get("entry_score")
                 ),
+                "entry_score_components": globals().get(
+                    "LATEST_CONFLUENCE_COMPONENT_SCORES", {}
+                ),
                 "decision_status": current_decision.get("status", "WAIT"),
                 "decision": current_decision,
                 "market_analysis": dashboard_analysis["market_analysis"],
@@ -2313,6 +2316,8 @@ def main():
         except (TypeError, ValueError):
             LATEST_ENTRY_SCORE = None
         print("DASHBOARD_ENTRY_SCORE_UPDATED:", LATEST_ENTRY_SCORE)
+        # Publish genuine per-engine raw scores for the live dashboard breakdown.
+        LATEST_CONFLUENCE_COMPONENT_SCORES = dict(confluence_component_scores)
         print("CONFLUENCE_COMPONENT_SCORES:", confluence_component_scores)
         print(
             "LIQUIDITY_GREEKS_CONFLUENCE_SCORE:",
