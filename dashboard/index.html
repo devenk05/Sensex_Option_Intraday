@@ -2039,6 +2039,18 @@ async function updateJarvisAgentReview() {
             return;
         }
         const review = await response.json();
+        if (review.status === "WAITING_FOR_LIVE_REVIEW") {
+            headlineEl.textContent = (review.explanation || {}).headline || "Waiting for first live review";
+            modeEl.textContent = review.mode || "ADVISORY ONLY";
+            bodyEl.textContent = [
+                "JARVIS Agentic AI is integrated and ready.",
+                "No live market review has been generated yet.",
+                "The panel updates after the next completed 5-minute decision.",
+                "Safety: no trade recommendation has been generated; no broker order was placed."
+            ].join("\\n");
+            metaEl.textContent = "Review status: waiting for first completed 5-minute decision · Initialized: " + (review.timestamp || "time unavailable");
+            return;
+        }
         const audit = review.decision_audit || {};
         const risk = review.risk_review || {};
         const market = review.market_intelligence || {};
