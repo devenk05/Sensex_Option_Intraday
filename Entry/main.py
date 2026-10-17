@@ -709,6 +709,9 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             fii_dii_analysis=fii_dii_analysis,
             liquidity_greeks_analysis=liquidity_greeks_analysis,
         )
+        # Keep the dashboard component breakdown in sync with the same score
+        # calculation that updates LATEST_ENTRY_SCORE in this live decision path.
+        globals()["LATEST_CONFLUENCE_COMPONENT_SCORES"] = dict(component_scores)
         confluence = calculate_confluence_score(component_scores)
         entry_score = confluence.get("score")
         try:
