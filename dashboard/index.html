@@ -983,6 +983,31 @@ input, textarea, select { color: var(--text); }
   .score-ai-core { width: 95px !important; }
 }
 
+
+/* Keep Multi-Timeframe Analysis visible as a clean three-card row beneath the top metrics */
+.section:has(> .section-title h2) { min-width: 0; }
+.analysis-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  align-items: stretch;
+  gap: 12px !important;
+  width: 100%;
+}
+.analysis-grid > .analysis-card {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  min-width: 0;
+  width: auto;
+  min-height: 180px;
+  box-sizing: border-box;
+}
+.analysis-card .detail-row { display:flex; justify-content:space-between; gap:10px; min-width:0; }
+.analysis-card .detail-row > * { min-width:0; overflow-wrap:anywhere; }
+@media (max-width: 760px) {
+  .analysis-grid { grid-template-columns: minmax(0,1fr) !important; }
+  .analysis-grid > .analysis-card { min-height: 130px; }
+}
+
 </style>
 </head>
 
