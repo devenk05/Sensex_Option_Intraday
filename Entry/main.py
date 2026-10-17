@@ -2317,7 +2317,7 @@ def main():
             LATEST_ENTRY_SCORE = None
         print("DASHBOARD_ENTRY_SCORE_UPDATED:", LATEST_ENTRY_SCORE)
         # Publish genuine per-engine raw scores for the live dashboard breakdown.
-        LATEST_CONFLUENCE_COMPONENT_SCORES = dict(confluence_component_scores)
+        globals()["LATEST_CONFLUENCE_COMPONENT_SCORES"] = dict(confluence_component_scores)
         print("CONFLUENCE_COMPONENT_SCORES:", confluence_component_scores)
         print(
             "LIQUIDITY_GREEKS_CONFLUENCE_SCORE:",
