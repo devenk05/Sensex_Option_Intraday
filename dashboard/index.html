@@ -744,269 +744,98 @@ input, textarea, select { color: var(--text); }
 @media (max-width:520px) { .entry-score-card { grid-column:span 1; } .score-breakdown-heading { align-items:flex-start; flex-direction:column; } .score-radial-map { grid-template-rows:repeat(3,minmax(88px,auto)); gap:5px; } .score-node { padding:7px 3px; } .score-node-name { font-size:8px; } .score-node strong { font-size:18px; } .score-node > small { font-size:8px; } .score-ai-core { width:min(100%,90px); } .score-ai-core span { font-size:6px; } }
 
 
-/* Layout repair v1: consistent desktop grid and contained radial score map */
-.metrics { grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: stretch; gap: 12px; }
-.metrics > .metric-card { min-width: 0; min-height: 150px; height: auto; align-self: stretch; }
-.metrics > .sensex-spot-card { grid-column: span 1; }
-.metrics > .market-status-card { grid-column: span 1; }
-.metrics > .market-bias-card { grid-column: span 1; }
-.metrics > .entry-score-card { grid-column: span 2; min-height: 0; }
-.metrics > .atm-strike-card { grid-column: span 1; }
-.metrics > .decision-card { grid-column: span 1; }
-.score-radial-map { height: 390px; min-height: 390px; overflow: hidden; }
-.score-radial-map:before { width: min(330px, 64%); height: min(330px, 84%); }
-.score-radial-map:after { width: min(220px, 44%); height: min(220px, 56%); }
-.score-node { width: 118px; min-height: 54px; padding: 2px; gap: 3px; }
-.score-node-name { font-size: 10px; line-height: 1.2; }
-.score-node > strong { min-width: 0; min-height: 0; font-size: 23px; }
-.score-node-market_structure { left: 50%; top: 2%; transform: translateX(-50%); }
-.score-node-volume_analysis { left: auto; right: 7%; top: 18%; transform: none; }
-.score-node-support_resistance { right: 1%; top: 44%; }
-.score-node-fii_dii { right: 8%; bottom: 2%; }
-.score-node-price_action { left: 7%; top: 18%; }
-.score-node-atm_ce_pe_strength { left: 1%; top: 44%; }
-.score-node-pivot_points { left: 8%; bottom: 2%; }
-.score-node-liquidity_greeks { left: 50%; bottom: 0; transform: translateX(-50%); }
-.score-ai-core { width: 118px; }
-.score-ai-core strong { font-size: 42px; }
-.score-breakdown-status { min-height: 14px; }
-.market-intelligence-grid { grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); grid-template-rows: repeat(6, minmax(150px, auto)); min-height: 0; }
-.sensex30-market-panel { min-height: 0; }
-.market-intelligence-grid .analysis-card { min-height: 150px; }
-.analysis-card, .panel, .metric-card { overflow-wrap: anywhere; }
-@media (max-width: 1250px) {
-  .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .metrics > .entry-score-card { grid-column: span 2; grid-row: span 2; }
-  .score-radial-map { height: 390px; }
-  .market-intelligence-grid { grid-template-columns: minmax(0, 1.3fr) minmax(260px, 1fr); }
-}
-@media (max-width: 850px) {
-  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .metrics > .entry-score-card { grid-column: span 2; grid-row: auto; }
-  .metrics > .metric-card { min-height: 125px; }
-  .score-radial-map { height: 370px; min-height: 370px; }
-  .market-intelligence-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; min-height: 0; }
-  .sensex30-market-panel, .market-intelligence-grid .analysis-card,
-  .market-intelligence-grid > .analysis-card:nth-child(n) { grid-column: 1; grid-row: auto; min-height: 140px; }
-  .sensex30-market-panel { overflow-x: auto; }
-  .analysis-grid, .option-cards, .lower-grid { grid-template-columns: minmax(0, 1fr); }
-}
-@media (max-width: 520px) {
-  .metrics { grid-template-columns: minmax(0, 1fr); }
-  .metrics > .entry-score-card { grid-column: span 1; }
-  .score-radial-map { height: 350px; min-height: 350px; }
-  .score-node { width: 92px; }
-  .score-node-name { font-size: 8px; }
-  .score-node > strong { font-size: 18px; }
-  .score-node-volume_analysis { right: 2%; top: 18%; }
-  .score-node-price_action { left: 2%; top: 18%; }
-  .score-ai-core { width: 92px; }
-  .score-ai-core strong { font-size: 34px; }
-}
 
-
-/* Radial score map: keep both rings perfectly circular at every card width */
-.score-radial-map { position: relative; width: 100%; height: 390px; min-height: 390px; }
-.score-radial-map:before {
-  width: min(330px, 78%);
-  height: auto;
-  aspect-ratio: 1 / 1;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-.score-radial-map:after {
-  width: min(220px, 52%);
-  height: auto;
-  aspect-ratio: 1 / 1;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-@media (max-width: 520px) {
-  .score-radial-map { height: 350px; min-height: 350px; }
-  .score-radial-map:before { width: min(290px, 78%); }
-  .score-radial-map:after { width: min(190px, 52%); }
-}
-
-
-/* Final responsive correction: never let the metrics cards overlap or split into a side stack */
-.metrics { display:grid; grid-template-columns: minmax(0,1.05fr) minmax(0,1.05fr) minmax(0,1.05fr) minmax(0,2fr) minmax(0,1.05fr) minmax(0,1.05fr); align-items:stretch; }
-.metrics > .metric-card { grid-row:auto !important; grid-column:auto; min-width:0; width:auto; max-width:100%; box-sizing:border-box; }
-.metrics > .entry-score-card { grid-column:span 1; grid-row:auto !important; min-width:0; }
-.metrics > .sensex-spot-card, .metrics > .market-status-card, .metrics > .market-bias-card, .metrics > .atm-strike-card, .metrics > .decision-card { grid-column:auto; }
-.sensex-spot-card .sensex-open-change { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
-.sensex-spot-card .sensex-open-change > div { min-width:0; overflow-wrap:anywhere; }
-@media (max-width: 1250px) {
-  .metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
-  .metrics > .entry-score-card { grid-column:span 2; grid-row:auto !important; }
-}
-@media (max-width: 850px) {
-  .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .metrics > .entry-score-card { grid-column:1 / -1; grid-row:auto !important; }
-  .metrics > .metric-card { min-height:0; }
-  .score-radial-map { height:390px; min-height:390px; }
-}
-@media (max-width: 520px) {
-  .metrics { grid-template-columns:minmax(0,1fr); }
-  .metrics > .entry-score-card { grid-column:1; }
-  .score-radial-map { height:350px; min-height:350px; }
-}
-
-
-/* Hard guard: preserve the six-card desktop composition instead of squeezing/overlapping it */
-@media (min-width: 761px) {
-  .main { min-width: 0; }
-  .metrics {
-    display: grid !important;
-    grid-template-columns: 210px 210px 210px minmax(440px, 2fr) 210px 210px !important;
-    grid-auto-flow: row;
-    align-items: stretch;
-    gap: 12px;
-    overflow-x: auto;
-    padding-bottom: 6px;
-  }
-  .metrics > .metric-card,
-  .metrics > .entry-score-card,
-  .metrics > .sensex-spot-card,
-  .metrics > .market-status-card,
-  .metrics > .market-bias-card,
-  .metrics > .atm-strike-card,
-  .metrics > .decision-card {
-    grid-column: auto !important;
-    grid-row: auto !important;
-    min-width: 0;
-    width: auto;
-    max-width: none;
-    height: auto;
-    box-sizing: border-box;
-  }
-  .metrics > .entry-score-card { min-width: 440px; }
-}
-@media (max-width: 760px) {
-  .metrics {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 10px;
-  }
-  .metrics > .metric-card { min-width: 0; width: auto; grid-column: auto !important; grid-row: auto !important; }
-  .metrics > .entry-score-card { grid-column: 1 / -1 !important; grid-row: auto !important; min-width: 0; }
-  .sensex-spot-card .sensex-open-change > div { overflow-wrap: anywhere; }
-}
-@media (max-width: 520px) {
-  .metrics { grid-template-columns: minmax(0,1fr) !important; }
-  .metrics > .entry-score-card { grid-column: 1 !important; }
-}
-
-
-/* User-requested desktop composition: keep the six metric cards in one row at all viewport widths.
-   Narrow viewports can scroll horizontally instead of collapsing cards into a vertical stack. */
+/* Consolidated dashboard layout — replaces conflicting experimental overrides */
 .metrics {
-  display: grid !important;
-  grid-template-columns: 210px 210px 210px minmax(440px, 2fr) 210px 210px !important;
-  grid-auto-flow: row !important;
-  align-items: stretch !important;
-  gap: 12px !important;
-  width: max-content !important;
-  min-width: 100% !important;
-  overflow: visible !important;
-}
-.metrics > .metric-card,
-.metrics > .entry-score-card,
-.metrics > .sensex-spot-card,
-.metrics > .market-status-card,
-.metrics > .market-bias-card,
-.metrics > .atm-strike-card,
-.metrics > .decision-card {
-  grid-column: auto !important;
-  grid-row: auto !important;
-  width: auto !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  box-sizing: border-box !important;
-}
-.metrics > .entry-score-card { min-width: 440px !important; }
-.main { overflow-x: auto; }
-@media (max-width: 760px) {
-  .metrics {
-    grid-template-columns: 210px 210px 210px minmax(440px, 2fr) 210px 210px !important;
-    width: max-content !important;
-  }
-  .metrics > .entry-score-card { grid-column: auto !important; }
-}
-
-
-/* Corrective fluid layout: six cards share the available main-panel width without forced horizontal overflow */
-@media (min-width: 761px) {
-  .main { min-width: 0 !important; overflow-x: visible !important; }
-  .metrics {
-    display: grid !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    grid-template-columns:
-      minmax(112px, 1fr)
-      minmax(112px, 1fr)
-      minmax(112px, 1fr)
-      minmax(340px, 2.2fr)
-      minmax(112px, 1fr)
-      minmax(112px, 1fr) !important;
-    gap: 10px !important;
-    overflow: visible !important;
-    align-items: stretch !important;
-  }
-  .metrics > .metric-card,
-  .metrics > .entry-score-card,
-  .metrics > .sensex-spot-card,
-  .metrics > .market-status-card,
-  .metrics > .market-bias-card,
-  .metrics > .atm-strike-card,
-  .metrics > .decision-card {
-    grid-column: auto !important;
-    grid-row: auto !important;
-    min-width: 0 !important;
-    width: auto !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-  }
-  .metrics > .entry-score-card { min-width: 0 !important; }
-  .sensex-spot-card .sensex-open-change { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 4px !important; }
-  .sensex-spot-card .sensex-open-change > div { min-width: 0; overflow-wrap: anywhere; }
-  .score-radial-map { width: 100%; }
-}
-@media (min-width: 761px) and (max-width: 1150px) {
-  .metrics { grid-template-columns: minmax(105px,1fr) minmax(105px,1fr) minmax(105px,1fr) minmax(310px,2fr) minmax(105px,1fr) minmax(105px,1fr) !important; gap: 7px !important; }
-  .metrics > .metric-card { padding: 10px !important; }
-  .score-radial-map { height: 350px !important; min-height: 350px !important; }
-  .score-node { width: 90px !important; }
-  .score-node-name { font-size: 8px !important; }
-  .score-node > strong { font-size: 18px !important; }
-  .score-ai-core { width: 95px !important; }
-}
-
-
-/* Keep Multi-Timeframe Analysis visible as a clean three-card row beneath the top metrics */
-.section:has(> .section-title h2) { min-width: 0; }
-.analysis-grid {
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   align-items: stretch;
-  gap: 12px !important;
+  gap: 12px;
   width: 100%;
+  min-width: 0;
+  margin-bottom: 20px;
 }
-.analysis-grid > .analysis-card {
-  grid-column: auto !important;
-  grid-row: auto !important;
+.metrics > .metric-card {
+  grid-column: auto;
+  grid-row: auto;
   min-width: 0;
   width: auto;
-  min-height: 180px;
+  max-width: 100%;
+  height: auto;
   box-sizing: border-box;
 }
+.metrics > .entry-score-card { grid-column: span 2; min-width: 0; }
+.sensex-spot-card .sensex-open-change {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+}
+.sensex-spot-card .sensex-open-change > div { min-width: 0; overflow-wrap: anywhere; }
+
+.score-calculation-note { margin-top:6px; max-width:720px; color:#8baac2; font-size:10px; line-height:1.5; }
+.score-breakdown-heading { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:16px; margin-bottom:9px; font-size:11px; letter-spacing:.08em; font-weight:700; color:var(--text-secondary, #9bb4c9); }
+.score-breakdown-note { font-size:10px; letter-spacing:0; font-weight:500; text-align:right; }
+.score-radial-map { position:relative; display:block; width:100%; height:390px; min-height:350px; margin:4px auto 0; padding:0; isolation:isolate; overflow:hidden; }
+.score-radial-map:before { content:""; position:absolute; left:50%; top:50%; width:min(330px,78%); aspect-ratio:1/1; height:auto; transform:translate(-50%,-50%); z-index:0; border:1px solid rgba(40,178,255,.28); border-radius:50%; box-shadow:0 0 24px rgba(0,168,255,.08),inset 0 0 22px rgba(0,168,255,.05); pointer-events:none; }
+.score-radial-map:after { content:""; position:absolute; left:50%; top:50%; width:min(220px,52%); aspect-ratio:1/1; height:auto; transform:translate(-50%,-50%); z-index:0; border:1px solid rgba(137,72,255,.25); border-radius:50%; pointer-events:none; }
+.score-node:before,.score-node:after,.score-node > small,.score-node > strong:before,.score-node > strong:after { content:none !important; display:none !important; }
+.score-node { position:absolute; z-index:2; width:clamp(78px,22%,125px); min-height:48px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; gap:4px; padding:3px; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.score-node-name { font-size:clamp(8px,.75vw,11px); line-height:1.2; font-weight:700; letter-spacing:.015em; color:#c8e7fa; overflow-wrap:anywhere; text-shadow:0 1px 4px #03111f; }
+.score-node > strong { display:block; min-width:0; min-height:0; font-size:clamp(18px,1.7vw,25px); line-height:1.05; text-align:center; color:#34e7bd; text-shadow:0 0 12px rgba(52,231,189,.25); }
+.score-node.strong > strong { color:#34e7bd; }
+.score-node.moderate > strong { color:#facc15; text-shadow:0 0 12px rgba(250,204,21,.2); }
+.score-node.weak > strong { color:#fb7185; text-shadow:0 0 12px rgba(251,113,133,.2); }
+.score-node.unavailable { opacity:.8; }
+.score-node-market_structure { left:50%; top:1%; transform:translateX(-50%); }
+.score-node-volume_analysis { right:7%; top:17%; }
+.score-node-support_resistance { right:0; top:43%; }
+.score-node-fii_dii { right:7%; bottom:1%; }
+.score-node-price_action { left:7%; top:17%; }
+.score-node-atm_ce_pe_strength { left:0; top:43%; }
+.score-node-pivot_points { left:7%; bottom:1%; }
+.score-node-liquidity_greeks { left:50%; bottom:0; transform:translateX(-50%); }
+.score-ai-core { position:absolute; z-index:3; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:5px; width:clamp(88px,24%,125px); aspect-ratio:1; border-radius:50%; background:radial-gradient(circle,rgba(0,156,255,.28),rgba(15,28,75,.94) 68%); border:1px solid rgba(43,211,255,.8); box-shadow:0 0 28px rgba(0,153,255,.32),inset 0 0 22px rgba(81,85,255,.3); }
+.score-ai-core > strong { color:#e5f6ff; font-size:clamp(34px,4vw,48px); text-shadow:0 0 18px #249dff; }
+.score-ai-core span { font-size:8px; letter-spacing:.1em; color:#80d8ff; }
+.score-ai-orbit { position:absolute; inset:-7px; border:1px dashed rgba(48,208,255,.45); border-radius:50%; animation:score-orbit-spin 24s linear infinite; pointer-events:none; }
+@keyframes score-orbit-spin { to { transform:rotate(360deg); } }
+.score-breakdown-status { margin-top:9px; font-size:10px; color:#829caf; min-height:14px; }
+
+/* Multi-timeframe: three equal cards on desktop */
+.analysis-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; width:100%; align-items:stretch; }
+.analysis-grid > .analysis-card { min-width:0; width:auto; grid-column:auto; grid-row:auto; min-height:180px; box-sizing:border-box; }
 .analysis-card .detail-row { display:flex; justify-content:space-between; gap:10px; min-width:0; }
 .analysis-card .detail-row > * { min-width:0; overflow-wrap:anywhere; }
-@media (max-width: 760px) {
-  .analysis-grid { grid-template-columns: minmax(0,1fr) !important; }
-  .analysis-grid > .analysis-card { min-height: 130px; }
+
+/* Tablet: use a two-row composition, never force cards to overlap */
+@media (max-width: 1450px) {
+  .metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .metrics > .entry-score-card { grid-column:span 2; grid-row:span 2; }
+  .score-radial-map { height:390px; }
+  .score-node { width:clamp(78px,22%,115px); }
+  .score-node-name { font-size:9px; }
+  .score-ai-core { width:clamp(88px,24%,120px); }
 }
+@media (max-width: 900px) {
+  .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .metrics > .entry-score-card { grid-column:1 / -1; grid-row:auto; }
+  .analysis-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .analysis-grid > .analysis-card:last-child { grid-column:1 / -1; }
+}
+@media (max-width: 600px) {
+  .metrics { grid-template-columns:minmax(0,1fr); }
+  .metrics > .entry-score-card { grid-column:1; grid-row:auto; }
+  .analysis-grid { grid-template-columns:minmax(0,1fr); }
+  .analysis-grid > .analysis-card:last-child { grid-column:1; }
+  .score-radial-map { height:350px; min-height:350px; }
+  .score-radial-map:before { width:min(285px,78%); }
+  .score-radial-map:after { width:min(190px,52%); }
+  .score-node { width:clamp(76px,23%,95px); }
+  .score-node-name { font-size:8px; }
+  .score-node > strong { font-size:18px; }
+  .score-ai-core { width:clamp(82px,25%,100px); }
+  .score-ai-core > strong { font-size:34px; }
+}
+
 
 </style>
 </head>
