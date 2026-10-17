@@ -804,8 +804,13 @@ input, textarea, select { color: var(--text); }
         
     <div class="metric-card sensex-spot-card">
         <div class="metric-title">SENSEX</div>
-        <div class="metric-value">72,573.25</div>
+        <div class="metric-value">—</div>
         <div class="metric-subtitle">Live Spot</div>
+        <div class="sensex-open-change" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;text-align:center;">
+            <div><div style="font-size:11px;opacity:.75;">TODAY OPEN</div><div id="sensex-today-open" style="font-weight:600;">—</div></div>
+            <div><div style="font-size:11px;opacity:.75;">CHANGE (PTS)</div><div id="sensex-open-change-points" style="font-weight:600;">—</div></div>
+            <div><div style="font-size:11px;opacity:.75;">CHANGE (%)</div><div id="sensex-open-change-percent" style="font-weight:600;">—</div></div>
+        </div>
     </div>
     
 
@@ -2120,11 +2125,45 @@ async function updateDashboardLive() {
         updateOptionChainLive(data);
         updateOneMinuteEntryCard(data);
 
+        const sensexData = data.live_sensex || data.sensex || {};
+        const spotValue = Number(data.spot ?? sensexData.last_price);
+        const openValue = Number(sensexData.open);
         const spotElement = document.querySelector(
             ".sensex-spot-card .metric-value"
         );
-        if (spotElement && data.spot != null) {
-            spotElement.textContent = data.spot;
+        const openElement = document.getElementById("sensex-today-open");
+        const pointsElement = document.getElementById("sensex-open-change-points");
+        const percentElement = document.getElementById("sensex-open-change-percent");
+        const formatSensex = value => value.toLocaleString("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+
+        if (spotElement && Number.isFinite(spotValue)) {
+            spotElement.textContent = formatSensex(spotValue);
+        }
+        if (openElement) {
+            openElement.textContent = Number.isFinite(openValue) && openValue > 0
+                ? formatSensex(openValue) : "—";
+        }
+        if (pointsElement && percentElement) {
+            pointsElement.classList.remove("bullish", "bearish", "positive", "red");
+            percentElement.classList.remove("bullish", "bearish", "positive", "red");
+            if (Number.isFinite(spotValue) && Number.isFinite(openValue) && openValue > 0) {
+                const changePoints = spotValue - openValue;
+                const changePercent = (changePoints / openValue) * 100;
+                const changeClass = changePoints > 0
+                    ? "bullish" : changePoints < 0 ? "bearish" : "neutral";
+                const sign = changePoints > 0 ? "+" : "";
+                pointsElement.textContent = sign + formatSensex(changePoints);
+                percentElement.textContent = (changePercent > 0 ? "+" : "") +
+                    changePercent.toFixed(2) + "%";
+                pointsElement.classList.add(changeClass);
+                percentElement.classList.add(changeClass);
+            } else {
+                pointsElement.textContent = "—";
+                percentElement.textContent = "—";
+            }
         }
 
         const biasElement = document.querySelector(
