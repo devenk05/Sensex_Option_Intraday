@@ -57,7 +57,7 @@ def publish_waiting_snapshot():
     dashboard = agent_config.PROJECT_ROOT / "dashboard"
     dashboard.mkdir(parents=True, exist_ok=True)
     snapshot = dashboard / "latest_agentic_review.json"
-    snapshot.write_text(dumps(review) + "\\n", encoding="utf-8")
+    snapshot.write_text(dumps(review) + "\n", encoding="utf-8")
     return review
 
 
