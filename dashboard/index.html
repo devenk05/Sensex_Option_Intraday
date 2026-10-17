@@ -2047,7 +2047,7 @@ async function updateJarvisAgentReview() {
                 "No live market review has been generated yet.",
                 "The panel updates after the next completed 5-minute decision.",
                 "Safety: no trade recommendation has been generated; no broker order was placed."
-            ].join("\\n");
+            ].join("\n");
             metaEl.textContent = "Review status: waiting for first completed 5-minute decision · Initialized: " + (review.timestamp || "time unavailable");
             return;
         }
