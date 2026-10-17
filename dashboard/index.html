@@ -712,6 +712,8 @@ input, textarea, select { color: var(--text); }
 .score-radial-map { position:relative; display:block; width:100%; height:480px; margin:4px auto 0; padding:0; isolation:isolate; overflow:hidden; }
 .score-radial-map:before { content:""; position:absolute; left:50%; top:50%; width:min(390px,76%); height:min(390px,76%); transform:translate(-50%,-50%); z-index:0; border:1px solid rgba(40,178,255,.28); border-radius:50%; box-shadow:0 0 24px rgba(0,168,255,.08),inset 0 0 22px rgba(0,168,255,.05); pointer-events:none; }
 .score-radial-map:after { content:""; position:absolute; left:50%; top:50%; width:min(255px,50%); height:min(255px,50%); transform:translate(-50%,-50%); z-index:0; border:1px solid rgba(137,72,255,.25); border-radius:50%; pointer-events:none; }
+.score-node:before,.score-node:after { content:none !important; display:none !important; }
+.score-node > small { display:none !important; }
 .score-node { position:absolute; z-index:2; width:clamp(105px,22%,150px); min-height:70px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; gap:5px; padding:5px; border:0; border-radius:0; background:transparent; box-shadow:none; }
 .score-node-name { font-size:clamp(9px,1.1vw,12px); line-height:1.25; font-weight:700; letter-spacing:.025em; color:#c8e7fa; overflow-wrap:anywhere; text-shadow:0 1px 4px #03111f; }
 .score-node strong { font-size:clamp(23px,2.5vw,30px); line-height:1.05; color:#34e7bd; text-shadow:0 0 12px rgba(52,231,189,.25); }
@@ -874,14 +876,14 @@ input, textarea, select { color: var(--text); }
             <span class="score-breakdown-note">SCORE</span>
         </div>
         <div id="entry-score-breakdown" class="score-radial-map">
-            <div class="score-node score-node-market_structure unavailable" data-score-key="market_structure"><span class="score-node-name">MARKET STRUCTURE</span><strong>—</strong><small class="score-actual-value">—</small></div>
-            <div class="score-node score-node-volume_analysis unavailable" data-score-key="volume_analysis"><span class="score-node-name">VOLUME</span><strong>—</strong><small class="score-actual-value">—</small></div>
-            <div class="score-node score-node-support_resistance unavailable" data-score-key="support_resistance"><span class="score-node-name">SUPPORT / RESISTANCE</span><strong>—</strong><small class="score-actual-value">—</small></div>
-            <div class="score-node score-node-fii_dii unavailable" data-score-key="fii_dii"><span class="score-node-name">FII / DII</span><strong>—</strong><small class="score-actual-value">—</small></div>
-            <div class="score-node score-node-price_action unavailable" data-score-key="price_action"><span class="score-node-name">PRICE ACTION</span><strong>—</strong><small class="score-actual-value">—</small></div>
-            <div class="score-node score-node-atm_ce_pe_strength unavailable" data-score-key="atm_ce_pe_strength"><span class="score-node-name">ATM CE / PE</span><strong>—</strong><small class="score-actual-value">—</small></div>
-            <div class="score-node score-node-pivot_points unavailable" data-score-key="pivot_points"><span class="score-node-name">PIVOT POINTS</span><strong>—</strong><small class="score-actual-value">—</small></div>
-            <div class="score-node score-node-liquidity_greeks unavailable" data-score-key="liquidity_greeks"><span class="score-node-name">LIQUIDITY / GREEKS</span><strong>—</strong><small class="score-actual-value">—</small></div>
+            <div class="score-node score-node-market_structure unavailable" data-score-key="market_structure"><span class="score-node-name">MARKET STRUCTURE</span><strong>—</strong></div>
+            <div class="score-node score-node-volume_analysis unavailable" data-score-key="volume_analysis"><span class="score-node-name">VOLUME</span><strong>—</strong></div>
+            <div class="score-node score-node-support_resistance unavailable" data-score-key="support_resistance"><span class="score-node-name">SUPPORT / RESISTANCE</span><strong>—</strong></div>
+            <div class="score-node score-node-fii_dii unavailable" data-score-key="fii_dii"><span class="score-node-name">FII / DII</span><strong>—</strong></div>
+            <div class="score-node score-node-price_action unavailable" data-score-key="price_action"><span class="score-node-name">PRICE ACTION</span><strong>—</strong></div>
+            <div class="score-node score-node-atm_ce_pe_strength unavailable" data-score-key="atm_ce_pe_strength"><span class="score-node-name">ATM CE / PE</span><strong>—</strong></div>
+            <div class="score-node score-node-pivot_points unavailable" data-score-key="pivot_points"><span class="score-node-name">PIVOT POINTS</span><strong>—</strong></div>
+            <div class="score-node score-node-liquidity_greeks unavailable" data-score-key="liquidity_greeks"><span class="score-node-name">LIQUIDITY / GREEKS</span><strong>—</strong></div>
             <div class="score-ai-core" aria-label="AI score engine"><div class="score-ai-orbit"></div><strong>AI</strong><span>CONFLUENCE</span></div>
         </div>
         <div id="entry-score-breakdown-status" class="score-breakdown-status">Waiting for live component scores…</div>
@@ -2289,8 +2291,6 @@ async function updateDashboardLive() {
                     Number.isFinite(Number(raw)) ? Math.max(0, Math.min(100, Number(raw))) : null;
                 const valueEl = node.querySelector("strong");
                 if (valueEl) valueEl.textContent = numeric === null ? "—" : numeric.toFixed(0);
-                const actualScoreEl = node.querySelector(".score-actual-value");
-                if (actualScoreEl) actualScoreEl.textContent = numeric === null ? "—" : "SCORE " + numeric.toFixed(0);
                 node.classList.remove("strong", "moderate", "weak", "unavailable");
                 if (numeric === null) {
                     node.classList.add("unavailable");
