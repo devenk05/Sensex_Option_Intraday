@@ -10,6 +10,7 @@ on:
       - "Entry/entry_confirmation.py"
       - "dashboard/index.html"
       - "test/test_agentic_ai.py"
+      - "test/test_jarvis_live_context_mapping_guards.py"
       - "test/test_one_minute_entry_confirmation.py"
       - ".github/workflows/agentic-regression.yml"
   push:
@@ -33,4 +34,4 @@ jobs:
       - name: Run 1-minute and JARVIS regression tests
         env:
           PYTHONPATH: .:Entry:exit:report
-        run: python -m pytest -q test/test_one_minute_entry_confirmation.py test/test_agentic_ai.py
+        run: python -m pytest -q test/test_one_minute_entry_confirmation.py test/test_agentic_ai.py test/test_jarvis_live_context_mapping_guards.py
