@@ -1001,6 +1001,72 @@ input, textarea, select { color: var(--text); }
   line-height: 1.15 !important;
 }
 
+
+/* MATRIX GRID score map — replaces the old radial layout only */
+#entry-score-breakdown.score-radial-map {
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  grid-auto-rows:minmax(76px,auto) !important;
+  gap:7px !important;
+  height:auto !important;
+  min-height:0 !important;
+  margin:8px 0 0 !important;
+  padding:0 !important;
+  overflow:visible !important;
+  isolation:auto !important;
+}
+#entry-score-breakdown.score-radial-map::before,
+#entry-score-breakdown.score-radial-map::after { display:none !important; content:none !important; }
+#entry-score-breakdown .score-ai-core { display:none !important; }
+#entry-score-breakdown .score-node {
+  position:relative !important;
+  inset:auto !important;
+  transform:none !important;
+  width:auto !important;
+  min-width:0 !important;
+  min-height:76px !important;
+  padding:9px 5px 7px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:center !important;
+  align-items:center !important;
+  gap:3px !important;
+  border:1px solid rgba(56,232,255,.24) !important;
+  border-radius:10px !important;
+  background:linear-gradient(145deg,rgba(10,31,49,.96),rgba(5,17,30,.96)) !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.025) !important;
+  text-align:center !important;
+  overflow:hidden !important;
+}
+#entry-score-breakdown .score-node::before {
+  content:"" !important; display:block !important; position:static !important;
+  width:17px !important; height:17px !important; margin:0 auto 3px !important;
+  border:0 !important; border-radius:0 !important; background:none !important;
+  box-shadow:none !important; transform:none !important;
+  font-size:17px !important; line-height:17px !important; font-weight:800 !important;
+}
+#entry-score-breakdown .score-node-market_structure::before { content:"▥" !important; color:#35e6cf !important; }
+#entry-score-breakdown .score-node-price_action::before { content:"∿" !important; color:#35e6cf !important; }
+#entry-score-breakdown .score-node-volume_analysis::before { content:"▮" !important; color:#ff8a26 !important; }
+#entry-score-breakdown .score-node-support_resistance::before { content:"⛨" !important; color:#ff5b67 !important; }
+#entry-score-breakdown .score-node-atm_ce_pe_strength::before { content:"♧" !important; color:#ffd43b !important; }
+#entry-score-breakdown .score-node-pivot_points::before { content:"◎" !important; color:#b38bff !important; }
+#entry-score-breakdown .score-node-fii_dii::before { content:"♜" !important; color:#38d7ec !important; }
+#entry-score-breakdown .score-node-liquidity_greeks::before { content:"♢" !important; color:#38d7ec !important; }
+#entry-score-breakdown .score-node-name {
+  font-size:10px !important; line-height:1.15 !important; letter-spacing:0 !important;
+  color:#d3e7f5 !important; text-shadow:none !important; overflow-wrap:anywhere !important;
+}
+#entry-score-breakdown .score-node strong {
+  min-width:0 !important; min-height:0 !important;
+  font-size:14px !important; line-height:1.1 !important; font-weight:800 !important;
+  text-shadow:none !important;
+}
+#entry-score-breakdown-status { margin-top:7px !important; }
+@media(max-width:520px) {
+  #entry-score-breakdown.score-radial-map { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+}
+
 </style>
 </head>
 
