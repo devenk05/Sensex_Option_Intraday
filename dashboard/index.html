@@ -1165,19 +1165,25 @@ input, textarea, select { color: var(--text); }
 
 
 /* Extra market context cards in the available left-column vertical space */
-/* Keep these three cards in the LEFT column, directly after DECISION.
-   On desktop the main dashboard grid is six columns wide: left cards span 2,
-   center AI score spans 3, and right MTF spans 1/2 depending on viewport. */
-.support-resistance-card,.key-levels-card,.volume-card {
-  grid-column:1 / span 2 !important;
-  min-width:0;
-  width:100%;
-  align-self:stretch;
+/* Place these cards inside the existing LEFT column only.
+   The metrics grid is visually arranged as left / center / right columns.
+   Force each card to the same grid track as SENSEX and DECISION. */
+.metrics > .support-resistance-card,
+.metrics > .key-levels-card,
+.metrics > .volume-card {
+  grid-column:1 / 2 !important;
+  grid-row:auto !important;
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  justify-self:stretch !important;
+  align-self:stretch !important;
+  box-sizing:border-box !important;
 }
-@media (min-width:1061px) {
+@media (max-width:760px) {
   .metrics > .support-resistance-card,
   .metrics > .key-levels-card,
-  .metrics > .volume-card { grid-column:1 / span 2 !important; }
+  .metrics > .volume-card { grid-column:1 / -1 !important; }
 }
 .sr-level-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; font-size:11px; color:var(--muted); }
 .sr-level-row strong { color:#e5f4ff; font-size:13px; text-align:right; }
