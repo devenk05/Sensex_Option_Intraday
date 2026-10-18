@@ -1075,7 +1075,14 @@ input, textarea, select { color: var(--text); }
 .atm-momentum-subtitle { margin-top:4px; color:#829caf; font-size:9px; }
 .atm-momentum-strike { color:#8baac2; font-size:9px; white-space:nowrap; }
 .atm-momentum-strike strong { color:#f1f8ff; font-size:12px; margin-left:3px; }
-.atm-momentum-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.atm-momentum-stats { display:grid; grid-template-columns:1fr; gap:8px; }
+.atm-momentum-ce-card,.atm-momentum-pe-card { width:100%; box-sizing:border-box; padding:8px 10px; }
+.atm-momentum-chart-wrap { margin:8px 0; }
+.atm-momentum-legend { display:flex; gap:14px; padding:4px 0 2px; color:#8baac2; font-size:9px; }
+.atm-momentum-legend span { display:flex; align-items:center; gap:5px; }
+.atm-momentum-legend i { display:inline-block; width:7px; height:7px; border-radius:50%; }
+.atm-momentum-legend .ce-dot { background:#35d6a0; }
+.atm-momentum-legend .pe-dot { background:#ff6686; }
 .atm-momentum-stat { min-width:0; padding:7px 9px; border-radius:7px; background:rgba(8,19,31,.75); border:1px solid rgba(255,255,255,.06); display:flex; flex-direction:column; gap:3px; }
 .atm-momentum-stat span { font-size:9px; letter-spacing:.06em; color:#8baac2; }
 .atm-momentum-stat strong { font-size:17px; line-height:1.1; color:#e8f6ff; }
@@ -1244,17 +1251,16 @@ input, textarea, select { color: var(--text); }
                 </div>
                 <div class="atm-momentum-strike">ATM <strong id="atm-momentum-strike">—</strong></div>
             </div>
-            <div class="atm-momentum-stats">
-                <div class="atm-momentum-stat ce">
-                    <span>CALL · CE</span><strong id="atm-momentum-ce-price">—</strong><small id="atm-momentum-ce-change">Waiting for live ticks</small>
-                </div>
-                <div class="atm-momentum-stat pe">
-                    <span>PUT · PE</span><strong id="atm-momentum-pe-price">—</strong><small id="atm-momentum-pe-change">Waiting for live ticks</small>
-                </div>
+            <div class="atm-momentum-stat ce atm-momentum-ce-card">
+                <span>CALL OPTION · CE PREMIUM</span><strong id="atm-momentum-ce-price">—</strong><small id="atm-momentum-ce-change">Waiting for live ticks</small>
             </div>
             <div class="atm-momentum-chart-wrap">
-                <div class="atm-momentum-chart-label"><span>PREMIUM TRACKER</span><span id="atm-momentum-chart-status">COLLECTING LIVE SAMPLES</span></div>
+                <div class="atm-momentum-chart-label"><span>ATM CE vs PE PREMIUM MOVEMENT</span><span id="atm-momentum-chart-status">COLLECTING LIVE SAMPLES</span></div>
                 <canvas id="atm-momentum-chart" aria-label="ATM call and put premium movement chart"></canvas>
+                <div class="atm-momentum-legend"><span><i class="ce-dot"></i> CE premium</span><span><i class="pe-dot"></i> PE premium</span></div>
+            </div>
+            <div class="atm-momentum-stat pe atm-momentum-pe-card">
+                <span>PUT OPTION · PE PREMIUM</span><strong id="atm-momentum-pe-price">—</strong><small id="atm-momentum-pe-change">Waiting for live ticks</small>
             </div>
         </section>
     </div>
