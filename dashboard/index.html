@@ -2597,13 +2597,32 @@ const atmMomentumHistory = { strike: null, ce: [], pe: [], times: [] };
 
 
 function removeDuplicateAtmMomentumPanels() {
-    const panels = Array.from(document.querySelectorAll(".atm-momentum-panel"));
-    panels.slice(1).forEach(panel => panel.remove());
+    const headings = Array.from(document.querySelectorAll(".atm-momentum-title, .metric-title, h1, h2, h3, div, section"))
+        .filter(el => (el.textContent || "").trim().replace(/\\s+/g, " ").toUpperCase() === "ATM OPTION MOMENTUM");
+    const kept = new Set();
+    headings.forEach(heading => {
+        let panel = heading.closest(".atm-momentum-panel");
+        if (!panel) panel = heading.closest("section, article, .metric-card, .card");
+        if (!panel) panel = heading.parentElement;
+        if (!panel) return;
+        if (kept.has("ATM_OPTION_MOMENTUM")) {
+            panel.remove();
+        } else {
+            kept.add("ATM_OPTION_MOMENTUM");
+        }
+    });
+}
+function installAtmMomentumDuplicateGuard() {
+    removeDuplicateAtmMomentumPanels();
+    if (window.__atmMomentumDuplicateObserver) return;
+    const observer = new MutationObserver(() => removeDuplicateAtmMomentumPanels());
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.__atmMomentumDuplicateObserver = observer;
 }
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", removeDuplicateAtmMomentumPanels, { once: true });
+    document.addEventListener("DOMContentLoaded", installAtmMomentumDuplicateGuard, { once: true });
 } else {
-    removeDuplicateAtmMomentumPanels();
+    installAtmMomentumDuplicateGuard();
 }
 
 function updateAtmOptionMomentum(data) {
