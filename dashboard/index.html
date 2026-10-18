@@ -928,6 +928,36 @@ input, textarea, select { color: var(--text); }
   .metrics-mtf-section .analysis-grid { grid-template-columns:minmax(0,1fr) !important; }
 }
 
+
+/* Dashboard readability adjustment: reduce entry score emphasis and enlarge MTF cards */
+.entry-score-card .metric-value {
+  font-size: clamp(24px, 2vw, 30px) !important;
+  line-height: 1.15 !important;
+}
+.metrics-mtf-section .analysis-card {
+  min-height: 145px !important;
+  padding: 14px !important;
+}
+.metrics-mtf-section .analysis-card > span,
+.metrics-mtf-section .analysis-card .analysis-label {
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+.metrics-mtf-section .analysis-card strong,
+.metrics-mtf-section .analysis-card .analysis-value {
+  font-size: 19px !important;
+  line-height: 1.25 !important;
+}
+.metrics-mtf-section .analysis-card p,
+.metrics-mtf-section .analysis-card .analysis-detail,
+.metrics-mtf-section .analysis-card .analysis-row {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+@media (max-width: 1050px) {
+  .metrics-mtf-section .analysis-card { min-height: 135px !important; padding: 12px !important; }
+}
+
 </style>
 </head>
 
