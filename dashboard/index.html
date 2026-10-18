@@ -929,6 +929,19 @@ input, textarea, select { color: var(--text); }
 }
 
 
+/* Further reduce AI score card footprint while preserving its circular map */
+@media (min-width: 1061px) {
+  .metrics {
+    grid-template-columns: minmax(205px, .78fr) minmax(325px, 1.28fr) minmax(320px, 1.18fr) !important;
+  }
+  .metrics > .entry-score-card {
+    padding: 10px !important;
+  }
+  .score-radial-map {
+    height: 350px !important;
+    min-height: 350px !important;
+  }
+}
 /* Layout-only adjustment: reduce center panel width and enlarge MTF cards; preserve text sizes */
 @media (min-width: 1061px) {
   .metrics {
