@@ -736,22 +736,6 @@ input, textarea, select { color: var(--text); }
     .timeframe-chart { height: 120px; }
 }
 
-/* Compact live charts below DECISION: independent of MTF cards */
-.quick-chart-card { grid-column: 1 / -1; min-width: 0; padding: 13px !important; }
-.quick-chart-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
-.quick-chart-subtitle { color:var(--muted); font-size:10px; margin-top:5px; }
-.quick-chart-live { display:flex; align-items:center; gap:6px; color:var(--green); font-size:9px; letter-spacing:.06em; white-space:nowrap; }
-.quick-chart-live i { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); }
-.quick-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.quick-chart-box { min-width:0; border:1px solid rgba(68,198,232,.16); border-radius:9px; padding:8px; background:rgba(3,10,19,.62); }
-.quick-chart-label { display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:10px; margin-bottom:5px; }
-.quick-chart-label span { font-size:8px; color:#7894a8; }
-.quick-candle-canvas { display:block; width:100%; height:155px; }
-.quick-chart-foot { color:#7894a8; font-size:9px; margin-top:8px; }
-@media(max-width:850px) {
-  .quick-chart-grid { grid-template-columns:1fr; }
-  .quick-candle-canvas { height:140px; }
-}
 /* Radial live AI score map */
 .entry-score-card { grid-column:span 2; }
 .score-calculation-note { margin-top:6px; max-width:720px; color:#8baac2; font-size:10px; line-height:1.5; }
@@ -1183,26 +1167,7 @@ input, textarea, select { color: var(--text); }
         <div class="metric-subtitle">Current setup status</div>
     </div>
 
-    <section class="metric-card quick-chart-card" id="quick-chart-panel">
-        <div class="quick-chart-head">
-            <div>
-                <div class="metric-title">LIVE CANDLE CHARTS</div>
-                <div class="quick-chart-subtitle">15-minute trend · 5-minute confirmation</div>
-            </div>
-            <span class="quick-chart-live"><i></i> LIVE DATA</span>
-        </div>
-        <div class="quick-chart-grid">
-            <div class="quick-chart-box">
-                <div class="quick-chart-label"><strong>SENSEX · 15M</strong><span id="quick-15m-status">WAITING</span></div>
-                <canvas id="quick-chart-15m" class="quick-candle-canvas" aria-label="Sensex 15 minute candlestick chart"></canvas>
-            </div>
-            <div class="quick-chart-box">
-                <div class="quick-chart-label"><strong>SENSEX · 5M</strong><span id="quick-5m-status">WAITING</span></div>
-                <canvas id="quick-chart-5m" class="quick-candle-canvas" aria-label="Sensex 5 minute candlestick chart"></canvas>
-            </div>
-        </div>
-        <div class="quick-chart-foot" id="quick-chart-foot">Charts appear when live OHLC candle data is available.</div>
-    </section>
+
     
 
     <section class="section metrics-mtf-section">
@@ -2366,70 +2331,6 @@ function updateOptionChainLive(data) {
         }).join("");
 }
 
-function renderQuickCandleChart(canvasId, statusId, data, timeframe) {
-    const canvas = document.getElementById(canvasId);
-    const status = document.getElementById(statusId);
-    if (!canvas) return 0;
-    const ctx = canvas.getContext("2d");
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const width = Math.max(240, rect.width || 300);
-    const height = Math.max(110, rect.height || 155);
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-
-    const keys = [
-      `candles_${timeframe}`, `ohlc_${timeframe}`,
-      `candles_${timeframe}m`, `ohlc_${timeframe}m`,
-      `candles_${timeframe}min`, `ohlc_${timeframe}min`,
-      `timeframe_${timeframe}`, `analysis_${timeframe}`
-    ];
-    let raw = null;
-    for (const key of keys) {
-      const v = data && data[key];
-      if (Array.isArray(v) && v.length) { raw = v; break; }
-      if (v && typeof v === "object") {
-        const list = v.candles || v.ohlc || v.bars || v.history;
-        if (Array.isArray(list) && list.length) { raw = list; break; }
-      }
-    }
-    for (const key of ["timeframes","multi_timeframe"]) {
-      const obj = data && data[key];
-      const v = obj && (obj[timeframe] || obj[timeframe+"m"] || obj[timeframe+"min"]);
-      if (!raw && v) raw = Array.isArray(v) ? v : (v.candles || v.ohlc || v.bars || v.history);
-    }
-    const candles = (Array.isArray(raw) ? raw : []).map(c => ({
-      open:Number(c.open ?? c.o), high:Number(c.high ?? c.h),
-      low:Number(c.low ?? c.l), close:Number(c.close ?? c.c)
-    })).filter(c => [c.open,c.high,c.low,c.close].every(Number.isFinite) && c.high >= c.low);
-
-    ctx.strokeStyle = "rgba(115,151,174,.16)";
-    for(let i=1;i<=3;i++){const y=height*i/4;ctx.beginPath();ctx.moveTo(4,y);ctx.lineTo(width-4,y);ctx.stroke();}
-    if(!candles.length){
-      ctx.fillStyle="#7894a8";ctx.font="11px Segoe UI,Arial,sans-serif";ctx.textAlign="center";
-      ctx.fillText("Waiting for live "+timeframe+"m OHLC candles",width/2,height/2);
-      if(status)status.textContent="NO CANDLE DATA";
-      return 0;
-    }
-    const shown=candles.slice(-Math.max(10,Math.floor((width-20)/8)));
-    const low=Math.min(...shown.map(c=>c.low)), high=Math.max(...shown.map(c=>c.high)), range=high-low||1;
-    const top=9,bottom=height-15, y=p=>bottom-(p-low)/range*(bottom-top);
-    const slot=(width-18)/shown.length, bw=Math.max(2,Math.min(8,slot*.58));
-    shown.forEach((c,i)=>{
-      const x=9+slot*i+slot/2, up=c.close>=c.open, color=up?"#35d6a0":"#ff6686";
-      ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=1.1;
-      ctx.beginPath();ctx.moveTo(x,y(c.high));ctx.lineTo(x,y(c.low));ctx.stroke();
-      const bt=Math.min(y(c.open),y(c.close)), bh=Math.max(2,Math.abs(y(c.open)-y(c.close)));
-      ctx.fillRect(x-bw/2,bt,bw,bh);
-    });
-    ctx.fillStyle="#7894a8";ctx.font="9px Segoe UI,Arial,sans-serif";ctx.textAlign="left";
-    ctx.fillText(high.toFixed(2),5,10);ctx.fillText(low.toFixed(2),5,height-2);
-    if(status)status.textContent=shown.length+" CANDLES";
-    return shown.length;
-}
-
 function renderTimeframeCandles(canvasId, statusId, data, timeframe) {
     const canvas = document.getElementById(canvasId);
     const status = document.getElementById(statusId);
@@ -2626,12 +2527,7 @@ async function updateDashboardLive() {
         updateOneMinuteEntryCard(data);
         renderTimeframeCandles("chart-15m", "chart-15m-status", data, "15");
         renderTimeframeCandles("chart-5m", "chart-5m-status", data, "5");
-        const quick15 = renderQuickCandleChart("quick-chart-15m", "quick-15m-status", data, "15");
-        const quick5 = renderQuickCandleChart("quick-chart-5m", "quick-5m-status", data, "5");
-        const quickFoot = document.getElementById("quick-chart-foot");
-        if (quickFoot) quickFoot.textContent = quick15 || quick5
-          ? "Candles rendered from available OHLC data. 15M: " + quick15 + " · 5M: " + quick5
-          : "Waiting for actual 15M / 5M OHLC arrays in live_state.json; no sample candles are fabricated.";
+
 
         const sensexData = data.live_sensex || data.sensex || {};
         const spotValue = Number(data.spot ?? sensexData.last_price);
