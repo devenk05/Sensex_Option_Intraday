@@ -929,7 +929,32 @@ input, textarea, select { color: var(--text); }
 }
 
 
-/* Dashboard readability adjustment: reduce entry score emphasis and enlarge MTF cards */
+/* Dashboard layout adjustment: slightly reduce center score panel and give MTF cards more room */
+@media (min-width: 1061px) {
+  .metrics {
+    grid-template-columns: minmax(205px, .78fr) minmax(390px, 1.55fr) minmax(275px, 1.05fr) !important;
+  }
+  .metrics > .entry-score-card {
+    min-width: 0 !important;
+  }
+  .score-radial-map {
+    height: 390px !important;
+    min-height: 390px !important;
+  }
+  .metrics-mtf-section .analysis-card {
+    min-height: 150px !important;
+    padding: 14px !important;
+  }
+}
+@media (min-width: 761px) and (max-width: 1060px) {
+  .metrics {
+    grid-template-columns: minmax(180px, .78fr) minmax(350px, 1.45fr) minmax(250px, 1.05fr) !important;
+  }
+  .metrics-mtf-section .analysis-card {
+    min-height: 140px !important;
+  }
+}
+
 
 .metrics-mtf-section .analysis-direction {
   font-size: 20px !important;
