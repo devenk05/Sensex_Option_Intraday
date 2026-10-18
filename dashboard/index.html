@@ -1067,6 +1067,26 @@ input, textarea, select { color: var(--text); }
   #entry-score-breakdown.score-radial-map { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
 }
 
+
+/* Compact ATM option momentum panel inside AI score card */
+.atm-momentum-panel { margin-top:12px; padding:10px; border:1px solid rgba(52,198,232,.2); border-radius:10px; background:linear-gradient(145deg,rgba(7,24,39,.88),rgba(4,15,27,.82)); }
+.atm-momentum-header { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:9px; }
+.atm-momentum-title { color:#d8edf9; font-size:11px; font-weight:800; letter-spacing:.07em; }
+.atm-momentum-subtitle { margin-top:4px; color:#829caf; font-size:9px; }
+.atm-momentum-strike { color:#8baac2; font-size:9px; white-space:nowrap; }
+.atm-momentum-strike strong { color:#f1f8ff; font-size:12px; margin-left:3px; }
+.atm-momentum-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.atm-momentum-stat { min-width:0; padding:7px 9px; border-radius:7px; background:rgba(8,19,31,.75); border:1px solid rgba(255,255,255,.06); display:flex; flex-direction:column; gap:3px; }
+.atm-momentum-stat span { font-size:9px; letter-spacing:.06em; color:#8baac2; }
+.atm-momentum-stat strong { font-size:17px; line-height:1.1; color:#e8f6ff; }
+.atm-momentum-stat small { font-size:9px; color:#8baac2; overflow-wrap:anywhere; }
+.atm-momentum-stat.ce { border-left:2px solid #35d6a0; }
+.atm-momentum-stat.pe { border-left:2px solid #ff6686; }
+.atm-momentum-chart-wrap { margin-top:8px; padding:7px 8px 3px; border-radius:7px; background:rgba(2,10,18,.55); }
+.atm-momentum-chart-label { display:flex; justify-content:space-between; gap:8px; color:#7894a8; font-size:8px; letter-spacing:.06em; }
+#atm-momentum-chart { display:block; width:100%; height:105px; }
+@media(max-width:900px) { #atm-momentum-chart { height:90px; } }
+
 </style>
 </head>
 
@@ -1215,6 +1235,28 @@ input, textarea, select { color: var(--text); }
             <div class="score-ai-core" aria-label="AI score engine"><div class="score-ai-orbit"></div><strong>AI</strong><span>CONFLUENCE</span></div>
         </div>
         <div id="entry-score-breakdown-status" class="score-breakdown-status">Waiting for live component scores…</div>
+
+        <section class="atm-momentum-panel" id="atm-momentum-panel">
+            <div class="atm-momentum-header">
+                <div>
+                    <div class="atm-momentum-title">ATM OPTION MOMENTUM</div>
+                    <div class="atm-momentum-subtitle">Live ATM CE vs PE premium movement</div>
+                </div>
+                <div class="atm-momentum-strike">ATM <strong id="atm-momentum-strike">—</strong></div>
+            </div>
+            <div class="atm-momentum-stats">
+                <div class="atm-momentum-stat ce">
+                    <span>CALL · CE</span><strong id="atm-momentum-ce-price">—</strong><small id="atm-momentum-ce-change">Waiting for live ticks</small>
+                </div>
+                <div class="atm-momentum-stat pe">
+                    <span>PUT · PE</span><strong id="atm-momentum-pe-price">—</strong><small id="atm-momentum-pe-change">Waiting for live ticks</small>
+                </div>
+            </div>
+            <div class="atm-momentum-chart-wrap">
+                <div class="atm-momentum-chart-label"><span>PREMIUM TRACKER</span><span id="atm-momentum-chart-status">COLLECTING LIVE SAMPLES</span></div>
+                <canvas id="atm-momentum-chart" aria-label="ATM call and put premium movement chart"></canvas>
+            </div>
+        </section>
     </div>
     
 
@@ -2397,6 +2439,104 @@ function updateOptionChainLive(data) {
         }).join("");
 }
 
+const atmMomentumHistory = { strike: null, ce: [], pe: [], times: [] };
+
+function updateAtmOptionMomentum(data) {
+    const options = data && (data.option_chain || data.options);
+    const spot = Number(data && (data.spot ?? (data.live_sensex || data.sensex || {}).last_price));
+    const strikeFromData = Number(data && (data.atm_strike ?? data.selected_strike ?? data.atmStrike));
+    const strike = Number.isFinite(strikeFromData) && strikeFromData > 0
+        ? strikeFromData
+        : (Number.isFinite(spot) && spot > 0 ? Math.round(spot / 100) * 100 : NaN);
+    const strikeEl = document.getElementById("atm-momentum-strike");
+    const cePriceEl = document.getElementById("atm-momentum-ce-price");
+    const pePriceEl = document.getElementById("atm-momentum-pe-price");
+    const ceChangeEl = document.getElementById("atm-momentum-ce-change");
+    const peChangeEl = document.getElementById("atm-momentum-pe-change");
+    const statusEl = document.getElementById("atm-momentum-chart-status");
+    if (!Array.isArray(options) || !options.length || !Number.isFinite(strike)) {
+        if (statusEl) statusEl.textContent = "WAITING FOR OPTION DATA";
+        drawAtmMomentumChart();
+        return;
+    }
+    const near = options.filter(o => Number.isFinite(Number(o.strike)))
+        .sort((a,b) => Math.abs(Number(a.strike)-strike)-Math.abs(Number(b.strike)-strike))[0];
+    const actualStrike = near ? Number(near.strike) : strike;
+    const grouped = new Map();
+    for (const o of options) {
+        const st = Number(o.strike);
+        if (!Number.isFinite(st)) continue;
+        if (!grouped.has(st)) grouped.set(st,{ce:null,pe:null});
+        const row=grouped.get(st);
+        const type=String(o.option_type || o.type || "").toUpperCase();
+        if (type==="CE") row.ce=Number(o.ce_ltp ?? o.ltp ?? o.last_price);
+        if (type==="PE") row.pe=Number(o.pe_ltp ?? o.ltp ?? o.last_price);
+        if (type==="BOTH") {
+            row.ce=Number(o.ce_ltp); row.pe=Number(o.pe_ltp);
+        }
+        if (o.ce_ltp != null && o.pe_ltp != null) {
+            row.ce=Number(o.ce_ltp); row.pe=Number(o.pe_ltp);
+        }
+    }
+    const pair=grouped.get(actualStrike);
+    if (!pair) {
+        if(statusEl)statusEl.textContent="ATM STRIKE NOT IN CHAIN";
+        drawAtmMomentumChart(); return;
+    }
+    const ce=Number.isFinite(pair.ce)&&pair.ce>0?pair.ce:null;
+    const pe=Number.isFinite(pair.pe)&&pair.pe>0?pair.pe:null;
+    if(strikeEl)strikeEl.textContent=actualStrike.toLocaleString("en-IN");
+    if(cePriceEl)cePriceEl.textContent=ce==null?"—":ce.toFixed(2);
+    if(pePriceEl)pePriceEl.textContent=pe==null?"—":pe.toFixed(2);
+    if(atmMomentumHistory.strike!==actualStrike){
+        atmMomentumHistory.strike=actualStrike;
+        atmMomentumHistory.ce=[];atmMomentumHistory.pe=[];atmMomentumHistory.times=[];
+    }
+    const now=Date.now();
+    const lastTime=atmMomentumHistory.times[atmMomentumHistory.times.length-1]||0;
+    if(now-lastTime>=4000 && (ce!=null || pe!=null)){
+        atmMomentumHistory.times.push(now);
+        atmMomentumHistory.ce.push(ce);
+        atmMomentumHistory.pe.push(pe);
+        const maxPoints=60;
+        for(const key of ["times","ce","pe"]) if(atmMomentumHistory[key].length>maxPoints)atmMomentumHistory[key].shift();
+    }
+    const change=(arr,current)=>{
+        const valid=arr.filter(v=>Number.isFinite(v));
+        if(current==null||valid.length<2)return "Collecting live samples";
+        const first=valid[0],delta=current-first,pct=first?delta/first*100:0;
+        return (delta>0?"+":"")+delta.toFixed(2)+" ("+(pct>0?"+":"")+pct.toFixed(2)+"%)";
+    };
+    if(ceChangeEl)ceChangeEl.textContent=change(atmMomentumHistory.ce,ce);
+    if(peChangeEl)peChangeEl.textContent=change(atmMomentumHistory.pe,pe);
+    if(statusEl)statusEl.textContent=atmMomentumHistory.times.length+" LIVE SAMPLES";
+    drawAtmMomentumChart();
+}
+
+function drawAtmMomentumChart(){
+    const canvas=document.getElementById("atm-momentum-chart");if(!canvas)return;
+    const ctx=canvas.getContext("2d"),rect=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+    const w=Math.max(240,rect.width||300),h=Math.max(75,rect.height||105);
+    canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle="rgba(115,151,174,.13)";ctx.lineWidth=1;
+    for(let i=1;i<=3;i++){const y=h*i/4;ctx.beginPath();ctx.moveTo(4,y);ctx.lineTo(w-4,y);ctx.stroke();}
+    const all=[...atmMomentumHistory.ce,...atmMomentumHistory.pe].filter(Number.isFinite);
+    if(all.length<2){
+        ctx.fillStyle="#7894a8";ctx.font="10px Segoe UI,Arial,sans-serif";ctx.textAlign="center";
+        ctx.fillText("Live CE / PE premium samples will plot here",w/2,h/2);return;
+    }
+    let min=Math.min(...all),max=Math.max(...all);if(max===min){min-=1;max+=1;}
+    const pad=8,px=i=>pad+i/(Math.max(1,Math.max(atmMomentumHistory.ce.length,atmMomentumHistory.pe.length)-1))*(w-pad*2);
+    const py=v=>h-12-(v-min)/(max-min)*(h-24);
+    const draw=(arr,color)=>{
+        ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();let started=false;
+        arr.forEach((v,i)=>{if(!Number.isFinite(v)){started=false;return;}if(!started){ctx.moveTo(px(i),py(v));started=true;}else ctx.lineTo(px(i),py(v));});
+        ctx.stroke();
+    };
+    draw(atmMomentumHistory.ce,"#35d6a0");draw(atmMomentumHistory.pe,"#ff6686");
+    ctx.font="8px Segoe UI,Arial,sans-serif";ctx.textAlign="left";ctx.fillStyle="#35d6a0";ctx.fillText("CE",5,10);ctx.fillStyle="#ff6686";ctx.fillText("PE",25,10);
+}
+
 function renderTimeframeCandles(canvasId, statusId, data, timeframe) {
     const canvas = document.getElementById(canvasId);
     const status = document.getElementById(statusId);
@@ -2591,6 +2731,7 @@ async function updateDashboardLive() {
         const data = await response.json();
         updateOptionChainLive(data);
         updateOneMinuteEntryCard(data);
+        updateAtmOptionMomentum(data);
         renderTimeframeCandles("chart-15m", "chart-15m-status", data, "15");
         renderTimeframeCandles("chart-5m", "chart-5m-status", data, "5");
 
