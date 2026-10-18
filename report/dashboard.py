@@ -1177,6 +1177,121 @@ td {{
  .metrics-mtf-section .analysis-grid { grid-template-columns:minmax(0,1fr) !important; }
 }
 
+ 
+/* Reference composition: left KPI stack | centered AI map | right 15m/5m/1m stack */
+.metrics {{
+  display:grid !important;
+  grid-template-columns:minmax(205px, 0.78fr) minmax(420px, 1.75fr) minmax(245px, 0.9fr) !important;
+  grid-template-rows:repeat(5, min-content) !important;
+  align-items:start !important;
+  gap:10px !important;
+  width:100% !important;
+  min-width:0 !important;
+  margin-bottom:18px !important;
+  overflow:visible !important;
+}}
+.metrics > .metric-card {{
+  min-width:0 !important; width:auto !important; max-width:100% !important;
+  height:auto !important; min-height:0 !important; align-self:start !important;
+  grid-row:auto !important; box-sizing:border-box !important; padding:14px !important;
+}}
+.metrics > .sensex-spot-card {{ grid-column:1 !important; grid-row:1 !important; }}
+.metrics > .market-status-card {{ grid-column:1 !important; grid-row:2 !important; }}
+.metrics > .market-bias-card {{ grid-column:1 !important; grid-row:3 !important; }}
+.metrics > .atm-strike-card {{ grid-column:1 !important; grid-row:4 !important; }}
+.metrics > .decision-card {{ grid-column:1 !important; grid-row:5 !important; }}
+.metrics > .entry-score-card {{
+  grid-column:2 !important; grid-row:1 / span 5 !important;
+  min-width:0 !important; width:auto !important; align-self:stretch !important;
+}}
+.metrics > .metrics-mtf-section {{
+  grid-column:3 !important; grid-row:1 / span 5 !important;
+  min-width:0 !important; width:auto !important; margin:0 !important; padding:0 !important;
+}}
+.metrics-mtf-section .section-title {{ margin:0 0 10px !important; }}
+.metrics-mtf-section .analysis-grid {{
+  display:grid !important; grid-template-columns:minmax(0,1fr) !important;
+  gap:10px !important; width:100% !important;
+}}
+.metrics-mtf-section .analysis-card {{
+  min-width:0 !important; min-height:135px !important; height:auto !important;
+  width:auto !important; padding:12px !important;
+}}
+.sensex-spot-card .sensex-open-change {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:4px !important; }}
+.sensex-spot-card .sensex-open-change > div {{ min-width:0 !important; overflow-wrap:anywhere !important; }}
+
+/* Keep the AI map truly circular; remove old grid-based node overrides */
+.score-radial-map {{
+  position:relative !important; display:block !important; width:100% !important;
+  height:430px !important; min-height:430px !important; margin:4px auto 0 !important;
+  padding:0 !important; isolation:isolate !important; overflow:hidden !important;
+}}
+.score-radial-map:before {{
+  content:"" !important; position:absolute !important; left:50% !important; top:50% !important;
+  width:min(350px,78%) !important; height:auto !important; aspect-ratio:1 / 1 !important;
+  transform:translate(-50%,-50%) !important; border-radius:50% !important;
+}}
+.score-radial-map:after {{
+  content:"" !important; position:absolute !important; left:50% !important; top:50% !important;
+  width:min(235px,52%) !important; height:auto !important; aspect-ratio:1 / 1 !important;
+  transform:translate(-50%,-50%) !important; border-radius:50% !important;
+}}
+.score-node {{
+  position:absolute !important; display:flex !important; flex-direction:column !important;
+  justify-content:center !important; align-items:center !important; text-align:center !important;
+  width:clamp(78px,22%,125px) !important; min-height:42px !important; padding:2px !important;
+  border:0 !important; background:transparent !important; box-shadow:none !important;
+  gap:3px !important; z-index:2 !important; transform:none;
+}}
+.score-node-name {{ font-size:clamp(8px,.72vw,11px) !important; line-height:1.15 !important; }}
+.score-node > strong {{ display:block !important; min-height:0 !important; font-size:clamp(17px,1.6vw,24px) !important; }}
+.score-node > small {{ display:none !important; }}
+.score-node-market_structure {{ left:50% !important; top:1% !important; transform:translateX(-50%) !important; }}
+.score-node-price_action {{ left:5% !important; top:17% !important; }}
+.score-node-volume_analysis {{ right:5% !important; top:17% !important; left:auto !important; transform:none !important; }}
+.score-node-atm_ce_pe_strength {{ left:0 !important; top:43% !important; }}
+.score-node-support_resistance {{ right:0 !important; top:43% !important; left:auto !important; transform:none !important; }}
+.score-node-pivot_points {{ left:5% !important; bottom:1% !important; top:auto !important; }}
+.score-node-liquidity_greeks {{ left:50% !important; bottom:0 !important; top:auto !important; transform:translateX(-50%) !important; }}
+.score-node-fii_dii {{ right:5% !important; bottom:1% !important; top:auto !important; left:auto !important; transform:none !important; }}
+.score-ai-core {{
+  position:absolute !important; left:50% !important; top:50% !important;
+  transform:translate(-50%,-50%) !important; width:clamp(92px,25%,125px) !important;
+  height:auto !important; aspect-ratio:1 / 1 !important; border-radius:50% !important;
+  z-index:3 !important; display:flex !important; flex-direction:column !important;
+  justify-content:center !important; align-items:center !important;
+}}
+.score-ai-core > strong {{ font-size:clamp(32px,3.6vw,46px) !important; }}
+@media (max-width:1050px) {{
+  .metrics {{ grid-template-columns:minmax(180px,.8fr) minmax(350px,1.5fr) minmax(215px,.9fr) !important; gap:8px !important; }}
+  .metrics > .metric-card {{ padding:10px !important; }}
+  .score-radial-map {{ height:390px !important; min-height:390px !important; }}
+  .score-node {{ width:clamp(68px,23%,100px) !important; }}
+  .score-node-name {{ font-size:8px !important; }}
+  .score-ai-core {{ width:clamp(82px,25%,105px) !important; }}
+  .metrics-mtf-section .analysis-card {{ min-height:120px !important; padding:10px !important; }}
+}}
+@media (max-width:760px) {{
+  .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)) !important; grid-template-rows:auto !important; }}
+  .metrics > .sensex-spot-card {{ grid-column:1 !important; grid-row:1 !important; }}
+  .metrics > .market-status-card {{ grid-column:2 !important; grid-row:1 !important; }}
+  .metrics > .market-bias-card {{ grid-column:1 !important; grid-row:2 !important; }}
+  .metrics > .atm-strike-card {{ grid-column:2 !important; grid-row:2 !important; }}
+  .metrics > .decision-card {{ grid-column:1 / -1 !important; grid-row:3 !important; }}
+  .metrics > .entry-score-card {{ grid-column:1 / -1 !important; grid-row:4 !important; }}
+  .metrics > .metrics-mtf-section {{ grid-column:1 / -1 !important; grid-row:5 !important; }}
+  .metrics-mtf-section .analysis-grid {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; }}
+  .metrics-mtf-section .analysis-card {{ min-height:120px !important; }}
+  .score-radial-map {{ height:360px !important; min-height:360px !important; }}
+}}
+@media (max-width:520px) {{
+  .metrics {{ grid-template-columns:minmax(0,1fr) !important; }}
+  .metrics > .sensex-spot-card, .metrics > .market-status-card, .metrics > .market-bias-card,
+  .metrics > .atm-strike-card, .metrics > .decision-card, .metrics > .entry-score-card,
+  .metrics > .metrics-mtf-section {{ grid-column:1 !important; grid-row:auto !important; }}
+  .metrics-mtf-section .analysis-grid {{ grid-template-columns:minmax(0,1fr) !important; }}
+}}
+
 </style>
 </head>
 
