@@ -705,6 +705,37 @@ input, textarea, select { color: var(--text); }
 @media (max-width:760px) { .sidebar { width:68px; padding:18px 8px; } .logo { padding:5px 4px 22px; font-size:0; } .logo-mark { flex:0 0 35px; } .nav-title, .nav-item span:not(.nav-icon), .sidebar-footer { display:none; } .nav-item { justify-content:center; padding:12px 4px; } .main { padding:18px 12px 100px; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .jarvis-chat { right:14px; bottom:88px; } .jarvis-chat-launcher { right:16px; bottom:15px; } }
 
 
+/* 15M / 5M candlestick charts inside timeframe cards */
+.timeframe-chart-wrap {
+    margin: 8px 0 12px;
+    padding: 8px 8px 4px;
+    border: 1px solid rgba(68,198,232,.16);
+    border-radius: 8px;
+    background: rgba(3,10,19,.62);
+}
+.timeframe-chart-label {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 5px;
+    color: var(--muted);
+    font-size: 9px;
+    letter-spacing: .06em;
+}
+.timeframe-chart-label span { color: #718da2; font-size: 8px; letter-spacing: 0; }
+.timeframe-chart {
+    display: block;
+    width: 100%;
+    height: 150px;
+}
+.metrics-mtf-section .analysis-card { min-width: 0; }
+@media (max-width: 850px) {
+    .timeframe-chart { height: 135px; }
+}
+@media (max-width: 520px) {
+    .timeframe-chart { height: 120px; }
+}
+
 /* Radial live AI score map */
 .entry-score-card { grid-column:span 2; }
 .score-calculation-note { margin-top:6px; max-width:720px; color:#8baac2; font-size:10px; line-height:1.5; }
@@ -1156,6 +1187,10 @@ input, textarea, select { color: var(--text); }
         <div class="analysis-direction bearish">
             BEARISH
         </div>
+        <div class="timeframe-chart-wrap">
+            <div class="timeframe-chart-label">15M CANDLE CHART <span id="chart-15m-status">WAITING FOR CANDLES</span></div>
+            <canvas class="timeframe-chart" id="chart-15m" role="img" aria-label="15 minute candlestick chart"></canvas>
+        </div>
 
         <div class="detail-list">
             
@@ -1177,6 +1212,10 @@ input, textarea, select { color: var(--text); }
 
         <div class="analysis-direction bearish">
             BEARISH
+        </div>
+        <div class="timeframe-chart-wrap">
+            <div class="timeframe-chart-label">5M CANDLE CHART <span id="chart-5m-status">WAITING FOR CANDLES</span></div>
+            <canvas class="timeframe-chart" id="chart-5m" role="img" aria-label="5 minute candlestick chart"></canvas>
         </div>
 
         <div class="detail-list">
@@ -2290,6 +2329,81 @@ function updateOptionChainLive(data) {
         }).join("");
 }
 
+function renderTimeframeCandles(canvasId, statusId, data, timeframe) {
+    const canvas = document.getElementById(canvasId);
+    const status = document.getElementById(statusId);
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(260, rect.width || 320);
+    const height = Math.max(110, rect.height || 150);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const containers = [
+        data && data[`candles_${timeframe}`],
+        data && data[`ohlc_${timeframe}`],
+        data && data[`timeframe_${timeframe}`],
+        data && data.multi_timeframe && data.multi_timeframe[timeframe],
+        data && data.timeframes && data.timeframes[timeframe],
+        data && data[`${timeframe}_minute_analysis`],
+        data && data[`${timeframe}_min_analysis`],
+        data && data[`analysis_${timeframe}`]
+    ];
+    let raw = containers.find(value => Array.isArray(value) && value.length);
+    if (!raw) {
+        const analysis = containers.find(value => value && typeof value === "object" && !Array.isArray(value));
+        raw = analysis && (analysis.candles || analysis.ohlc || analysis.history || analysis.bars);
+    }
+    const candles = (Array.isArray(raw) ? raw : []).map(item => ({
+        time: item.time || item.timestamp || item.datetime || "",
+        open: Number(item.open ?? item.o),
+        high: Number(item.high ?? item.h),
+        low: Number(item.low ?? item.l),
+        close: Number(item.close ?? item.c)
+    })).filter(c => [c.open,c.high,c.low,c.close].every(Number.isFinite) && c.high >= c.low);
+    ctx.strokeStyle = "rgba(115,151,174,.13)";
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+        const y = (height - 14) * i / 4 + 4;
+        ctx.beginPath(); ctx.moveTo(5, y); ctx.lineTo(width - 5, y); ctx.stroke();
+    }
+    if (!candles.length) {
+        ctx.fillStyle = "#7894a8";
+        ctx.font = "11px Segoe UI, Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Waiting for live " + timeframe + "m OHLC candles", width / 2, height / 2);
+        if (status) status.textContent = "NO CANDLE DATA";
+        return;
+    }
+    const visible = candles.slice(-Math.max(8, Math.floor((width - 24) / 9)));
+    const min = Math.min(...visible.map(c => c.low));
+    const max = Math.max(...visible.map(c => c.high));
+    const range = max - min || 1;
+    const top = 7, bottom = height - 16;
+    const y = price => bottom - ((price - min) / range) * (bottom - top);
+    const slot = (width - 20) / visible.length;
+    const bodyWidth = Math.max(3, Math.min(9, slot * .56));
+    visible.forEach((c, i) => {
+        const x = 10 + slot * i + slot / 2;
+        const up = c.close >= c.open;
+        const color = up ? "#35d6a0" : "#ff6686";
+        ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(x, y(c.high)); ctx.lineTo(x, y(c.low)); ctx.stroke();
+        const bodyTop = Math.min(y(c.open), y(c.close));
+        const bodyHeight = Math.max(2, Math.abs(y(c.open) - y(c.close)));
+        ctx.fillRect(x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight);
+    });
+    ctx.fillStyle = "#7894a8";
+    ctx.font = "9px Segoe UI, Arial, sans-serif";
+    ctx.textAlign = "left"; ctx.fillText(max.toFixed(2), 5, 10);
+    ctx.fillText(min.toFixed(2), 5, height - 3);
+    if (status) status.textContent = visible.length + " CANDLES";
+}
+
 function updateOneMinuteEntryCard(data) {
     const directionEl = document.getElementById("one-minute-direction");
     const detailsEl = document.getElementById("one-minute-details");
@@ -2409,6 +2523,8 @@ async function updateDashboardLive() {
         const data = await response.json();
         updateOptionChainLive(data);
         updateOneMinuteEntryCard(data);
+        renderTimeframeCandles("chart-15m", "chart-15m-status", data, "15");
+        renderTimeframeCandles("chart-5m", "chart-5m-status", data, "5");
 
         const sensexData = data.live_sensex || data.sensex || {};
         const spotValue = Number(data.spot ?? sensexData.last_price);
