@@ -1192,6 +1192,16 @@ input, textarea, select { color: var(--text); }
 .volume-bar-fill { width:0%; height:100%; border-radius:99px; background:linear-gradient(90deg,#20c997,#36d9f2); transition:width .25s ease; }
 @media(max-width:760px) { .support-resistance-card,.key-levels-card,.volume-card { grid-column:1 / -1 !important; } }
 
+/* Independent left stack: avoid CSS Grid stretching blank space between cards */
+.metrics { display:grid !important; grid-template-columns:minmax(230px,.95fr) minmax(430px,1.7fr) minmax(330px,1.35fr) !important; align-items:start !important; gap:12px !important; margin-bottom:16px !important; }
+.metrics-left-stack { grid-column:1 !important; grid-row:1 !important; display:flex !important; flex-direction:column !important; gap:12px !important; min-width:0 !important; }
+.metrics-left-stack > .metric-card { width:100% !important; margin:0 !important; }
+.metrics > .entry-score-card { grid-column:2 !important; grid-row:1 !important; min-width:0 !important; }
+.metrics > .metrics-mtf-section { grid-column:3 !important; grid-row:1 !important; min-width:0 !important; width:100% !important; margin:0 !important; }
+.metrics-mtf-section .analysis-grid { grid-template-columns:minmax(0,1fr) !important; }
+@media(max-width:1100px){.metrics{grid-template-columns:minmax(210px,.85fr) minmax(0,1.5fr)!important}.metrics-left-stack{grid-column:1!important;grid-row:1!important}.metrics>.entry-score-card{grid-column:2!important;grid-row:1!important}.metrics>.metrics-mtf-section{grid-column:1/-1!important;grid-row:2!important}.metrics-mtf-section .analysis-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:760px){.metrics{grid-template-columns:minmax(0,1fr)!important}.metrics-left-stack,.metrics>.entry-score-card,.metrics>.metrics-mtf-section{grid-column:1!important;grid-row:auto!important}.metrics-mtf-section .analysis-grid{grid-template-columns:minmax(0,1fr)!important}}
+
 </style>
 </head>
 
@@ -1290,7 +1300,8 @@ input, textarea, select { color: var(--text); }
     <section class="metrics">
 
         
-    <div class="metric-card sensex-spot-card">
+    <div class="metrics-left-stack">
+<div class="metric-card sensex-spot-card">
         <div class="metric-title">SENSEX</div>
         <div class="metric-value">—</div>
         <div class="metric-subtitle">Live Spot</div>
@@ -1302,22 +1313,66 @@ input, textarea, select { color: var(--text); }
     </div>
     
 
-        
-    <div class="metric-card market-status-card">
+<div class="metric-card market-status-card">
         <div class="metric-title">MARKET STATUS</div>
         <div class="metric-value"><span class="status-badge positive">TRADING</span></div>
         <div class="metric-subtitle">Updated: 2026-10-07 13:12:52</div>
     </div>
     
 
-        
-    <div class="metric-card market-bias-card">
+<div class="metric-card market-bias-card">
         <div class="metric-title">MARKET BIAS</div>
         <div class="metric-value"><span class="bearish">BEARISH</span></div>
         <div class="metric-subtitle">Structure + price action</div>
     </div>
     
 
+<div class="metric-card atm-strike-card">
+        <div class="metric-title">ATM STRIKE</div>
+        <div class="metric-value">72,800</div>
+        <div class="metric-subtitle">Selected Sensex strike</div>
+    </div>
+    
+
+<div class="metric-card decision-card">
+        <div class="metric-title">DECISION</div>
+        <div class="metric-value"><span class="status-badge warning">WAIT</span></div>
+        <div class="metric-subtitle">Current setup status</div>
+    </div>
+
+    
+<div class="metric-card support-resistance-card">
+        <div class="metric-title">SUPPORT / RESISTANCE</div>
+        <div class="sr-level-row"><span>Support</span><strong id="dashboard-support-level">—</strong></div>
+        <div class="sr-level-row"><span>Resistance</span><strong id="dashboard-resistance-level">—</strong></div>
+        <div class="metric-subtitle" id="dashboard-sr-status">Waiting for live levels</div>
+    </div>
+
+    
+<div class="metric-card key-levels-card">
+        <div class="metric-title">LEVELS</div>
+        <div class="sr-level-row"><span>Pivot</span><strong id="dashboard-pivot-level">—</strong></div>
+        <div class="sr-level-row"><span>Day High</span><strong id="dashboard-day-high">—</strong></div>
+        <div class="sr-level-row"><span>Day Low</span><strong id="dashboard-day-low">—</strong></div>
+        <div class="metric-subtitle" id="dashboard-levels-status">Waiting for live levels</div>
+    </div>
+
+    
+<div class="metric-card volume-card">
+        <div class="metric-title">VOLUME</div>
+        <div class="volume-main-value" id="dashboard-volume-value">—</div>
+        <div class="volume-bar-track"><div id="dashboard-volume-bar" class="volume-bar-fill"></div></div>
+        <div class="sr-level-row"><span>Volume trend</span><strong id="dashboard-volume-trend">—</strong></div>
+        <div class="metric-subtitle" id="dashboard-volume-status">Waiting for live volume data</div>
+    </div>
+
+
+   
+</div>
+        
+    
+        
+    
         
     <div class="metric-card entry-score-card">
         <div class="metric-title">AI ENTRY SCORE</div>
@@ -1372,45 +1427,9 @@ input, textarea, select { color: var(--text); }
     
 
         
-    <div class="metric-card atm-strike-card">
-        <div class="metric-title">ATM STRIKE</div>
-        <div class="metric-value">72,800</div>
-        <div class="metric-subtitle">Selected Sensex strike</div>
-    </div>
     
-
         
-    <div class="metric-card decision-card">
-        <div class="metric-title">DECISION</div>
-        <div class="metric-value"><span class="status-badge warning">WAIT</span></div>
-        <div class="metric-subtitle">Current setup status</div>
-    </div>
-
-    <div class="metric-card support-resistance-card">
-        <div class="metric-title">SUPPORT / RESISTANCE</div>
-        <div class="sr-level-row"><span>Support</span><strong id="dashboard-support-level">—</strong></div>
-        <div class="sr-level-row"><span>Resistance</span><strong id="dashboard-resistance-level">—</strong></div>
-        <div class="metric-subtitle" id="dashboard-sr-status">Waiting for live levels</div>
-    </div>
-
-    <div class="metric-card key-levels-card">
-        <div class="metric-title">LEVELS</div>
-        <div class="sr-level-row"><span>Pivot</span><strong id="dashboard-pivot-level">—</strong></div>
-        <div class="sr-level-row"><span>Day High</span><strong id="dashboard-day-high">—</strong></div>
-        <div class="sr-level-row"><span>Day Low</span><strong id="dashboard-day-low">—</strong></div>
-        <div class="metric-subtitle" id="dashboard-levels-status">Waiting for live levels</div>
-    </div>
-
-    <div class="metric-card volume-card">
-        <div class="metric-title">VOLUME</div>
-        <div class="volume-main-value" id="dashboard-volume-value">—</div>
-        <div class="volume-bar-track"><div id="dashboard-volume-bar" class="volume-bar-fill"></div></div>
-        <div class="sr-level-row"><span>Volume trend</span><strong id="dashboard-volume-trend">—</strong></div>
-        <div class="metric-subtitle" id="dashboard-volume-status">Waiting for live volume data</div>
-    </div>
-
-
-    
+     
 
     <section class="section metrics-mtf-section">
 
