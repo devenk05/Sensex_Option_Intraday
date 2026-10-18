@@ -1116,6 +1116,53 @@ input, textarea, select { color: var(--text); }
   .atm-single-chart { height:100px !important; }
 }
 
+
+/* Use the empty lower area of the center score column for larger ATM CE/PE panels */
+@media (min-width: 1061px) {
+  .metrics > .entry-score-card {
+    display:flex !important;
+    flex-direction:column !important;
+    min-height:100% !important;
+  }
+  .metrics > .entry-score-card > .atm-momentum-panel {
+    flex:1 1 auto !important;
+    display:flex !important;
+    flex-direction:column !important;
+    min-height:0 !important;
+    margin-top:12px !important;
+    padding:12px !important;
+  }
+  .atm-momentum-panel .atm-option-track {
+    flex:1 1 0 !important;
+    grid-template-columns:minmax(235px,.9fr) minmax(0,1.6fr) !important;
+    min-height:165px !important;
+    margin-top:10px !important;
+    gap:10px !important;
+  }
+  .atm-momentum-panel .atm-momentum-ce-card,
+  .atm-momentum-panel .atm-momentum-pe-card {
+    min-height:165px !important;
+    padding:18px !important;
+    justify-content:center !important;
+  }
+  .atm-momentum-panel .atm-momentum-stat span { font-size:11px !important; }
+  .atm-momentum-panel .atm-momentum-stat strong { font-size:26px !important; }
+  .atm-momentum-panel .atm-momentum-stat small { font-size:11px !important; }
+  .atm-momentum-panel .atm-single-chart-wrap {
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:stretch !important;
+    min-height:165px !important;
+    padding:10px 12px 6px !important;
+  }
+  .atm-momentum-panel .atm-single-chart { flex:1 1 auto !important; height:125px !important; min-height:125px !important; }
+}
+@media (min-width: 651px) and (max-width: 1060px) {
+  .atm-option-track { grid-template-columns:minmax(190px,.85fr) minmax(0,1.4fr) !important; }
+  .atm-momentum-ce-card,.atm-momentum-pe-card { min-height:125px !important; padding:14px !important; }
+  .atm-single-chart { height:110px !important; }
+}
+
 </style>
 </head>
 
