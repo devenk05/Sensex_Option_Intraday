@@ -1953,10 +1953,19 @@ def main():
         # The pipeline marks a signal delivered only after Telegram confirms it.
         result = EXIT_ALERT_INTEGRATION.on_exit_signal(signal)
         status = str(result.get("status", "UNKNOWN")).upper()
-        if status == "ERROR":
-            EXIT_ALERT_STATUS.update("ERROR", result.get("reason", "Telegram delivery failed"))
+        send_result = result.get("send_result") or {}
+        telegram_confirmed = (
+            status == "DUPLICATE"
+            or (
+                status == "PROCESSED"
+                and str(send_result.get("status", "")).upper() == "SENT"
+            )
+        )
+        if not telegram_confirmed:
+            reason = result.get("reason", "Telegram delivery was not confirmed")
+            EXIT_ALERT_STATUS.update("ERROR", reason)
             print("TRADE_EXIT_ALERT_RESULT:", result)
-            return {"status": "ERROR", "reason": result.get("reason", "EXIT_ALERT_DELIVERY_FAILED")}
+            return {"status": "ERROR", "reason": reason}
 
         # DUPLICATE means this exact alert was already delivered successfully;
         # proceed with closure without sending a second Telegram message.
