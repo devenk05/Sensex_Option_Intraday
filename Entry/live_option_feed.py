@@ -163,6 +163,9 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                         except Exception as exc:
                             print("SENSEX_CANDLE_CALLBACK_ERROR:", repr(exc))
 
+                    previous_cumulative_volume = sensex_current_candle.get(
+                        "last_cumulative_volume"
+                    )
                     sensex_current_candle = {
                         "instrument_token": token,
                         "minute": minute,
@@ -171,7 +174,9 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                         "low": price,
                         "close": price,
                         "volume": 0,
-                        "start_cumulative_volume": cumulative_volume,
+                        # Use the last cumulative value from the prior minute
+                        # as baseline so early-minute trades are included.
+                        "start_cumulative_volume": previous_cumulative_volume,
                         "last_cumulative_volume": cumulative_volume,
                     }
                 else:
