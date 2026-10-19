@@ -1605,11 +1605,20 @@ def _generate_live_dashboard(
         "live_sensex": dict(LIVE_SENSEX_TICK_STATE),
         "market_bias": market_bias,
 
-        # Publish the actual confluence score and component scores to the initial HTML.
-        # Use the latest score only; do not display stale score from an older decision.
+        # Keep the one-shot dashboard generator consistent with the live updater.
+        # This function can rewrite dashboard/index.html; it must not erase the
+        # current decision, 1m state, or score/component snapshot.
         "entry_score": LATEST_ENTRY_SCORE,
-        "entry_score_components": globals().get("LATEST_CONFLUENCE_COMPONENT_SCORES", {}),
+        "entry_score_components": dict(globals().get("LATEST_CONFLUENCE_COMPONENT_SCORES", {}) or {}),
         "decision_status": (CURRENT_SETUP_DECISION or {}).get("status", "WAIT"),
+        "decision": dict(CURRENT_SETUP_DECISION or {}),
+        "one_minute_analysis": dict(LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}),
+        "one_minute_direction": (
+            (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("direction") or "WAIT"
+        ),
+        "entry_direction": (
+            (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("direction") or "WAIT"
+        ),
 
         "atm_strike": option_data.get("atm_strike"),
         "expiry": option_data.get("expiry"),
