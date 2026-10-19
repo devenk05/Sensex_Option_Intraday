@@ -2357,14 +2357,32 @@ async function updateJarvisAgentReview() {
 }
 
 async function updateDashboardLive() {
+    const diag = document.getElementById("live-connection-diagnostic");
     try {
         const response = await fetch("live_state.json?ts=" + Date.now(), {
             cache: "no-store"
         });
 
-        if (!response.ok) return;
+        if (!response.ok) {
+            if (diag) diag.textContent = "LIVE CHECK · live_state.json HTTP " + response.status;
+            console.error("LIVE_STATE_HTTP_ERROR:", response.status);
+            return;
+        }
 
         const data = await response.json();
+        const sensexTick = data.live_sensex || data.sensex || {};
+        const tickTime = sensexTick.timestamp || "no tick timestamp";
+        const fileTime = data.timestamp || data.live_update || "no JSON timestamp";
+        const tickAgeSeconds = sensexTick.timestamp
+            ? Math.max(0, Math.floor((Date.now() - new Date(sensexTick.timestamp).getTime()) / 1000))
+            : null;
+        const feedLabel = tickAgeSeconds === null
+            ? "NO SENSEX TICK TIMESTAMP"
+            : tickAgeSeconds <= 5 ? "BROKER TICK FRESH" : "BROKER TICK STALE " + tickAgeSeconds + "s";
+        if (diag) diag.textContent = "LIVE CHECK · JSON " + fileTime + " · " + feedLabel + " · tick " + tickTime;
+        if (tickAgeSeconds === null || !Number.isFinite(tickAgeSeconds) || tickAgeSeconds > 15) {
+            console.warn("LIVE_BROKER_TICK_STALE:", {tickTime, tickAgeSeconds, jsonTimestamp: fileTime});
+        }
 
         // Isolate each renderer: one broken panel must not stop the other
         // live fields from refreshing. Sensex 30 has its own independent poller.
@@ -2562,6 +2580,7 @@ async function updateDashboardLive() {
         console.error("LIVE_STATE_UPDATE_ERROR:", error);
         const status = document.getElementById("live-refresh-status");
         if (status) status.textContent = "Live feed error: " + String(error && error.message || error);
+        if (diag) diag.textContent = "LIVE CHECK · FETCH/JSON ERROR · " + String(error && error.message || error);
     }
 }
 
@@ -2597,6 +2616,11 @@ setInterval(updateSensex30Live, 1000);
   <div class="jarvis-chat-foot">VOICE SUPPORT DEPENDS ON YOUR BROWSER · NO AUTOMATIC ORDERS</div>
 </section>
 
+<!-- Live feed diagnostic: distinguishes browser polling from actual broker ticks. -->
+<div id="live-connection-diagnostic" role="status" aria-live="polite"
+ style="position:fixed;right:12px;bottom:12px;z-index:99999;background:#071522;color:#e8f8ff;border:1px solid #38e8ff;border-radius:8px;padding:8px 11px;font:11px/1.5 ui-monospace,Consolas,monospace;box-shadow:0 4px 18px #0008;max-width:360px">
+  LIVE CHECK · starting…
+</div>
 <script>
 
 (function initJarvisChat() {
