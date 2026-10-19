@@ -1157,6 +1157,18 @@ def _live_dashboard_updater(
             if live_spot is None:
                 live_spot = option_data.get("spot")
 
+            # Recover the displayed total from the same confluence engine when the
+            # latest decision score is temporarily absent but genuine component scores exist.
+            live_component_scores = globals().get("LATEST_CONFLUENCE_COMPONENT_SCORES", {})
+            live_entry_score = LATEST_ENTRY_SCORE
+            if live_entry_score is None and isinstance(live_component_scores, dict) and live_component_scores:
+                try:
+                    recovered_score = calculate_confluence_score(live_component_scores).get("score")
+                    if recovered_score is not None:
+                        live_entry_score = round(float(recovered_score), 2)
+                except (TypeError, ValueError, KeyError):
+                    pass
+
             # 1. Build consolidated live state for frontend.
             dashboard_data = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1176,8 +1188,8 @@ def _live_dashboard_updater(
                 "atm_strike": option_data.get("atm_strike"),
                 "expiry": option_data.get("expiry"),
                 "entry_score": (
-                    LATEST_ENTRY_SCORE
-                    if LATEST_ENTRY_SCORE is not None
+                    live_entry_score
+                    if live_entry_score is not None
                     else current_decision.get("entry_score")
                 ),
                 "entry_score_components": globals().get(
