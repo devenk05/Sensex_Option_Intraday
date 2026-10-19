@@ -22,7 +22,9 @@ MONITORING_INTERVAL_SECONDS = 60
 MIN_ENTRY_SCORE = 80
 MAX_ENTRY_SCORE = 100
 
-# Stop-loss and target are Sensex index points
+# Risk and target policy
+# Risk is measured as option-premium points multiplied by one contract lot.
+MAX_RISK_PER_TRADE_INR = 1000
 MIN_TARGET_POINTS = 100
 
 # Approved scoring weights
