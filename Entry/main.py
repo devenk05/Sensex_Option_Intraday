@@ -137,86 +137,122 @@ LIVE_5M_LAST_REFRESH = None
 
 
 def _aggregate_live_1m_into_5m(candle):
-    """Build a completed 5-minute Sensex candle from finalized 1-minute candles."""
+    """Aggregate only five unique, consecutive finalized 1-minute candles."""
     global LIVE_5M_CURRENT
     global LIVE_5M_LAST_REFRESH
 
-    if not candle:
+    if not isinstance(candle, dict):
         return None
 
     minute = candle.get("minute")
-    if minute is None:
+    if not isinstance(minute, datetime):
+        print("LIVE_5M_CANDLE_REJECTED: minute must be a datetime.")
         return None
 
-    # Align to 5-minute boundary.
+    try:
+        open_price = float(candle["open"])
+        high_price = float(candle["high"])
+        low_price = float(candle["low"])
+        close_price = float(candle["close"])
+        volume = float(candle.get("volume") or 0)
+    except (KeyError, TypeError, ValueError):
+        print("LIVE_5M_CANDLE_REJECTED: invalid OHLCV.")
+        return None
+
+    if (
+        min(open_price, high_price, low_price, close_price) <= 0
+        or high_price < max(open_price, close_price, low_price)
+        or low_price > min(open_price, close_price, high_price)
+        or volume < 0
+    ):
+        print("LIVE_5M_CANDLE_REJECTED: inconsistent OHLCV.")
+        return None
+
     bucket_minute = minute.replace(
         minute=(minute.minute // 5) * 5,
         second=0,
         microsecond=0,
     )
 
-    if LIVE_5M_CURRENT is None:
-        LIVE_5M_CURRENT = {
+    def start_bucket():
+        return {
             "instrument_token": candle.get("instrument_token"),
             "minute": bucket_minute,
-            "open": candle.get("open"),
-            "high": candle.get("high"),
-            "low": candle.get("low"),
-            "close": candle.get("close"),
-            "volume": candle.get("volume") or 0,
+            "open": open_price,
+            "high": high_price,
+            "low": low_price,
+            "close": close_price,
+            "volume": volume,
             "_minute_count": 1,
+            "_last_minute": minute,
         }
+
+    if LIVE_5M_CURRENT is None:
+        LIVE_5M_CURRENT = start_bucket()
         return None
 
-    current_bucket = LIVE_5M_CURRENT["minute"]
+    current_bucket = LIVE_5M_CURRENT.get("minute")
+    last_minute = LIVE_5M_CURRENT.get("_last_minute")
+
+    # Do not count a duplicate or out-of-order finalized 1-minute candle twice.
+    if isinstance(last_minute, datetime) and minute <= last_minute:
+        print("LIVE_5M_CANDLE_IGNORED: duplicate_or_out_of_order_minute")
+        return None
 
     if bucket_minute == current_bucket:
-        LIVE_5M_CURRENT["high"] = max(
-            LIVE_5M_CURRENT["high"],
-            candle.get("high"),
-        )
-        LIVE_5M_CURRENT["low"] = min(
-            LIVE_5M_CURRENT["low"],
-            candle.get("low"),
-        )
-        LIVE_5M_CURRENT["close"] = candle.get("close")
-        LIVE_5M_CURRENT["volume"] += candle.get("volume") or 0
+        # Missing minutes invalidate this bucket; never synthesize missing data.
+        if not isinstance(last_minute, datetime) or minute - last_minute != timedelta(minutes=1):
+            print("LIVE_5M_CANDLE_DISCARDED: non_consecutive_minutes")
+            LIVE_5M_CURRENT = start_bucket()
+            return None
+
+        LIVE_5M_CURRENT["high"] = max(LIVE_5M_CURRENT["high"], high_price)
+        LIVE_5M_CURRENT["low"] = min(LIVE_5M_CURRENT["low"], low_price)
+        LIVE_5M_CURRENT["close"] = close_price
+        LIVE_5M_CURRENT["volume"] += volume
         LIVE_5M_CURRENT["_minute_count"] += 1
+        LIVE_5M_CURRENT["_last_minute"] = minute
         return None
 
-    # A new 5-minute bucket means the previous 5-minute candle is complete.
-    completed = dict(LIVE_5M_CURRENT)
-    completed.pop("_minute_count", None)
-
-    LIVE_5M_CANDLE_HISTORY.append(completed)
-
-    if len(LIVE_5M_CANDLE_HISTORY) > 500:
-        del LIVE_5M_CANDLE_HISTORY[:-500]
-
-    LIVE_5M_LAST_REFRESH = completed["minute"]
-
-    LIVE_5M_CURRENT = {
-        "instrument_token": candle.get("instrument_token"),
-        "minute": bucket_minute,
-        "open": candle.get("open"),
-        "high": candle.get("high"),
-        "low": candle.get("low"),
-        "close": candle.get("close"),
-        "volume": candle.get("volume") or 0,
-        "_minute_count": 1,
-    }
-
-    print(
-        "LIVE_5M_CANDLE_COMPLETED:",
-        completed["minute"].strftime("%H:%M"),
-        "O:", completed["open"],
-        "H:", completed["high"],
-        "L:", completed["low"],
-        "C:", completed["close"],
-        "V:", completed["volume"],
-        "COUNT:", len(LIVE_5M_CANDLE_HISTORY),
+    # Publish the previous bucket only if all five unique minute candles exist.
+    completed = None
+    expected_next_bucket = (
+        current_bucket + timedelta(minutes=5)
+        if isinstance(current_bucket, datetime)
+        else None
     )
+    minute_count = int(LIVE_5M_CURRENT.get("_minute_count", 0))
 
+    if (
+        minute_count == 5
+        and bucket_minute == expected_next_bucket
+        and isinstance(last_minute, datetime)
+        and last_minute == current_bucket + timedelta(minutes=4)
+    ):
+        completed = dict(LIVE_5M_CURRENT)
+        completed.pop("_minute_count", None)
+        completed.pop("_last_minute", None)
+        LIVE_5M_CANDLE_HISTORY.append(completed)
+        if len(LIVE_5M_CANDLE_HISTORY) > 500:
+            del LIVE_5M_CANDLE_HISTORY[:-500]
+        LIVE_5M_LAST_REFRESH = completed["minute"]
+        print(
+            "LIVE_5M_CANDLE_COMPLETED:",
+            completed["minute"].strftime("%H:%M"),
+            "O:", completed["open"],
+            "H:", completed["high"],
+            "L:", completed["low"],
+            "C:", completed["close"],
+            "V:", completed["volume"],
+            "COUNT:", len(LIVE_5M_CANDLE_HISTORY),
+        )
+    else:
+        print(
+            "LIVE_5M_CANDLE_DISCARDED: incomplete_or_gap",
+            {"bucket": str(current_bucket), "minute_count": minute_count},
+        )
+
+    LIVE_5M_CURRENT = start_bucket()
     return completed
 
 ACTIVE_TRADE_MANAGER = ActiveTradeManager()
