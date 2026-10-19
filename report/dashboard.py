@@ -2682,6 +2682,11 @@ setInterval(updateDashboardLive, 1000);
 updateSensex30Live();
 setInterval(updateSensex30Live, 1000);
 </script>
+<div id="live-connection-diagnostic" role="status" aria-live="polite"
+ style="position:fixed;right:12px;bottom:12px;z-index:99999;background:#071522;color:#e8f8ff;border:1px solid #38e8ff;border-radius:8px;padding:8px 11px;font:11px/1.5 ui-monospace,Consolas,monospace;box-shadow:0 4px 18px #0008;max-width:420px;pointer-events:none">
+  <div id="live-main-feed-status">LIVE CHECK · starting…</div>
+  <div id="live-sensex30-feed-status">SENSEX 30 · starting…</div>
+</div>
 </body>
 </html>
 """
