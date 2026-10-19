@@ -2365,8 +2365,13 @@ async function updateDashboardLive() {
         if (!response.ok) return;
 
         const data = await response.json();
-        updateOptionChainLive(data);
-        updateOneMinuteEntryCard(data);
+
+        // Isolate each renderer: one broken panel must not stop the other
+        // live fields from refreshing. Sensex 30 has its own independent poller.
+        try { updateOptionChainLive(data); }
+        catch (error) { console.error("OPTION_CHAIN_LIVE_UPDATE_ERROR:", error); }
+        try { updateOneMinuteEntryCard(data); }
+        catch (error) { console.error("ONE_MINUTE_LIVE_UPDATE_ERROR:", error); }
 
         const sensexData = data.live_sensex || data.sensex || {};
         const spotValue = Number(data.spot ?? sensexData.last_price);
@@ -2452,12 +2457,52 @@ async function updateDashboardLive() {
             atmElement.textContent = data.atm_strike;
         }
 
-        const scoreElement = document.querySelector(
-            ".entry-score-card .metric-value"
-        );
-        if (scoreElement && data.entry_score != null) {
-            scoreElement.textContent = Number(data.entry_score).toFixed(2);
+        const scoreElement = document.querySelector(".entry-score-card .metric-value");
+        if (scoreElement) {
+            const score = data.entry_score;
+            scoreElement.textContent = score !== null && score !== undefined && Number.isFinite(Number(score))
+                ? Number(score).toFixed(2) : "—";
         }
+
+        // Refresh the rendered 15m and 5m cards from the same live JSON
+        // instead of leaving the initial HTML snapshot on screen.
+        const mtf = data.multi_timeframe || {};
+        const mtfCards = Array.from(document.querySelectorAll(".metrics-mtf-section .analysis-card"));
+        const mtfSpecs = [
+            { title: "15 MIN ANALYSIS", direction: mtf.direction_15m || mtf.trend_15m || "UNKNOWN" },
+            { title: "5 MIN CONFIRMATION", direction: mtf.direction_5m || mtf.trend_5m || "UNKNOWN" }
+        ];
+        mtfSpecs.forEach((spec, index) => {
+            const card = mtfCards.find(node => {
+                const title = node.querySelector(".card-header span");
+                return title && title.textContent.trim().toUpperCase() === spec.title;
+            });
+            if (!card) return;
+            const directionEl = card.querySelector(".analysis-direction");
+            const dotEl = card.querySelector(".mini-dot");
+            if (directionEl) {
+                directionEl.textContent = String(spec.direction).replace(/_/g, " ").toUpperCase();
+                directionEl.classList.remove("bullish", "bearish", "neutral");
+                const direction = String(spec.direction).toUpperCase();
+                directionEl.classList.add(direction.includes("BULL") ? "bullish" :
+                    direction.includes("BEAR") ? "bearish" : "neutral");
+            }
+            if (dotEl) {
+                dotEl.classList.remove("bullish", "bearish", "neutral");
+                const direction = String(spec.direction).toUpperCase();
+                dotEl.classList.add(direction.includes("BULL") ? "bullish" :
+                    direction.includes("BEAR") ? "bearish" : "neutral");
+            }
+            const detailList = card.querySelector(".detail-list");
+            if (detailList) {
+                const alignment = String(mtf.alignment || "UNKNOWN").replace(/_/g, " ");
+                detailList.innerHTML = '<div class="detail-row"><span>Alignment</span><strong>' +
+                    alignment + '</strong></div>';
+            }
+        }
+
+        const dashboardUpdatedAt = document.getElementById("dashboard-live-updated-at");
+        if (dashboardUpdatedAt) dashboardUpdatedAt.textContent = data.timestamp || "Live data received";
 
         const scoreBreakdown = document.getElementById("entry-score-breakdown");
         const scoreBreakdownStatus = document.getElementById("entry-score-breakdown-status");
@@ -2514,7 +2559,9 @@ async function updateDashboardLive() {
         }
 
     } catch (error) {
-        console.log("LIVE_STATE_UPDATE_ERROR:", error);
+        console.error("LIVE_STATE_UPDATE_ERROR:", error);
+        const status = document.getElementById("live-refresh-status");
+        if (status) status.textContent = "Live feed error: " + String(error && error.message || error);
     }
 }
 
