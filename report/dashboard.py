@@ -2249,6 +2249,19 @@ async function updateSensex30Live() {{
         if (!response.ok) return;
 
         const data = await response.json();
+        const feedStatus = document.getElementById("live-sensex30-feed-status");
+        if (feedStatus) {{
+            const stamps = (data.stocks || []).map(stock => Date.parse(stock.timestamp)).filter(Number.isFinite);
+            const newest = stamps.length ? Math.max(...stamps) : NaN;
+            const ageSeconds = Number.isFinite(newest) ? (Date.now() - newest) / 1000 : Infinity;
+            if (Number.isFinite(ageSeconds) && ageSeconds >= -5 && ageSeconds <= 15) {{
+                feedStatus.textContent = "SENSEX 30 · LIVE · " + Math.max(0, Math.floor(ageSeconds)) + "s";
+                feedStatus.style.borderColor = "#22c55e";
+            }} else {{
+                feedStatus.textContent = "SENSEX 30 · STALE / NO TICKS";
+                feedStatus.style.borderColor = "#f59e0b";
+            }}
+        }}
 
         for (const stock of (data.stocks || [])) {{
             const row = Array.from(
@@ -2490,6 +2503,18 @@ async function updateDashboardLive() {{
         if (!response.ok) return;
 
         const data = await response.json();
+        const feedStatus = document.getElementById("live-main-feed-status");
+        if (feedStatus) {{
+            const tickTime = (data.live_sensex || data.sensex || {{}}).timestamp;
+            const ageSeconds = tickTime ? (Date.now() - Date.parse(tickTime)) / 1000 : Infinity;
+            if (Number.isFinite(ageSeconds) && ageSeconds >= -5 && ageSeconds <= 10) {{
+                feedStatus.textContent = "SENSEX FEED · LIVE · " + Math.max(0, Math.floor(ageSeconds)) + "s";
+                feedStatus.style.borderColor = "#22c55e";
+            }} else {{
+                feedStatus.textContent = "SENSEX FEED · STALE / NO TICKS";
+                feedStatus.style.borderColor = "#f59e0b";
+            }}
+        }}
         try {{ updateActiveTradePanel(data); }}
         catch (error) {{ console.error("ACTIVE_TRADE_LIVE_UPDATE_ERROR:", error); }}
         // A single panel exception must not stop the remaining live dashboard fields.
