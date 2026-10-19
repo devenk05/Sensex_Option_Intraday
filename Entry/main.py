@@ -394,7 +394,31 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
     try:
         score = float(score)
     except (TypeError, ValueError):
-        score = None
+        print("TRADE_REGISTRATION_REJECTED: Entry score is missing or invalid.")
+        return None
+    if not (score == score and 80.0 <= score <= 100.0 and abs(score) != float("inf")):
+        print("TRADE_REGISTRATION_REJECTED: Entry score must be within 80-100.")
+        return None
+
+    # Enforce the configured ₹1,000 risk cap without moving the structural SL.
+    # If even one whole lot exceeds the cap, reject the recommendation.
+    lot_size_value = selected.get("lot_size") or (candidate or {}).get("lot_size")
+    try:
+        lot_size = int(lot_size_value)
+    except (TypeError, ValueError):
+        print("TRADE_REGISTRATION_REJECTED: Contract lot size unavailable.")
+        return None
+    if lot_size <= 0:
+        print("TRADE_REGISTRATION_REJECTED: Contract lot size invalid.")
+        return None
+    max_risk_inr = float(getattr(config, "MAX_RISK_PER_TRADE_INR", 1000))
+    risk_per_lot_inr = risk_points * lot_size
+    if risk_per_lot_inr > max_risk_inr:
+        print(
+            "TRADE_REGISTRATION_REJECTED: One-lot structural risk exceeds cap.",
+            {"risk_per_lot_inr": round(risk_per_lot_inr, 2), "max_risk_inr": max_risk_inr},
+        )
+        return None
 
     now = datetime.now().astimezone().isoformat()
 
@@ -415,6 +439,10 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
         "option_target": round(option_target, 2),
         "target_points": round(target_points, 2),
         "risk_points": round(risk_points, 2),
+        "lot_size": lot_size,
+        "quantity": lot_size,
+        "risk_per_lot_inr": round(risk_per_lot_inr, 2),
+        "max_risk_inr": max_risk_inr,
         "score": score,
         "entry_score": score,
         "entry_time": now,
@@ -454,6 +482,13 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
 
     if ACTIVE_TRADE_MANAGER.has_active_trade():
         print("TRADE_REGISTRATION_IGNORED: Active trade already exists.")
+        return False
+
+    # Enforce the configured local trading window and stop issuing fresh
+    # recommendations at NO_NEW_RECOMMENDATIONS_AFTER.
+    current_time = datetime.now().time()
+    if current_time < config.TRADING_START or current_time > config.NO_NEW_RECOMMENDATIONS_AFTER:
+        print("TRADE_REGISTRATION_REJECTED: Outside recommendation window.", current_time.isoformat())
         return False
 
     if LIVE_FINALIZED:
