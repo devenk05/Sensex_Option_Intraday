@@ -1711,6 +1711,14 @@ input, textarea, select {{ color: var(--text); }}
 .entry-score-card [data-field="entry-score"]:empty::after {{ content:"DATA WAIT"; font-size:14px; color:#64748b; }}
 .entry-score-card [data-field="score-core"]:empty::after {{ content:"WAIT"; font-size:18px; color:#fff; }}
 
+
+.sensex-index-details {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border,#e6e8eb); }}
+.sensex-index-details div {{ display:flex; flex-direction:column; gap:4px; min-width:0; }}
+.sensex-index-details span {{ font-size:10px; color:var(--muted,#718096); text-transform:uppercase; letter-spacing:.04em; }}
+.sensex-index-details strong {{ font-size:12px; color:var(--text,#263746); white-space:nowrap; }}
+#jarvis-agent-review-section {{ display:block !important; visibility:visible !important; opacity:1 !important; margin-top:18px !important; }}
+#jarvis-agent-review-section .jarvis-review-body {{ min-height:100px; }}
+
 </style>
 </head>
 
@@ -1808,12 +1816,16 @@ input, textarea, select {{ color: var(--text); }}
 
     <section class="metrics">
 
-        {_metric_card(
-            "SENSEX",
-            _number(spot),
-            "Live Spot",
-            "sensex-spot-card",
-        )}
+        <div class="metric-card sensex-spot-card">
+            <div class="metric-title">SENSEX</div>
+            <div class="metric-value" data-field="sensex-ltp">{_number(spot)}</div>
+            <div class="metric-subtitle">Live Spot · Current LTP</div>
+            <div class="sensex-index-details">
+                <div><span>Open</span><strong data-field="sensex-open">—</strong></div>
+                <div><span>Change</span><strong data-field="sensex-change">—</strong></div>
+                <div><span>Change %</span><strong data-field="sensex-change-percent">—</strong></div>
+            </div>
+        </div>
 
         {_metric_card(
             "MARKET STATUS",
@@ -2428,11 +2440,30 @@ async function updateDashboardLive() {{
         updateOptionChainLive(data);
         updateAtmOptionMomentum(data);
 
-        const spotElement = document.querySelector(
-            ".sensex-spot-card .metric-value"
-        );
-        if (spotElement && data.spot != null) {{
-            spotElement.textContent = data.spot;
+        const sensex = data.live_sensex || data.sensex || {{}};
+        const spotElement = document.querySelector('[data-field="sensex-ltp"]');
+        const openElement = document.querySelector('[data-field="sensex-open"]');
+        const changeElement = document.querySelector('[data-field="sensex-change"]');
+        const changePercentElement = document.querySelector('[data-field="sensex-change-percent"]');
+        const liveLtp = sensex.last_price ?? sensex.ltp ?? data.spot;
+        const liveOpen = sensex.open;
+        const liveChange = sensex.change;
+        let liveChangePercent = sensex.change_percent;
+        if ((liveChangePercent == null || !Number.isFinite(Number(liveChangePercent))) &&
+            liveChange != null && liveOpen != null && Number(liveOpen) !== 0) {{
+            liveChangePercent = Number(liveChange) / Number(liveOpen) * 100;
+        }}
+        if (spotElement && liveLtp != null) spotElement.textContent = formatLiveNumber(liveLtp, 2);
+        if (openElement && liveOpen != null) openElement.textContent = formatLiveNumber(liveOpen, 2);
+        if (changeElement && liveChange != null) {{
+            changeElement.textContent = (Number(liveChange) > 0 ? "+" : "") + formatLiveNumber(liveChange, 2);
+            changeElement.classList.toggle("ce-text", Number(liveChange) > 0);
+            changeElement.classList.toggle("pe-text", Number(liveChange) < 0);
+        }}
+        if (changePercentElement && liveChangePercent != null && Number.isFinite(Number(liveChangePercent))) {{
+            changePercentElement.textContent = (Number(liveChangePercent) > 0 ? "+" : "") + Number(liveChangePercent).toFixed(2) + "%";
+            changePercentElement.classList.toggle("ce-text", Number(liveChangePercent) > 0);
+            changePercentElement.classList.toggle("pe-text", Number(liveChangePercent) < 0);
         }}
 
         const biasElement = document.querySelector(
