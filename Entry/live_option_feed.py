@@ -126,24 +126,43 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                         "high": price,
                         "low": price,
                         "close": price,
-                        "volume": cumulative_volume,
+                        # Kite's volume_traded is cumulative for the day.
+                        # The first observed minute has no reliable baseline.
+                        "volume": 0,
+                        "start_cumulative_volume": cumulative_volume,
+                        "last_cumulative_volume": cumulative_volume,
                     }
                 elif minute > sensex_current_candle["minute"]:
-                    sensex_candle_history.append(dict(sensex_current_candle))
+                    finalized = dict(sensex_current_candle)
+                    start_volume = finalized.pop("start_cumulative_volume", None)
+                    last_volume = finalized.pop("last_cumulative_volume", None)
+                    if start_volume is not None and last_volume is not None:
+                        try:
+                            finalized["volume"] = max(
+                                0, float(last_volume) - float(start_volume)
+                            )
+                        except (TypeError, ValueError):
+                            finalized["volume"] = 0
+                    else:
+                        finalized["volume"] = 0
+
+                    sensex_candle_history.append(finalized)
                     print(
                         "SENSEX_CANDLE_1M",
-                        "TIME:", sensex_current_candle["minute"].strftime("%H:%M"),
-                        "O:", sensex_current_candle["open"],
-                        "H:", sensex_current_candle["high"],
-                        "L:", sensex_current_candle["low"],
-                        "C:", sensex_current_candle["close"],
+                        "TIME:", finalized["minute"].strftime("%H:%M"),
+                        "O:", finalized["open"],
+                        "H:", finalized["high"],
+                        "L:", finalized["low"],
+                        "C:", finalized["close"],
+                        "V:", finalized["volume"],
                     )
 
                     if on_candle is not None:
                         try:
-                            on_candle(dict(sensex_current_candle))
+                            on_candle(dict(finalized))
                         except Exception as exc:
                             print("SENSEX_CANDLE_CALLBACK_ERROR:", repr(exc))
+
                     sensex_current_candle = {
                         "instrument_token": token,
                         "minute": minute,
@@ -151,7 +170,9 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                         "high": price,
                         "low": price,
                         "close": price,
-                        "volume": cumulative_volume,
+                        "volume": 0,
+                        "start_cumulative_volume": cumulative_volume,
+                        "last_cumulative_volume": cumulative_volume,
                     }
                 else:
                     sensex_current_candle["high"] = max(
@@ -161,7 +182,16 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                         sensex_current_candle["low"], price
                     )
                     sensex_current_candle["close"] = price
-                    sensex_current_candle["volume"] = cumulative_volume
+                    if cumulative_volume is not None:
+                        sensex_current_candle["last_cumulative_volume"] = cumulative_volume
+                        start_volume = sensex_current_candle.get("start_cumulative_volume")
+                        try:
+                            if start_volume is not None:
+                                sensex_current_candle["volume"] = max(
+                                    0, float(cumulative_volume) - float(start_volume)
+                                )
+                        except (TypeError, ValueError):
+                            sensex_current_candle["volume"] = 0
 
                 print(
                     "SENSEX_LIVE_TICK",
