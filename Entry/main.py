@@ -1337,91 +1337,52 @@ def _build_confluence_component_scores(
     fii_dii_analysis=None,
     liquidity_greeks_analysis=None,
 ):
-    """Build deterministic 0-100 scores from genuine analysis outputs only."""
+    """Return only component scores explicitly produced by the source engines.
+
+    Direction/alignment/status alone is not a numeric score. Do not turn a
+    successful condition into an arbitrary 75/100 component score.
+    """
+    def explicit_score(*sources):
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            for key in ("component_score", "confluence_score", "confidence_score", "score"):
+                value = source.get(key)
+                if isinstance(value, dict):
+                    value = value.get("score")
+                try:
+                    score = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if 0.0 <= score <= 100.0:
+                    return round(score, 2)
+        return None
+
     scores = {}
+    source_map = {
+        "market_structure": (market_analysis, multi_timeframe),
+        "support_resistance": (support_resistance,),
+        "price_action": (price_action,),
+        "pivot_points": (pivot_analysis,),
+        "volume_analysis": (volume_analysis,),
+        "fii_dii": (fii_dii_analysis,),
+        "atm_ce_pe_strength": (cepe_comparison,),
+        "liquidity_greeks": (liquidity_greeks_analysis,),
+    }
+    for component, sources in source_map.items():
+        value = explicit_score(*sources)
+        if value is not None:
+            scores[component] = value
 
-    market = str((market_analysis or {}).get("trend", "")).upper()
-    alignment = str((multi_timeframe or {}).get("alignment", "")).upper()
-    if market in {"UP", "DOWN"} and alignment == "ALIGNED":
-        scores["market_structure"] = 100.0
-    elif market in {"UP", "DOWN"}:
-        scores["market_structure"] = 70.0
-
-    sr = support_resistance or {}
-    if sr.get("status") == "OK":
-        try:
-            support = float(sr["support"])
-            resistance = float(sr["resistance"])
-            if resistance > support:
-                scores["support_resistance"] = 100.0
-        except (KeyError, TypeError, ValueError):
-            pass
-
-    pa = str((price_action or {}).get("signal", "")).upper()
-    if pa in {"BULLISH_BREAKOUT", "BEARISH_BREAKDOWN"}:
-        scores["price_action"] = 100.0
-    elif pa in {"BULLISH", "BEARISH"}:
-        scores["price_action"] = 75.0
-
-    pivot_state = (pivot_analysis or {}).get("state", {})
-    try:
-        pivot_score = float(pivot_state.get("score"))
-        scores["pivot_points"] = max(0.0, min(100.0, pivot_score))
-    except (TypeError, ValueError):
-        pass
-
-    try:
-        volume_ratio = float((volume_analysis or {}).get("volume_ratio"))
-        if volume_ratio >= 1.5:
-            scores["volume_analysis"] = 100.0
-        elif volume_ratio >= 1.2:
-            scores["volume_analysis"] = 80.0
-        elif volume_ratio >= 1.0:
-            scores["volume_analysis"] = 60.0
-        else:
-            scores["volume_analysis"] = 30.0
-    except (TypeError, ValueError):
-        pass
-
-    if isinstance(cepe_comparison, dict):
-        if cepe_comparison.get("status") == "CONFIRMED":
-            scores["atm_ce_pe_strength"] = 100.0
-        elif cepe_comparison.get("candidate_direction"):
-            scores["atm_ce_pe_strength"] = 50.0
-
-    liquidity = liquidity_greeks_analysis or {}
-    try:
-        liquidity_score = float(liquidity.get("score"))
-        if liquidity.get("status") == "OK":
-            scores["liquidity_greeks"] = max(
-                0.0, min(100.0, liquidity_score)
-            )
-    except (TypeError, ValueError):
-        pass
-
-    # Include FII/DII only when genuine NSE data was fetched.
-    # Positive score means the latest daily flow supports the market direction.
-    fii_dii = fii_dii_analysis or {}
-    fii_net = fii_dii.get("fii_net")
-    dii_net = fii_dii.get("dii_net")
-    if fii_net is not None and dii_net is not None and market in {"UP", "DOWN"}:
-        try:
-            fii_value = float(fii_net)
-            dii_value = float(dii_net)
-            supportive = lambda value: value > 0 if market == "UP" else value < 0
-            fii_supports = supportive(fii_value)
-            dii_supports = supportive(dii_value)
-            if fii_supports and dii_supports:
-                scores["fii_dii"] = 100.0
-            elif fii_supports or dii_supports:
-                scores["fii_dii"] = 75.0
-            elif fii_value == 0 and dii_value == 0:
-                scores["fii_dii"] = 50.0
-            else:
-                scores["fii_dii"] = 25.0
-        except (TypeError, ValueError):
-            pass
-
+    print(
+        "CONFLUENCE_SCORE_DATA_QUALITY:",
+        {
+            "scored_components": sorted(scores),
+            "missing_components": sorted(set(SCORING_WEIGHTS) - set(scores))
+            if "SCORING_WEIGHTS" in globals() else [],
+            "note": "Missing source-engine scores are omitted, not replaced with 75/100 guesses.",
+        },
+    )
     return scores
 
 
