@@ -1631,6 +1631,86 @@ input, textarea, select {{ color: var(--text); }}
 @media (max-width:1250px) {{ .metrics {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; }} .entry-score-card {{ grid-column:span 2 !important; }} .metrics-mtf-section {{ grid-column:1 / -1 !important; }} }}
 @media (max-width:760px) {{ .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)) !important; }} .entry-score-card {{ grid-column:1 / -1 !important; }} .metrics-mtf-section .analysis-grid {{ grid-template-columns:1fr !important; }} }}
 
+
+/* FINAL DESKTOP LAYOUT OVERRIDE: remove conflicting legacy grid placements */
+@media (min-width:1251px) {{
+  .metrics {{
+    display:grid !important;
+    grid-template-columns:minmax(180px,1fr) minmax(340px,1.45fr) minmax(440px,1.65fr) !important;
+    grid-auto-flow:row !important;
+    grid-auto-rows:auto !important;
+    align-items:stretch !important;
+    gap:12px !important;
+    width:100% !important;
+  }}
+  .metrics > .sensex-spot-card,
+  .metrics > .market-status-card,
+  .metrics > .market-bias-card,
+  .metrics > .atm-strike-card,
+  .metrics > .decision-card {{
+    grid-column:1 !important;
+    grid-row:auto !important;
+  }}
+  .metrics > .entry-score-card {{
+    grid-column:2 !important;
+    grid-row:1 / span 5 !important;
+    min-height:420px !important;
+    height:100% !important;
+    padding:14px !important;
+  }}
+  .metrics > .metrics-mtf-section {{
+    grid-column:3 !important;
+    grid-row:1 / span 5 !important;
+    width:100% !important;
+    min-width:0 !important;
+    margin:0 !important;
+    padding:0 !important;
+  }}
+  .metrics-mtf-section .analysis-grid {{
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    gap:12px !important;
+  }}
+  .metrics-mtf-section .analysis-card {{
+    min-height:145px !important;
+    padding:18px !important;
+  }}
+  .entry-score-card .score-radial-map {{
+    height:330px !important;
+    min-height:330px !important;
+  }}
+}}
+@media (min-width:761px) and (max-width:1250px) {{
+  .metrics {{
+    display:grid !important;
+    grid-template-columns:minmax(150px,1fr) minmax(300px,1.4fr) minmax(300px,1.3fr) !important;
+    grid-auto-flow:row !important;
+    gap:10px !important;
+  }}
+  .metrics > .sensex-spot-card,
+  .metrics > .market-status-card,
+  .metrics > .market-bias-card,
+  .metrics > .atm-strike-card,
+  .metrics > .decision-card {{ grid-column:1 !important; grid-row:auto !important; }}
+  .metrics > .entry-score-card {{ grid-column:2 !important; grid-row:1 / span 5 !important; min-height:400px !important; }}
+  .metrics > .metrics-mtf-section {{ grid-column:3 !important; grid-row:1 / span 5 !important; }}
+  .metrics-mtf-section .analysis-grid {{ grid-template-columns:1fr !important; }}
+}}
+@media (max-width:760px) {{
+  .metrics {{ grid-template-columns:minmax(0,1fr) !important; }}
+  .metrics > .sensex-spot-card,
+  .metrics > .market-status-card,
+  .metrics > .market-bias-card,
+  .metrics > .atm-strike-card,
+  .metrics > .decision-card,
+  .metrics > .entry-score-card,
+  .metrics > .metrics-mtf-section {{ grid-column:1 !important; grid-row:auto !important; }}
+  .metrics-mtf-section .analysis-grid {{ grid-template-columns:1fr !important; }}
+}}
+/* Make unavailable score data explicit rather than presenting a misleading blank core */
+.entry-score-card [data-field="entry-score"]:empty::after {{ content:"DATA WAIT"; font-size:14px; color:#64748b; }}
+.entry-score-card [data-field="score-core"]:empty::after {{ content:"WAIT"; font-size:18px; color:#fff; }}
+
 </style>
 </head>
 
