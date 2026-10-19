@@ -42,6 +42,22 @@ class TradeStateStorage:
         missing = [key for key in required if value.get(key) is None]
         if missing:
             raise ValueError("Persisted active trade missing required fields: " + ", ".join(missing))
+        direction = str(value.get("direction", "")).strip().upper()
+        if direction not in {"CE", "PE"}:
+            raise ValueError("Persisted active trade direction must be CE or PE.")
+        try:
+            token = int(value["instrument_token"])
+            entry = float(value["entry"])
+            stop = float(value["option_sl"])
+            target = float(value["option_target"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Persisted active trade has invalid numeric fields.") from exc
+        if token <= 0 or entry <= 0 or stop <= 0 or target <= 0:
+            raise ValueError("Persisted active trade prices/token must be positive.")
+        if not stop < entry < target:
+            raise ValueError("Persisted BUY option trade must satisfy SL < entry < target.")
+        value["instrument_token"] = token
+        value["direction"] = direction
         return value
 
     def clear(self) -> None:
