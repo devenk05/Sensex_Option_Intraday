@@ -1143,39 +1143,39 @@ td {{
 
 
 /* Layout: put timeframe analysis in the unused row below the first three metric cards */
-.metrics { display:grid !important; grid-template-columns:repeat(6,minmax(0,1fr)) !important; align-items:start !important; gap:12px !important; width:100% !important; }
-.metrics > .metric-card { grid-row:1 !important; grid-column:auto !important; align-self:start !important; min-width:0 !important; width:auto !important; height:auto !important; min-height:0 !important; box-sizing:border-box !important; }
-.metrics > .sensex-spot-card { grid-column:1 !important; }
-.metrics > .market-status-card { grid-column:2 !important; }
-.metrics > .market-bias-card { grid-column:3 !important; }
-.metrics > .entry-score-card { grid-column:4 !important; grid-row:1 / span 2 !important; min-width:0 !important; }
-.metrics > .atm-strike-card { grid-column:5 !important; }
-.metrics > .decision-card { grid-column:6 !important; }
-.metrics > .metrics-mtf-section { grid-column:1 / span 3 !important; grid-row:2 !important; min-width:0; width:100%; margin:0; padding:0; }
-.metrics-mtf-section .section-title { margin:0 0 10px; }
-.metrics-mtf-section .analysis-grid { display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:10px !important; width:100%; }
-.metrics-mtf-section .analysis-card { min-width:0; min-height:140px; padding:12px; }
-@media (max-width:1450px) {
- .metrics { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
- .metrics > .market-status-card { grid-column:1 !important; grid-row:2 !important; }
- .metrics > .market-bias-card { grid-column:1 !important; grid-row:3 !important; }
- .metrics > .atm-strike-card { grid-column:1 !important; grid-row:4 !important; }
- .metrics > .decision-card { grid-column:1 !important; grid-row:5 !important; }
- .metrics > .entry-score-card { grid-column:2 / span 2 !important; grid-row:1 / span 2 !important; }
- .metrics > .metrics-mtf-section { grid-column:1 !important; grid-row:6 !important; }
- .metrics-mtf-section .analysis-grid { grid-template-columns:minmax(0,1fr) !important; }
-}
-@media (max-width:760px) {
- .metrics { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
- .metrics > .entry-score-card { grid-column:1 / -1 !important; grid-row:1 !important; }
- .metrics > .sensex-spot-card { grid-column:1 !important; grid-row:2 !important; }
- .metrics > .market-status-card { grid-column:2 !important; grid-row:2 !important; }
- .metrics > .market-bias-card { grid-column:1 !important; grid-row:3 !important; }
- .metrics > .atm-strike-card { grid-column:2 !important; grid-row:3 !important; }
- .metrics > .decision-card { grid-column:1 / -1 !important; grid-row:4 !important; }
- .metrics > .metrics-mtf-section { grid-column:1 / -1 !important; grid-row:5 !important; }
- .metrics-mtf-section .analysis-grid { grid-template-columns:minmax(0,1fr) !important; }
-}
+.metrics {{ display:grid !important; grid-template-columns:repeat(6,minmax(0,1fr)) !important; align-items:start !important; gap:12px !important; width:100% !important; }}
+.metrics > .metric-card {{ grid-row:1 !important; grid-column:auto !important; align-self:start !important; min-width:0 !important; width:auto !important; height:auto !important; min-height:0 !important; box-sizing:border-box !important; }}
+.metrics > .sensex-spot-card {{ grid-column:1 !important; }}
+.metrics > .market-status-card {{ grid-column:2 !important; }}
+.metrics > .market-bias-card {{ grid-column:3 !important; }}
+.metrics > .entry-score-card {{ grid-column:4 !important; grid-row:1 / span 2 !important; min-width:0 !important; }}
+.metrics > .atm-strike-card {{ grid-column:5 !important; }}
+.metrics > .decision-card {{ grid-column:6 !important; }}
+.metrics > .metrics-mtf-section {{ grid-column:1 / span 3 !important; grid-row:2 !important; min-width:0; width:100%; margin:0; padding:0; }}
+.metrics-mtf-section .section-title {{ margin:0 0 10px; }}
+.metrics-mtf-section .analysis-grid {{ display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:10px !important; width:100%; }}
+.metrics-mtf-section .analysis-card {{ min-width:0; min-height:140px; padding:12px; }}
+@media (max-width:1450px) {{
+ .metrics {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; }}
+ .metrics > .market-status-card {{ grid-column:1 !important; grid-row:2 !important; }}
+ .metrics > .market-bias-card {{ grid-column:1 !important; grid-row:3 !important; }}
+ .metrics > .atm-strike-card {{ grid-column:1 !important; grid-row:4 !important; }}
+ .metrics > .decision-card {{ grid-column:1 !important; grid-row:5 !important; }}
+ .metrics > .entry-score-card {{ grid-column:2 / span 2 !important; grid-row:1 / span 2 !important; }}
+ .metrics > .metrics-mtf-section {{ grid-column:1 !important; grid-row:6 !important; }}
+ .metrics-mtf-section .analysis-grid {{ grid-template-columns:minmax(0,1fr) !important; }}
+}}
+@media (max-width:760px) {{
+ .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)) !important; }}
+ .metrics > .entry-score-card {{ grid-column:1 / -1 !important; grid-row:1 !important; }}
+ .metrics > .sensex-spot-card {{ grid-column:1 !important; grid-row:2 !important; }}
+ .metrics > .market-status-card {{ grid-column:2 !important; grid-row:2 !important; }}
+ .metrics > .market-bias-card {{ grid-column:1 !important; grid-row:3 !important; }}
+ .metrics > .atm-strike-card {{ grid-column:2 !important; grid-row:3 !important; }}
+ .metrics > .decision-card {{ grid-column:1 / -1 !important; grid-row:4 !important; }}
+ .metrics > .metrics-mtf-section {{ grid-column:1 / -1 !important; grid-row:5 !important; }}
+ .metrics-mtf-section .analysis-grid {{ grid-template-columns:minmax(0,1fr) !important; }}
+}}
 
  
 /* Reference composition: left KPI stack | centered AI map | right 15m/5m/1m stack */
