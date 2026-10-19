@@ -23,4 +23,4 @@ jobs:
       - name: Compile project Python files
         run: python -m compileall -q Entry exit report tests
       - name: Run critical live-decision and trade-lock regression tests
-        run: python -m pytest -q tests/test_risk_manager.py tests/test_entry_confirmation.py tests/test_active_trade_manager.py tests/test_trade_decision_flow.py tests/test_trade_persistence.py tests/test_trade_exit_lifecycle.py tests/test_exit_alert_retry.py tests/test_telegram_outbox.py
+        run: python -m pytest -q tests/test_risk_manager.py tests/test_entry_confirmation.py tests/test_active_trade_manager.py tests/test_trade_decision_flow.py tests/test_trade_persistence.py tests/test_trade_exit_lifecycle.py tests/test_exit_alert_retry.py tests/test_telegram_outbox.py tests/test_dashboard_generation.py
