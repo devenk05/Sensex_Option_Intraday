@@ -1596,6 +1596,18 @@ input, textarea, select {{ color: var(--text); }}
 }}
 
 
+
+/* FINAL FIX: keep AI score visualization visible in the generated dashboard */
+.entry-score-card {{ display:block !important; min-height:520px !important; overflow:visible !important; color:#dcefff !important; }}
+.entry-score-card .score-breakdown-heading {{ display:flex !important; visibility:visible !important; }}
+.entry-score-card .score-radial-map {{ display:block !important; position:relative !important; min-height:420px !important; height:420px !important; visibility:visible !important; opacity:1 !important; overflow:visible !important; }}
+.entry-score-card .score-node {{ display:flex !important; visibility:visible !important; opacity:1 !important; color:#dcefff !important; }}
+.entry-score-card .score-node-name {{ display:block !important; color:#47647c !important; text-shadow:none !important; }}
+.entry-score-card .score-node strong {{ display:block !important; color:#167e72 !important; }}
+.entry-score-card .score-ai-core {{ display:flex !important; visibility:visible !important; opacity:1 !important; background:radial-gradient(circle,#145071,#071629 75%) !important; }}
+.entry-score-card .score-ai-core strong {{ display:block !important; color:#ffffff !important; }}
+.entry-score-card .score-component-footnote {{ display:block !important; color:#64748b !important; font-size:11px !important; margin-top:8px !important; }}
+
 </style>
 </head>
 
