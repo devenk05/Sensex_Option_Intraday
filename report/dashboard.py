@@ -386,6 +386,26 @@ def generate_dashboard(
     decision = _dict(data.get("decision"))
 
     spot = data.get("spot", data.get("sensex_price"))
+    sensex_state = _dict(data.get("live_sensex"))
+    sensex_open_display = _number(sensex_state.get("open"))
+    sensex_change_value = sensex_state.get("change")
+    try:
+        sensex_change_display = (
+            f"+{float(sensex_change_value):,.2f}"
+            if float(sensex_change_value) > 0
+            else f"{float(sensex_change_value):,.2f}"
+        ) if sensex_change_value is not None else "—"
+    except (TypeError, ValueError):
+        sensex_change_display = "—"
+    sensex_change_percent_value = sensex_state.get("change_percent")
+    try:
+        sensex_change_percent_display = (
+            f"+{float(sensex_change_percent_value):.2f}%"
+            if float(sensex_change_percent_value) > 0
+            else f"{float(sensex_change_percent_value):.2f}%"
+        ) if sensex_change_percent_value is not None else "—"
+    except (TypeError, ValueError):
+        sensex_change_percent_display = "—"
     status = data.get("status", "Starting")
 
     market_bias = (
@@ -1837,9 +1857,9 @@ input, textarea, select {{ color: var(--text); }}
             <div class="metric-value" data-field="sensex-ltp">{_number(spot)}</div>
             <div class="metric-subtitle">Live Spot · Current LTP</div>
             <div class="sensex-index-details">
-                <div><span>Open</span><strong data-field="sensex-open">—</strong></div>
-                <div><span>Change</span><strong data-field="sensex-change">—</strong></div>
-                <div><span>Change %</span><strong data-field="sensex-change-percent">—</strong></div>
+                <div><span>Open</span><strong data-field="sensex-open">{sensex_open_display}</strong></div>
+                <div><span>Change</span><strong data-field="sensex-change">{sensex_change_display}</strong></div>
+                <div><span>Change %</span><strong data-field="sensex-change-percent">{sensex_change_percent_display}</strong></div>
             </div>
         </div>
 
