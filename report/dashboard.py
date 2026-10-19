@@ -2452,9 +2452,9 @@ function updateOptionChainLive(data) {{
 }}
 
 function escapeLiveText(value) {{
-    return String(value == null ? "—" : value).replace(/[&<>"']/g, ch => ({
+    return String(value == null ? "—" : value).replace(/[&<>"']/g, ch => ({{
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-    }[ch]));
+    }}[ch]));
 }}
 
 function updateActiveTradePanel(data) {{
