@@ -1913,25 +1913,29 @@ def main():
     EXIT_ALERT_INTEGRATION = TradeExitAlertIntegration(send_exit_message)
 
     def handle_exit_alert(signal):
-        # Close/persist first. If persistence fails, return an error so the
-        # monitor retries instead of deduplicating an uncompleted closure.
+        # Deliver the exit alert first. A failed Telegram delivery leaves the
+        # recommendation active, so the monitor can retry on the next tick.
+        # The pipeline marks a signal delivered only after Telegram confirms it.
+        result = EXIT_ALERT_INTEGRATION.on_exit_signal(signal)
+        status = str(result.get("status", "UNKNOWN")).upper()
+        if status == "ERROR":
+            EXIT_ALERT_STATUS.update("ERROR", result.get("reason", "Telegram delivery failed"))
+            print("TRADE_EXIT_ALERT_RESULT:", result)
+            return {"status": "ERROR", "reason": result.get("reason", "EXIT_ALERT_DELIVERY_FAILED")}
+
+        # DUPLICATE means this exact alert was already delivered successfully;
+        # proceed with closure without sending a second Telegram message.
         close_ok = _close_active_trade_from_exit(signal)
         if close_ok is False:
             EXIT_ALERT_STATUS.update("ERROR", "Trade closure/persistence failed; retrying.")
             return {"status": "ERROR", "reason": "TRADE_CLOSE_FAILED"}
 
-        if EXIT_ALERT_DEDUPLICATOR.is_duplicate(signal):
-            EXIT_ALERT_STATUS.update("DUPLICATE", "Repeated exit notification ignored.")
-            print("TRADE_EXIT_ALERT_DUPLICATE:", signal)
-            return {"status": "DUPLICATE", "reason": "Already notified"}
-
-        result = EXIT_ALERT_INTEGRATION.on_exit_signal(signal)
         EXIT_ALERT_STATUS.update(
-            result.get("status", "UNKNOWN"),
+            "SENT" if status == "PROCESSED" else status,
             result.get("reason", ""),
         )
         print("TRADE_EXIT_ALERT_RESULT:", result)
-        return result
+        return {"status": "HANDLED", "alert_result": result, "trade_closed": True}
 
     EXIT_SIGNAL_HANDLER = TradeExitSignalHandler(handle_exit_alert)
 
