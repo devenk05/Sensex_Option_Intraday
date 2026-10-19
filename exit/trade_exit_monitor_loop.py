@@ -84,10 +84,14 @@ class TradeExitMonitorLoop:
         return result
 
     def start(self) -> None:
+        """Run until stopped; transient quote/API errors must not kill monitoring."""
         self.running = True
-
         while self.running:
-            self.run_once()
+            try:
+                self.run_once()
+            except Exception as exc:
+                # Keep the active recommendation locked and retry next interval.
+                print("TRADE_EXIT_MONITOR_TICK_ERROR:", type(exc).__name__, str(exc)[:300])
             time.sleep(self.interval_seconds)
 
     def stop(self) -> None:
