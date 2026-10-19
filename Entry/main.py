@@ -1359,6 +1359,16 @@ def _build_confluence_component_scores(
                     continue
                 if 0.0 <= score <= 100.0:
                     return round(score, 2)
+            # LiquidityGreeksEngine publishes its validated 0-100 result as
+            # {"score": ..., "score_basis": "REAL_BID_ASK_SPREAD"}.
+            # Accept that field only for this component; PivotState.score is 0-10.
+            if source.get("score_basis") == "REAL_BID_ASK_SPREAD":
+                try:
+                    score = float(source.get("score"))
+                except (TypeError, ValueError):
+                    score = None
+                if score is not None and 0.0 <= score <= 100.0:
+                    return round(score, 2)
         return None
 
     def number(value):
