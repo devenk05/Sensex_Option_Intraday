@@ -2364,7 +2364,12 @@ async function updateJarvisAgentReview() {
     }
 }
 
+let liveDashboardPollCount = 0;
+let liveDashboardPollInFlight = false;
+
 async function updateDashboardLive() {
+    if (liveDashboardPollInFlight) return;
+    liveDashboardPollInFlight = true;
     const diag = document.getElementById("live-main-feed-status");
     try {
         const response = await fetch("live_state.json?ts=" + Date.now(), {
@@ -2387,7 +2392,10 @@ async function updateDashboardLive() {
         const feedLabel = tickAgeSeconds === null
             ? "NO SENSEX TICK TIMESTAMP"
             : tickAgeSeconds <= 5 ? "BROKER TICK FRESH" : "BROKER TICK STALE " + tickAgeSeconds + "s";
-        if (diag) diag.textContent = "LIVE CHECK · JSON " + fileTime + " · " + feedLabel + " · tick " + tickTime;
+        liveDashboardPollCount += 1;
+        if (diag) diag.textContent = "BROWSER POLL #" + liveDashboardPollCount +
+            " · " + new Date().toLocaleTimeString() +
+            " · JSON " + fileTime + " · " + feedLabel + " · tick " + tickTime;
         if (tickAgeSeconds === null || !Number.isFinite(tickAgeSeconds) || tickAgeSeconds > 15) {
             console.warn("LIVE_BROKER_TICK_STALE:", {tickTime, tickAgeSeconds, jsonTimestamp: fileTime});
         }
@@ -2589,6 +2597,8 @@ async function updateDashboardLive() {
         const status = document.getElementById("live-refresh-status");
         if (status) status.textContent = "Live feed error: " + String(error && error.message || error);
         if (diag) diag.textContent = "LIVE CHECK · FETCH/JSON ERROR · " + String(error && error.message || error);
+    } finally {
+        liveDashboardPollInFlight = false;
     }
 }
 
