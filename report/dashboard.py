@@ -1810,6 +1810,22 @@ input, textarea, select {{ color: var(--text); }}
     </div>
 
 
+    <!-- Dashboard-native JARVIS Agentic AI panel near the top -->
+    <section class="section" id="jarvis-agent-review-section">
+        <div class="section-title">
+            <h2>JARVIS Agentic AI</h2>
+            <span>Independent advisory review · no order execution</span>
+        </div>
+        <div class="jarvis-review-panel">
+            <div class="jarvis-review-head">
+                <strong id="jarvis-review-headline">Waiting for Agentic AI review data</strong>
+                <span class="jarvis-review-mode" id="jarvis-review-mode">ADVISORY ONLY</span>
+            </div>
+            <pre class="jarvis-review-body" id="jarvis-review-body">JARVIS review will appear here after a live 5-minute decision is evaluated.</pre>
+            <div class="jarvis-review-meta" id="jarvis-review-meta">Review status: waiting for data</div>
+        </div>
+    </section>
+
     <!-- ===================================================== -->
     <!-- MARKET METRICS -->
     <!-- ===================================================== -->
@@ -1924,20 +1940,7 @@ input, textarea, select {{ color: var(--text); }}
     <!-- ===================================================== -->
     <!-- ===================================================== -->
     <!-- SENSEX 30 -->
-      <section class="section" id="jarvis-agent-review-section">
-        <div class="section-title">
-            <h2>JARVIS Agentic AI</h2>
-            <span>Independent advisory review · no order execution</span>
-        </div>
-        <div class="jarvis-review-panel">
-            <div class="jarvis-review-head">
-                <strong id="jarvis-review-headline">Waiting for Agentic AI review data</strong>
-                <span class="jarvis-review-mode" id="jarvis-review-mode">ADVISORY ONLY</span>
-            </div>
-            <pre class="jarvis-review-body" id="jarvis-review-body">JARVIS review will appear here after a live 5-minute decision is evaluated.</pre>
-            <div class="jarvis-review-meta" id="jarvis-review-meta">Review status: waiting for data</div>
-        </div>
-    </section>
+  
 
     
 <!-- MARKET INTELLIGENCE -->
