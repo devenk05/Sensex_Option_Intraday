@@ -1608,6 +1608,32 @@ input, textarea, select {{ color: var(--text); }}
 .entry-score-card .score-ai-core strong {{ display:block !important; color:#ffffff !important; }}
 .entry-score-card .score-component-footnote {{ display:block !important; color:#64748b !important; font-size:11px !important; margin-top:8px !important; }}
 
+
+/* Dashboard sizing refinement: compact score panel, larger timeframe cards */
+.metrics {{ grid-template-columns:minmax(145px,.78fr) minmax(330px,1.45fr) minmax(145px,.78fr) minmax(310px,1.35fr) minmax(145px,.78fr) minmax(145px,.78fr) !important; gap:10px !important; }}
+.entry-score-card {{ grid-column:span 2 !important; min-height:0 !important; padding:12px !important; }}
+.entry-score-card .score-breakdown-heading {{ margin-top:4px !important; margin-bottom:4px !important; }}
+.entry-score-card .score-radial-map {{ height:350px !important; min-height:350px !important; margin-top:0 !important; }}
+.entry-score-card .score-radial-map:before {{ width:min(290px,70%) !important; height:min(290px,70%) !important; }}
+.entry-score-card .score-radial-map:after {{ width:min(195px,47%) !important; height:min(195px,47%) !important; }}
+.entry-score-card .score-ai-core {{ width:clamp(100px,22%,140px) !important; }}
+.entry-score-card .score-ai-core strong {{ font-size:clamp(30px,3vw,42px) !important; }}
+.entry-score-card .score-node {{ width:clamp(90px,20%,125px) !important; min-height:48px !important; gap:3px !important; }}
+.entry-score-card .score-node-name {{ font-size:clamp(8px,.7vw,10px) !important; }}
+.metrics-mtf-section .analysis-card {{ min-height:165px !important; padding:16px !important; }}
+@media (max-width:1250px) {{
+ .metrics {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; }}
+ .entry-score-card {{ grid-column:span 2 !important; }}
+ .metrics-mtf-section {{ grid-column:1 / -1 !important; }}
+ .metrics-mtf-section .analysis-grid {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; }}
+}}
+@media (max-width:760px) {{
+ .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)) !important; }}
+ .entry-score-card {{ grid-column:1 / -1 !important; }}
+ .entry-score-card .score-radial-map {{ height:330px !important; min-height:330px !important; }}
+ .metrics-mtf-section .analysis-grid {{ grid-template-columns:1fr !important; }}
+}}
+
 </style>
 </head>
 
@@ -1851,6 +1877,7 @@ input, textarea, select {{ color: var(--text); }}
                               <th>Open</th>
                               <th>Current LTP</th>
                               <th>Change</th>
+                              <th>Change %</th>
                               <th>Last Close</th>
                           </tr>
                       </thead>
@@ -1865,6 +1892,7 @@ input, textarea, select {{ color: var(--text); }}
                               <td class="sensex30-change {'ce-text' if (row.get("change") or 0) > 0 else 'pe-text' if (row.get("change") or 0) < 0 else ''}">
                                   {_number(row.get("change"))}
                               </td>
+                              <td class="sensex30-change-percent">{_number(row.get("change_percent")) if row.get("change_percent") is not None else (f'{(float(row.get("change")) / float(row.get("last_close")) * 100):.2f}%' if row.get("change") is not None and row.get("last_close") else '—')}</td>
                               <td class="sensex30-close">{_number(row.get("last_close"))}</td>
                           </tr>
                           '''
@@ -2123,6 +2151,7 @@ async function updateSensex30Live() {{
             const ltpCell = row.querySelector(".sensex30-ltp");
             const changeCell = row.querySelector(".sensex30-change");
             const closeCell = row.querySelector(".sensex30-close");
+            const percentCell = row.querySelector(".sensex30-change-percent");
 
             if (openCell) openCell.textContent = formatLiveNumber(stock.open);
 
@@ -2145,6 +2174,16 @@ async function updateSensex30Live() {{
 
             if (closeCell) {{
                 closeCell.textContent = formatLiveNumber(stock.last_close);
+            }}
+            if (percentCell) {{
+                let pct = stock.change_percent;
+                if ((pct == null || !Number.isFinite(Number(pct))) && stock.change != null && stock.last_close) {{
+                    pct = (Number(stock.change) / Number(stock.last_close)) * 100;
+                }}
+                percentCell.textContent = (pct == null || !Number.isFinite(Number(pct))) ? "—" : Number(pct).toFixed(2) + "%";
+                percentCell.classList.remove("ce-text", "pe-text");
+                if (Number(pct) > 0) percentCell.classList.add("ce-text");
+                else if (Number(pct) < 0) percentCell.classList.add("pe-text");
             }}
         }}
     }} catch (error) {{
@@ -2314,19 +2353,29 @@ async function updateDashboardLive() {{
         }}
 
         const scoreElement = document.querySelector(
-            ".entry-score-card .metric-value"
+            ".entry-score-card [data-field='entry-score']"
         );
-        if (scoreElement && data.entry_score != null) {{
-            scoreElement.textContent = data.entry_score;
-        }}
         const scoreCore = document.querySelector('[data-field="score-core"]');
-        if (scoreCore && data.entry_score != null) {{
-            scoreCore.textContent = data.entry_score;
-        }}
+        const liveScore = data.entry_score ?? (data.decision || {{}}).entry_score ?? null;
+        if (scoreElement) scoreElement.textContent = liveScore == null ? "WAIT" : Number(liveScore).toFixed(1);
+        if (scoreCore) scoreCore.textContent = liveScore == null ? "WAIT" : Number(liveScore).toFixed(1);
         const liveComponents = data.entry_score_components || {{}};
-        Object.entries(liveComponents).forEach(([key, raw]) => {{
-            const el = document.querySelector('[data-score-component="' + key + '"]');
+        const componentAliases = {{
+            market_structure: ["market_structure", "structure", "marketStructure"],
+            price_action: ["price_action", "priceAction"],
+            volume_analysis: ["volume_analysis", "volume", "volumeAnalysis"],
+            atm_ce_pe_strength: ["atm_ce_pe_strength", "ce_pe_strength", "atmCEPEStrength"],
+            support_resistance: ["support_resistance", "supportResistance"],
+            pivot_points: ["pivot_points", "pivot", "pivotPoints"],
+            liquidity_greeks: ["liquidity_greeks", "liquidity", "greeks", "liquidityGreeks"],
+            fii_dii: ["fii_dii", "fiiDii"]
+        }};
+        Object.entries(componentAliases).forEach(([targetKey, aliases]) => {{
+            const el = document.querySelector('[data-score-component="' + targetKey + '"]');
             if (!el) return;
+            const sourceKey = aliases.find(key => Object.prototype.hasOwnProperty.call(liveComponents, key));
+            if (!sourceKey) return;
+            const raw = liveComponents[sourceKey];
             const value = (raw && typeof raw === "object") ? (raw.score ?? raw.value) : raw;
             if (value == null || !Number.isFinite(Number(value))) return;
             el.textContent = Number(value).toFixed(0);
