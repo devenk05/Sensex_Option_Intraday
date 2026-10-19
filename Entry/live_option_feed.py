@@ -323,10 +323,18 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
     def on_error(ws, code, reason):
         print("WEBSOCKET_ERROR:", code, reason)
 
+    def on_reconnect(ws, attempts_count):
+        print("WEBSOCKET_RECONNECTING:", attempts_count)
+
+    def on_noreconnect(ws):
+        print("WEBSOCKET_RECONNECT_EXHAUSTED: Live feed is unavailable.")
+
     ticker.on_connect = on_connect
     ticker.on_ticks = on_ticks
     ticker.on_close = on_close
     ticker.on_error = on_error
+    ticker.on_reconnect = on_reconnect
+    ticker.on_noreconnect = on_noreconnect
 
     print("STARTING_WEBSOCKET...")
     ticker.connect()
