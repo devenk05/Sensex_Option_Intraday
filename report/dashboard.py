@@ -1292,6 +1292,281 @@ td {{
   .metrics-mtf-section .analysis-grid {{ grid-template-columns:minmax(0,1fr) !important; }}
 }}
 
+/* JARVIS advisory review panel */
+.jarvis-review-panel {{ border: 1px solid var(--border); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); padding: 18px 20px; margin: 14px 0 24px; }}
+.jarvis-review-head {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }}
+.jarvis-review-head strong {{ font-size: 15px; letter-spacing: .4px; }}
+.jarvis-review-mode {{ border-radius: 999px; padding: 5px 10px; background: #e8f0f5; color: #34566d; font-size: 11px; font-weight: 800; }}
+.jarvis-review-body {{ margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--text); }}
+.jarvis-review-meta {{ color: var(--muted); font-size: 11px; margin-top: 10px; }}
+
+
+/* JARVIS HUD skin — keeps existing dashboard structure and live-data bindings intact */
+body {{ background: radial-gradient(ellipse at 50% -15%, #123b57 0, #071321 38%, #03070e 100%) !important; color: var(--text) !important; }}
+.sidebar {{ background: rgba(4, 13, 24, .96) !important; border-right-color: var(--border) !important; box-shadow: 8px 0 32px rgba(0,0,0,.18); }}
+.logo-mark {{ background: rgba(56,232,255,.12) !important; color: var(--cyan) !important; border: 1px solid var(--border-bright); box-shadow: 0 0 22px rgba(56,232,255,.12); }}
+.nav-title, .sidebar-footer, .page-title p, .metric-title, .metric-subtitle, .section-title span {{ color: var(--muted) !important; }}
+.nav-item {{ color: #a9c5d7 !important; transition: .18s ease; }}
+.nav-item.active, .nav-item:hover {{ color: var(--cyan) !important; background: rgba(56,232,255,.09) !important; border: 1px solid var(--border) !important; }}
+.metric-card, .card, .analysis-card, .live-status, .panel, .section-card {{ background: var(--panel) !important; border-color: var(--border) !important; box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.025) !important; backdrop-filter: blur(14px); }}
+h1, h2, h3, .metric-value {{ color: var(--text); }}
+.metric-value {{ text-shadow: 0 0 20px rgba(56,232,255,.08); }}
+.status-badge {{ background: rgba(56,232,255,.10) !important; border: 1px solid var(--border); }}
+table {{ color: var(--text); }}
+th {{ background: rgba(56,232,255,.08) !important; color: #aeeeff !important; }}
+td, th {{ border-color: rgba(92,158,184,.18) !important; }}
+tr:hover td {{ background: rgba(56,232,255,.045); }}
+input, textarea, select {{ color: var(--text); }}
+@keyframes jarvisPulse {{ 0%,100% {{ box-shadow: 0 0 14px rgba(56,232,255,.14), inset 0 0 14px rgba(56,232,255,.08); }} 50% {{ box-shadow: 0 0 30px rgba(56,232,255,.32), inset 0 0 22px rgba(56,232,255,.15); }} }}
+.jarvis-chat-launcher {{ position:fixed; right:24px; bottom:22px; z-index:10001; width:64px; height:64px; border-radius:50%; border:1px solid #58eaff; color:#dffaff; background:radial-gradient(circle at 35% 28%,#1c6785,#061523 70%); font-size:24px; cursor:pointer; animation:jarvisPulse 3s infinite; box-shadow:0 0 25px rgba(56,232,255,.2); }}
+.jarvis-chat-launcher:hover {{ transform:translateY(-2px); }}
+.jarvis-chat {{ position:fixed; right:24px; bottom:98px; z-index:10000; width:min(390px,calc(100vw - 28px)); height:min(570px,calc(100vh - 130px)); display:none; flex-direction:column; overflow:hidden; border:1px solid rgba(56,232,255,.38); border-radius:18px; background:rgba(4,13,25,.97); box-shadow:0 20px 70px rgba(0,0,0,.6),0 0 35px rgba(56,232,255,.10); backdrop-filter:blur(20px); }}
+.jarvis-chat.open {{ display:flex; }}
+.jarvis-chat-head {{ display:flex; align-items:center; gap:11px; padding:15px; border-bottom:1px solid var(--border); background:linear-gradient(110deg,rgba(15,67,91,.72),rgba(5,18,33,.82)); }}
+.jarvis-orb {{ width:38px; height:38px; flex:0 0 auto; display:grid; place-items:center; border-radius:50%; color:var(--cyan); border:1px solid var(--border-bright); background:radial-gradient(circle,rgba(56,232,255,.22),rgba(5,18,33,.8)); box-shadow:0 0 18px rgba(56,232,255,.18); }}
+.jarvis-chat-title {{ font-weight:800; letter-spacing:1.3px; font-size:13px; }}
+.jarvis-chat-subtitle {{ margin-top:4px; font-size:10px; color:var(--muted); letter-spacing:.8px; }}
+.jarvis-chat-close {{ margin-left:auto; border:0; background:transparent; color:var(--muted); font-size:23px; cursor:pointer; }}
+.jarvis-chat-messages {{ flex:1; overflow:auto; padding:14px; display:flex; flex-direction:column; gap:11px; }}
+.jarvis-msg {{ max-width:91%; white-space:pre-wrap; overflow-wrap:anywhere; padding:11px 12px; border-radius:12px; font-size:12px; line-height:1.55; }}
+.jarvis-msg.bot {{ align-self:flex-start; color:#d8f6ff; background:rgba(22,54,74,.7); border:1px solid rgba(56,232,255,.16); border-top-left-radius:4px; }}
+.jarvis-msg.user {{ align-self:flex-end; color:#f3fdff; background:rgba(13,107,130,.42); border:1px solid rgba(56,232,255,.25); border-top-right-radius:4px; }}
+.jarvis-chat-suggestions {{ display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 10px; }}
+.jarvis-chip {{ border:1px solid var(--border); background:rgba(56,232,255,.06); color:#aeeeff; border-radius:20px; padding:6px 9px; font-size:10px; cursor:pointer; }}
+.jarvis-chip:hover {{ background:rgba(56,232,255,.14); }}
+.jarvis-chat-form {{ display:flex; gap:7px; padding:11px; border-top:1px solid var(--border); }}
+.jarvis-chat-input {{ min-width:0; flex:1; resize:none; max-height:88px; border:1px solid var(--border); border-radius:10px; outline:none; padding:11px; background:#071321; color:var(--text); font:12px/1.4 inherit; }}
+.jarvis-chat-input:focus {{ border-color:var(--cyan); box-shadow:0 0 0 2px rgba(56,232,255,.08); }}
+.jarvis-chat-action {{ width:39px; flex:0 0 39px; border:1px solid var(--border); border-radius:10px; color:var(--cyan); background:rgba(56,232,255,.08); cursor:pointer; font-size:15px; }}
+.jarvis-chat-action:hover {{ background:rgba(56,232,255,.16); }}
+.jarvis-chat-foot {{ padding:0 13px 10px; color:#6f8da2; font-size:9px; text-align:center; }}
+@media (max-width:760px) {{ .sidebar {{ width:68px; padding:18px 8px; }} .logo {{ padding:5px 4px 22px; font-size:0; }} .logo-mark {{ flex:0 0 35px; }} .nav-title, .nav-item span:not(.nav-icon), .sidebar-footer {{ display:none; }} .nav-item {{ justify-content:center; padding:12px 4px; }} .main {{ padding:18px 12px 100px; }} .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .jarvis-chat {{ right:14px; bottom:88px; }} .jarvis-chat-launcher {{ right:16px; bottom:15px; }} }}
+
+
+/* Radial live AI score map */
+.entry-score-card {{ grid-column:span 2; }}
+.score-calculation-note {{ margin-top:6px; max-width:720px; color:#8baac2; font-size:10px; line-height:1.5; }}
+.score-node > strong {{ display:block; min-width:42px; min-height:28px; font-size:clamp(23px,2.5vw,30px); line-height:1.05; text-align:center; }}
+.score-node > strong:before,.score-node > strong:after {{ content:none !important; display:none !important; }}
+.score-breakdown-heading {{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:16px; margin-bottom:9px; font-size:11px; letter-spacing:.08em; font-weight:700; color:var(--text-secondary, #9bb4c9); }}
+.score-breakdown-note {{ font-size:10px; letter-spacing:0; font-weight:500; text-align:right; }}
+.score-radial-map {{ position:relative; display:block; width:100%; height:480px; margin:4px auto 0; padding:0; isolation:isolate; overflow:hidden; }}
+.score-radial-map:before {{ content:""; position:absolute; left:50%; top:50%; width:min(390px,76%); height:min(390px,76%); transform:translate(-50%,-50%); z-index:0; border:1px solid rgba(40,178,255,.28); border-radius:50%; box-shadow:0 0 24px rgba(0,168,255,.08),inset 0 0 22px rgba(0,168,255,.05); pointer-events:none; }}
+.score-radial-map:after {{ content:""; position:absolute; left:50%; top:50%; width:min(255px,50%); height:min(255px,50%); transform:translate(-50%,-50%); z-index:0; border:1px solid rgba(137,72,255,.25); border-radius:50%; pointer-events:none; }}
+.score-node:before,.score-node:after {{ content:none !important; display:none !important; }}
+.score-node > small {{ display:none !important; }}
+.score-node {{ position:absolute; z-index:2; width:clamp(105px,22%,150px); min-height:70px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; gap:5px; padding:5px; border:0; border-radius:0; background:transparent; box-shadow:none; }}
+.score-node-name {{ font-size:clamp(9px,1.1vw,12px); line-height:1.25; font-weight:700; letter-spacing:.025em; color:#c8e7fa; overflow-wrap:anywhere; text-shadow:0 1px 4px #03111f; }}
+.score-node strong {{ font-size:clamp(23px,2.5vw,30px); line-height:1.05; color:#34e7bd; text-shadow:0 0 12px rgba(52,231,189,.25); }}
+.score-node > small {{ color:#8baac2; font-size:10px; letter-spacing:.04em; }}
+.score-node.strong strong {{ color:#34e7bd; }}
+.score-node.moderate strong {{ color:#facc15; text-shadow:0 0 12px rgba(250,204,21,.2); }}
+.score-node.weak strong {{ color:#fb7185; text-shadow:0 0 12px rgba(251,113,133,.2); }}
+.score-node.unavailable {{ opacity:.8; }}
+.score-node-market_structure {{ left:50%; top:0; transform:translateX(-50%); }}
+.score-node-volume_analysis {{ left:76%; top:14%; transform:translateX(-10%); }}
+.score-node-support_resistance {{ right:0; top:42%; }}
+.score-node-fii_dii {{ right:3%; bottom:1%; }}
+.score-node-price_action {{ left:0; top:14%; }}
+.score-node-atm_ce_pe_strength {{ left:0; top:42%; }}
+.score-node-pivot_points {{ left:3%; bottom:1%; }}
+.score-node-liquidity_greeks {{ left:50%; bottom:0; transform:translateX(-50%); }}
+.score-ai-core {{ position:absolute; z-index:3; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:5px; width:clamp(140px,29%,190px); height:auto; aspect-ratio:1; border-radius:50%; background:radial-gradient(circle,rgba(0,156,255,.28),rgba(15,28,75,.94) 68%); border:1px solid rgba(43,211,255,.8); box-shadow:0 0 28px rgba(0,153,255,.32),inset 0 0 22px rgba(81,85,255,.3); }}
+.score-ai-core strong {{ color:#e5f6ff; font-size:clamp(42px,5vw,58px); text-shadow:0 0 18px #249dff; }}
+.score-ai-core span {{ font-size:9px; letter-spacing:.12em; color:#80d8ff; }}
+.score-ai-orbit {{ position:absolute; inset:-7px; border:1px dashed rgba(48,208,255,.45); border-radius:50%; animation:score-orbit-spin 24s linear infinite; pointer-events:none; }}
+@keyframes score-orbit-spin {{ to {{ transform:rotate(360deg); }} }}
+.score-breakdown-status {{ margin-top:9px; font-size:10px; color:#829caf; }}
+@media (max-width:900px) {{ .entry-score-card {{ grid-column:span 2; }} .score-radial-map {{ height:420px; }} .score-node {{ width:clamp(105px,22%,145px); }} .score-node strong {{ font-size:24px; }} .score-node-name {{ font-size:10px; }} .score-ai-core {{ width:clamp(135px,28%,175px); }} }}
+@media (max-width:520px) {{ .entry-score-card {{ grid-column:span 1; }} .score-breakdown-heading {{ align-items:flex-start; flex-direction:column; }} .score-radial-map {{ height:370px; }} .score-node {{ width:clamp(86px,25%,110px); }} .score-node strong {{ font-size:19px; }} .score-node-name {{ font-size:8px; }} .score-node > small {{ font-size:8px; }} .score-node-volume_analysis {{ left:72%; transform:translateX(-5%); }} .score-node-support_resistance {{ right:-2%; }} .score-node-atm_ce_pe_strength {{ left:-2%; }} .score-ai-core {{ width:clamp(105px,31%,135px); }} .score-ai-core strong {{ font-size:36px; }} }}@media (max-width:900px) {{ .entry-score-card {{ grid-column:span 2; }} .score-radial-map {{ grid-template-rows:repeat(3,minmax(92px,auto)); gap:7px; }} .score-node-name {{ font-size:9px; }} .score-node strong {{ font-size:21px; }} .score-ai-core {{ width:min(100%,115px); }} }}
+@media (max-width:520px) {{ .entry-score-card {{ grid-column:span 1; }} .score-breakdown-heading {{ align-items:flex-start; flex-direction:column; }} .score-radial-map {{ grid-template-rows:repeat(3,minmax(88px,auto)); gap:5px; }} .score-node {{ padding:7px 3px; }} .score-node-name {{ font-size:8px; }} .score-node strong {{ font-size:18px; }} .score-node > small {{ font-size:8px; }} .score-ai-core {{ width:min(100%,90px); }} .score-ai-core span {{ font-size:6px; }} }}
+
+
+
+
+/* Compact cards: eliminate unused height and keep score visualization proportional */
+.metrics {{ display:grid; grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) minmax(150px,1fr) minmax(360px,2.1fr) minmax(150px,1fr) minmax(150px,1fr); gap:12px; align-items:start; width:100%; margin-bottom:18px; }}
+.metrics > .metric-card {{ min-width:0; height:auto !important; min-height:0 !important; padding:15px; }}
+.metrics > .entry-score-card {{ grid-column:auto; min-width:0; }}
+.metric-card:not(.entry-score-card) {{ align-self:start; }}
+.score-radial-map {{ height:350px; min-height:350px; margin-top:2px; }}
+.score-radial-map:before {{ width:min(300px,74%); }}
+.score-radial-map:after {{ width:min(200px,49%); }}
+.score-breakdown-heading {{ margin-top:12px; margin-bottom:6px; }}
+.score-breakdown-status {{ margin-top:5px; }}
+.analysis-grid {{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }}
+.analysis-grid > .analysis-card {{ min-height:150px; padding:14px; }}
+@media (max-width: 1450px) {{
+  .metrics {{ grid-template-columns:repeat(3,minmax(0,1fr)); align-items:stretch; }}
+  .metrics > .entry-score-card {{ grid-column:span 2; grid-row:auto; }}
+  .score-radial-map {{ height:350px; min-height:350px; }}
+}}
+@media (max-width: 900px) {{
+  .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+  .metrics > .entry-score-card {{ grid-column:1 / -1; }}
+  .analysis-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+  .analysis-grid > .analysis-card:last-child {{ grid-column:1 / -1; }}
+}}
+@media (max-width: 600px) {{
+  .metrics {{ grid-template-columns:minmax(0,1fr); }}
+  .metrics > .entry-score-card {{ grid-column:1; }}
+  .analysis-grid {{ grid-template-columns:minmax(0,1fr); }}
+  .analysis-grid > .analysis-card:last-child {{ grid-column:1; }}
+  .score-radial-map {{ height:330px; min-height:330px; }}
+}}
+
+
+/* Layout: put timeframe analysis in the unused row below the first three metric cards */
+.metrics {{ display:grid !important; grid-template-columns:repeat(6,minmax(0,1fr)) !important; align-items:start !important; gap:12px !important; width:100% !important; }}
+.metrics > .metric-card {{ grid-row:1 !important; grid-column:auto !important; align-self:start !important; min-width:0 !important; width:auto !important; height:auto !important; min-height:0 !important; box-sizing:border-box !important; }}
+.metrics > .sensex-spot-card {{ grid-column:1 !important; }}
+.metrics > .market-status-card {{ grid-column:2 !important; }}
+.metrics > .market-bias-card {{ grid-column:3 !important; }}
+.metrics > .entry-score-card {{ grid-column:4 !important; grid-row:1 / span 2 !important; min-width:0 !important; }}
+.metrics > .atm-strike-card {{ grid-column:5 !important; }}
+.metrics > .decision-card {{ grid-column:6 !important; }}
+.metrics > .metrics-mtf-section {{ grid-column:1 / span 3 !important; grid-row:2 !important; min-width:0; width:100%; margin:0; padding:0; }}
+.metrics-mtf-section .section-title {{ margin:0 0 10px; }}
+.metrics-mtf-section .analysis-grid {{ display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:10px !important; width:100%; }}
+.metrics-mtf-section .analysis-card {{ min-width:0; min-height:140px; padding:12px; }}
+@media (max-width:1450px) {{
+ .metrics {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; }}
+ .metrics > .market-status-card {{ grid-column:1 !important; grid-row:2 !important; }}
+ .metrics > .market-bias-card {{ grid-column:1 !important; grid-row:3 !important; }}
+ .metrics > .atm-strike-card {{ grid-column:1 !important; grid-row:4 !important; }}
+ .metrics > .decision-card {{ grid-column:1 !important; grid-row:5 !important; }}
+ .metrics > .entry-score-card {{ grid-column:2 / span 2 !important; grid-row:1 / span 2 !important; }}
+ .metrics > .metrics-mtf-section {{ grid-column:1 !important; grid-row:6 !important; }}
+ .metrics-mtf-section .analysis-grid {{ grid-template-columns:minmax(0,1fr) !important; }}
+}}
+@media (max-width:760px) {{
+ .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)) !important; }}
+ .metrics > .entry-score-card {{ grid-column:1 / -1 !important; grid-row:1 !important; }}
+ .metrics > .sensex-spot-card {{ grid-column:1 !important; grid-row:2 !important; }}
+ .metrics > .market-status-card {{ grid-column:2 !important; grid-row:2 !important; }}
+ .metrics > .market-bias-card {{ grid-column:1 !important; grid-row:3 !important; }}
+ .metrics > .atm-strike-card {{ grid-column:2 !important; grid-row:3 !important; }}
+ .metrics > .decision-card {{ grid-column:1 / -1 !important; grid-row:4 !important; }}
+ .metrics > .metrics-mtf-section {{ grid-column:1 / -1 !important; grid-row:5 !important; }}
+ .metrics-mtf-section .analysis-grid {{ grid-template-columns:minmax(0,1fr) !important; }}
+}}
+
+ 
+/* Reference composition: left KPI stack | centered AI map | right 15m/5m/1m stack */
+.metrics {{
+  display:grid !important;
+  grid-template-columns:minmax(205px, 0.78fr) minmax(420px, 1.75fr) minmax(245px, 0.9fr) !important;
+  grid-template-rows:repeat(5, min-content) !important;
+  align-items:start !important;
+  gap:10px !important;
+  width:100% !important;
+  min-width:0 !important;
+  margin-bottom:18px !important;
+  overflow:visible !important;
+}}
+.metrics > .metric-card {{
+  min-width:0 !important; width:auto !important; max-width:100% !important;
+  height:auto !important; min-height:0 !important; align-self:start !important;
+  grid-row:auto !important; box-sizing:border-box !important; padding:14px !important;
+}}
+.metrics > .sensex-spot-card {{ grid-column:1 !important; grid-row:1 !important; }}
+.metrics > .market-status-card {{ grid-column:1 !important; grid-row:2 !important; }}
+.metrics > .market-bias-card {{ grid-column:1 !important; grid-row:3 !important; }}
+.metrics > .atm-strike-card {{ grid-column:1 !important; grid-row:4 !important; }}
+.metrics > .decision-card {{ grid-column:1 !important; grid-row:5 !important; }}
+.metrics > .entry-score-card {{
+  grid-column:2 !important; grid-row:1 / span 5 !important;
+  min-width:0 !important; width:auto !important; align-self:stretch !important;
+}}
+.metrics > .metrics-mtf-section {{
+  grid-column:3 !important; grid-row:1 / span 5 !important;
+  min-width:0 !important; width:auto !important; margin:0 !important; padding:0 !important;
+}}
+.metrics-mtf-section .section-title {{ margin:0 0 10px !important; }}
+.metrics-mtf-section .analysis-grid {{
+  display:grid !important; grid-template-columns:minmax(0,1fr) !important;
+  gap:10px !important; width:100% !important;
+}}
+.metrics-mtf-section .analysis-card {{
+  min-width:0 !important; min-height:135px !important; height:auto !important;
+  width:auto !important; padding:12px !important;
+}}
+.sensex-spot-card .sensex-open-change {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:4px !important; }}
+.sensex-spot-card .sensex-open-change > div {{ min-width:0 !important; overflow-wrap:anywhere !important; }}
+
+/* Keep the AI map truly circular; remove old grid-based node overrides */
+.score-radial-map {{
+  position:relative !important; display:block !important; width:100% !important;
+  height:430px !important; min-height:430px !important; margin:4px auto 0 !important;
+  padding:0 !important; isolation:isolate !important; overflow:hidden !important;
+}}
+.score-radial-map:before {{
+  content:"" !important; position:absolute !important; left:50% !important; top:50% !important;
+  width:min(350px,78%) !important; height:auto !important; aspect-ratio:1 / 1 !important;
+  transform:translate(-50%,-50%) !important; border-radius:50% !important;
+}}
+.score-radial-map:after {{
+  content:"" !important; position:absolute !important; left:50% !important; top:50% !important;
+  width:min(235px,52%) !important; height:auto !important; aspect-ratio:1 / 1 !important;
+  transform:translate(-50%,-50%) !important; border-radius:50% !important;
+}}
+.score-node {{
+  position:absolute !important; display:flex !important; flex-direction:column !important;
+  justify-content:center !important; align-items:center !important; text-align:center !important;
+  width:clamp(78px,22%,125px) !important; min-height:42px !important; padding:2px !important;
+  border:0 !important; background:transparent !important; box-shadow:none !important;
+  gap:3px !important; z-index:2 !important; transform:none;
+}}
+.score-node-name {{ font-size:clamp(8px,.72vw,11px) !important; line-height:1.15 !important; }}
+.score-node > strong {{ display:block !important; min-height:0 !important; font-size:clamp(17px,1.6vw,24px) !important; }}
+.score-node > small {{ display:none !important; }}
+.score-node-market_structure {{ left:50% !important; top:1% !important; transform:translateX(-50%) !important; }}
+.score-node-price_action {{ left:5% !important; top:17% !important; }}
+.score-node-volume_analysis {{ right:5% !important; top:17% !important; left:auto !important; transform:none !important; }}
+.score-node-atm_ce_pe_strength {{ left:0 !important; top:43% !important; }}
+.score-node-support_resistance {{ right:0 !important; top:43% !important; left:auto !important; transform:none !important; }}
+.score-node-pivot_points {{ left:5% !important; bottom:1% !important; top:auto !important; }}
+.score-node-liquidity_greeks {{ left:50% !important; bottom:0 !important; top:auto !important; transform:translateX(-50%) !important; }}
+.score-node-fii_dii {{ right:5% !important; bottom:1% !important; top:auto !important; left:auto !important; transform:none !important; }}
+.score-ai-core {{
+  position:absolute !important; left:50% !important; top:50% !important;
+  transform:translate(-50%,-50%) !important; width:clamp(92px,25%,125px) !important;
+  height:auto !important; aspect-ratio:1 / 1 !important; border-radius:50% !important;
+  z-index:3 !important; display:flex !important; flex-direction:column !important;
+  justify-content:center !important; align-items:center !important;
+}}
+.score-ai-core > strong {{ font-size:clamp(32px,3.6vw,46px) !important; }}
+@media (max-width:1050px) {{
+  .metrics {{ grid-template-columns:minmax(180px,.8fr) minmax(350px,1.5fr) minmax(215px,.9fr) !important; gap:8px !important; }}
+  .metrics > .metric-card {{ padding:10px !important; }}
+  .score-radial-map {{ height:390px !important; min-height:390px !important; }}
+  .score-node {{ width:clamp(68px,23%,100px) !important; }}
+  .score-node-name {{ font-size:8px !important; }}
+  .score-ai-core {{ width:clamp(82px,25%,105px) !important; }}
+  .metrics-mtf-section .analysis-card {{ min-height:120px !important; padding:10px !important; }}
+}}
+@media (max-width:760px) {{
+  .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)) !important; grid-template-rows:auto !important; }}
+  .metrics > .sensex-spot-card {{ grid-column:1 !important; grid-row:1 !important; }}
+  .metrics > .market-status-card {{ grid-column:2 !important; grid-row:1 !important; }}
+  .metrics > .market-bias-card {{ grid-column:1 !important; grid-row:2 !important; }}
+  .metrics > .atm-strike-card {{ grid-column:2 !important; grid-row:2 !important; }}
+  .metrics > .decision-card {{ grid-column:1 / -1 !important; grid-row:3 !important; }}
+  .metrics > .entry-score-card {{ grid-column:1 / -1 !important; grid-row:4 !important; }}
+  .metrics > .metrics-mtf-section {{ grid-column:1 / -1 !important; grid-row:5 !important; }}
+  .metrics-mtf-section .analysis-grid {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; }}
+  .metrics-mtf-section .analysis-card {{ min-height:120px !important; }}
+  .score-radial-map {{ height:360px !important; min-height:360px !important; }}
+}}
+@media (max-width:520px) {{
+  .metrics {{ grid-template-columns:minmax(0,1fr) !important; }}
+  .metrics > .sensex-spot-card, .metrics > .market-status-card, .metrics > .market-bias-card,
+  .metrics > .atm-strike-card, .metrics > .decision-card, .metrics > .entry-score-card,
+  .metrics > .metrics-mtf-section {{ grid-column:1 !important; grid-row:auto !important; }}
+  .metrics-mtf-section .analysis-grid {{ grid-template-columns:minmax(0,1fr) !important; }}
+}}
+
+
 </style>
 </head>
 
@@ -1483,7 +1758,23 @@ td {{
     <!-- ===================================================== -->
     <!-- ===================================================== -->
     <!-- SENSEX 30 -->
-      <!-- MARKET INTELLIGENCE -->
+      <section class="section" id="jarvis-agent-review-section">
+        <div class="section-title">
+            <h2>JARVIS Agentic AI</h2>
+            <span>Independent advisory review · no order execution</span>
+        </div>
+        <div class="jarvis-review-panel">
+            <div class="jarvis-review-head">
+                <strong id="jarvis-review-headline">Waiting for first completed-candle review</strong>
+                <span class="jarvis-review-mode" id="jarvis-review-mode">ADVISORY ONLY</span>
+            </div>
+            <pre class="jarvis-review-body" id="jarvis-review-body">JARVIS review will appear here after a live 5-minute decision is evaluated.</pre>
+            <div class="jarvis-review-meta" id="jarvis-review-meta">Review status: waiting for data</div>
+        </div>
+    </section>
+
+    
+<!-- MARKET INTELLIGENCE -->
     <!-- ===================================================== -->
 
     <section class="section">
@@ -1999,11 +2290,205 @@ async function updateDashboardLive() {{
     }}
 }}
 
+async function updateJarvisAgentReview() {{
+    const bodyEl = document.getElementById("jarvis-review-body");
+    const headlineEl = document.getElementById("jarvis-review-headline");
+    const metaEl = document.getElementById("jarvis-review-meta");
+    const modeEl = document.getElementById("jarvis-review-mode");
+    if (!bodyEl || !headlineEl || !metaEl || !modeEl) return;
+    try {{
+        const response = await fetch("latest_agentic_review.json?ts=" + Date.now(), {{ cache: "no-store" }});
+        if (!response.ok) {{
+            metaEl.textContent = "Review status: waiting for the next completed 5-minute decision";
+            return;
+        }}
+        const review = await response.json();
+        if (review.status === "WAITING_FOR_LIVE_REVIEW") {{
+            headlineEl.textContent = (review.explanation || {{}}).headline || "Waiting for first live review";
+            modeEl.textContent = review.mode || "ADVISORY ONLY";
+            bodyEl.textContent = [
+                "JARVIS Agentic AI is integrated and ready.",
+                "No live market review has been generated yet.",
+                "The panel updates after the next completed 5-minute decision.",
+                "Safety: no trade recommendation has been generated; no broker order was placed."
+            ].join("\n");
+            metaEl.textContent = "Review status: waiting for first completed 5-minute decision · Initialized: " + (review.timestamp || "time unavailable");
+            return;
+        }}
+        const audit = review.decision_audit || {{}};
+        const risk = review.risk_review || {{}};
+        const market = review.market_intelligence || {{}};
+        const explanation = review.explanation || {{}};
+        const lines = [
+            "Decision: " + (audit.decision_status || "UNKNOWN"),
+            "Entry score: " + (audit.entry_score ?? "N/A") + " / " + (audit.minimum_score ?? "80"),
+            "Market: " + (explanation.market_summary || market.market_trend || "N/A"),
+            "Decision audit flags:",
+            ...((audit.diagnostic_flags || []).map(flag => "  - " + String(flag))),
+            "Risk guardrail flags:",
+            ...((risk.risk_flags || []).map(flag => "  - " + String(flag))),
+            "Safety: " + (explanation.safety || "Advisory only; deterministic decision remains authoritative.")
+        ];
+        headlineEl.textContent = explanation.headline || "JARVIS diagnostic review";
+        modeEl.textContent = review.mode || "ADVISORY ONLY";
+        bodyEl.textContent = lines.join("\n");
+        metaEl.textContent = "Last review: " + (review.timestamp || "timestamp unavailable") +
+            " · Local LLM: " + ((review.local_llm || {{}}).status || "disabled / not configured");
+    }} catch (error) {{
+        metaEl.textContent = "Review status: unable to read JARVIS snapshot";
+    }}
+}}
+
+
+updateJarvisAgentReview();
+setInterval(updateJarvisAgentReview, 3000);
 updateDashboardLive();
 setInterval(updateDashboardLive, 1000);
 updateSensex30Live();
 setInterval(updateSensex30Live, 1000);
 </script>
+<!-- JARVIS Chat: browser-local, dashboard-aware assistant; no broker actions -->
+<button class="jarvis-chat-launcher" id="jarvis-chat-launcher" aria-label="Open JARVIS chat" title="Talk to JARVIS">✧</button>
+<section class="jarvis-chat" id="jarvis-chat" role="dialog" aria-label="JARVIS AI Chat" aria-modal="false">
+  <header class="jarvis-chat-head">
+    <div class="jarvis-orb" aria-hidden="true">✧</div>
+    <div><div class="jarvis-chat-title">J.A.R.V.I.S.</div><div class="jarvis-chat-subtitle">MARKET ASSISTANT · ADVISORY ONLY</div></div>
+    <button class="jarvis-chat-close" id="jarvis-chat-close" aria-label="Close chat">×</button>
+  </header>
+  <div class="jarvis-chat-messages" id="jarvis-chat-messages" aria-live="polite">
+    <div class="jarvis-msg bot">Hello. JARVIS interface online. I can explain the current dashboard state, market bias, entry score, option-chain snapshot and why the system is waiting. Ask me in Marathi, Hindi or English.</div>
+  </div>
+  <div class="jarvis-chat-suggestions">
+    <button class="jarvis-chip" data-prompt="Market direction काय आहे?">Market direction</button>
+    <button class="jarvis-chip" data-prompt="Entry score आणि decision सांग">Score / decision</button>
+    <button class="jarvis-chip" data-prompt="WAIT का आहे?">Why WAIT?</button>
+  </div>
+  <form class="jarvis-chat-form" id="jarvis-chat-form">
+    <textarea class="jarvis-chat-input" id="jarvis-chat-input" rows="1" placeholder="Ask JARVIS… / JARVIS ला विचारा" aria-label="Message JARVIS"></textarea>
+    <button class="jarvis-chat-action" id="jarvis-chat-mic" type="button" title="Speak to JARVIS" aria-label="Speak to JARVIS">🎙</button>
+    <button class="jarvis-chat-action" type="submit" title="Send message" aria-label="Send message">➤</button>
+  </form>
+  <div class="jarvis-chat-foot">VOICE SUPPORT DEPENDS ON YOUR BROWSER · NO AUTOMATIC ORDERS</div>
+</section>
+
+<script>
+
+(function initJarvisChat() {{
+  const panel = document.getElementById("jarvis-chat");
+  const launcher = document.getElementById("jarvis-chat-launcher");
+  const close = document.getElementById("jarvis-chat-close");
+  const form = document.getElementById("jarvis-chat-form");
+  const input = document.getElementById("jarvis-chat-input");
+  const messages = document.getElementById("jarvis-chat-messages");
+  const mic = document.getElementById("jarvis-chat-mic");
+  let liveState = null;
+  let reviewState = null;
+  let recognition = null;
+
+  launcher.addEventListener("click", () => {{ panel.classList.toggle("open"); if (panel.classList.contains("open")) input.focus(); }});
+  close.addEventListener("click", () => panel.classList.remove("open"));
+
+  function addMessage(text, role) {{
+    const node = document.createElement("div");
+    node.className = "jarvis-msg " + role;
+    node.textContent = text;
+    messages.appendChild(node);
+    messages.scrollTop = messages.scrollHeight;
+  }}
+  async function readJson(file) {{
+    try {{
+      const r = await fetch(file + "?ts=" + Date.now(), {{cache:"no-store"}});
+      if (!r.ok) return null;
+      return await r.json();
+    }} catch (_) {{ return null; }}
+  }}
+  async function refreshContext() {{
+    const [live, review] = await Promise.all([readJson("live_state.json"), readJson("latest_agentic_review.json")]);
+    if (live) liveState = live;
+    if (review) reviewState = review;
+  }}
+  const val = (obj, keys, fallback="N/A") => {{
+    for (const key of keys) if (obj && obj[key] !== undefined && obj[key] !== null && obj[key] !== "") return obj[key];
+    return fallback;
+  }};
+  function makeReply(question) {{
+    const q = question.toLowerCase();
+    const d = liveState || {{}};
+    const r = reviewState || {{}};
+    const audit = r.decision_audit || {{}};
+    const market = r.market_intelligence || {{}};
+    const risk = r.risk_review || {{}};
+    const explanation = r.explanation || {{}};
+    const bias = val(d, ["market_bias"], val(market, ["market_trend"], "UNKNOWN"));
+    const score = val(d, ["entry_score"], val(audit, ["entry_score"], "N/A"));
+    const decision = val(d, ["decision_status"], val(audit, ["decision_status"], "WAIT"));
+    const spot = val(d, ["spot","sensex_price"], "N/A");
+    const atm = val(d, ["atm_strike"], "N/A");
+    const status = val(d, ["status"], "DATA NOT AVAILABLE");
+    const reviewStatus = val(r, ["status"], "");
+    if (/hello|hi\b|namaskar|नमस्कार|हाय|नमस्ते/.test(q)) return "Hello! JARVIS online आहे. Market direction, score, WAIT reason किंवा CE/PE snapshot बद्दल विचार.";
+    if (/market|direction|दिशा|trend|ट्रेंड|bull|bear/.test(q)) return "Market snapshot\n• Bias: " + String(bias).replace(/_/g," ") + "\n• SENSEX spot: " + spot + "\n• ATM strike: " + atm + "\n• Data status: " + String(status).replace(/_/g," ") + "\n\nही dashboard मधील उपलब्ध माहिती आहे; स्वतःहून future direction ची हमी नाही.";
+    if (/score|स्कोअर|decision|निर्णय|entry/.test(q)) return "Decision snapshot\n• Entry score: " + score + "\n• Decision: " + String(decision).replace(/_/g," ") + "\n• Minimum score: " + val(audit,["minimum_score"],80) + "\n• Review: " + (reviewStatus || "not available") + "\n\nScore एकटाच trade ची हमी देत नाही; deterministic risk/entry checks लागू राहतात.";
+    if (/wait|का थांब|का आहे|reason|कारण|प्रवेश|confirmation|confirm/.test(q)) {{
+      const flags = Array.isArray(audit.diagnostic_flags) ? audit.diagnostic_flags.join(", ") : "";
+      const riskFlags = Array.isArray(risk.risk_flags) ? risk.risk_flags.join(", ") : "";
+      return "WAIT / confirmation status\n• Decision: " + String(decision).replace(/_/g," ") + "\n• Explanation: " + val(explanation,["decision_summary","headline"],"No review explanation available") + "\n• Diagnostic flags: " + (flags || "No flags supplied") + "\n• Risk flags: " + (riskFlags || "No risk flags supplied") + "\n\n" + (reviewStatus === "WAITING_FOR_LIVE_REVIEW" ? "पहिला live review अजून आलेला नाही. पूर्ण झालेल्या 5-minute candle नंतर dashboard पुन्हा तपास." : "फक्त score पाहून WAIT override करू नको; actual decision audit तपास.");
+    }}
+    if (/option|chain|ce|pe|call|put|strike|ओपन इंटरेस्ट|oi/.test(q)) {{
+      const opts = Array.isArray(d.options) ? d.options : (Array.isArray(d.option_chain) ? d.option_chain : []);
+      const summary = opts.slice(0,8).map(o => "Strike " + val(o,["strike","strike_price"],"?") + ": CE " + val(o,["ce_ltp","call_ltp"],"N/A") + " / PE " + val(o,["pe_ltp","put_ltp"],"N/A")).join("\n");
+      return "Option-chain snapshot (available rows)\n" + (summary || "Option-chain rows dashboard JSON मध्ये उपलब्ध नाहीत.") + "\n\nRows: " + opts.length + ". डेटा जुना किंवा अपूर्ण असू शकतो; live timestamp तपास.";
+    }}
+    if (/help|काय विचारू|मदत/.test(q)) return "तू असे विचारू शकतोस:\n• Market direction काय आहे?\n• Entry score आणि decision सांग\n• WAIT का आहे?\n• ATM strike आणि option-chain snapshot दाखव\n\nमी dashboard JSON वरून उत्तर देतो. बाह्य AI service/backend जोडलेला नसल्यास हे contextual assistant आहे, general-purpose LLM नाही.";
+    if (/time|timestamp|updated|ताजा|कधी/.test(q)) return "Dashboard data timestamp: " + val(d,["timestamp","updated_at","time"],"live_state.json मध्ये timestamp उपलब्ध नाही") + "\nJARVIS review timestamp: " + val(r,["timestamp"],"review उपलब्ध नाही") + "\nData status: " + status;
+    return "तुझा प्रश्न समजला: “" + question + "”\n\nसध्याच्या build मध्ये मी dashboard च्या live_state.json आणि JARVIS review snapshot वर आधारित Market direction, score/decision, WAIT reason आणि option-chain माहिती सांगू शकतो. या प्रश्नासाठी आवश्यक structured data उपलब्ध नाही. Help लिही किंवा dashboard मधील संबंधित माहिती विचार.";
+  }}
+  async function sendMessage(text) {{
+    const question = String(text || "").trim();
+    if (!question) return;
+    addMessage(question, "user");
+    input.value = "";
+    addMessage("Checking dashboard snapshot…", "bot");
+    const pending = messages.lastElementChild;
+    await refreshContext();
+    const reply = makeReply(question);
+    pending.textContent = reply;
+    messages.scrollTop = messages.scrollHeight;
+    if (window.speechSynthesis && panel.dataset.speak === "true") {{
+      const utterance = new SpeechSynthesisUtterance(reply);
+      utterance.lang = /[\u0900-\u097F]/.test(reply) ? "mr-IN" : "en-IN";
+      window.speechSynthesis.speak(utterance);
+    }}
+  }}
+  form.addEventListener("submit", e => {{ e.preventDefault(); sendMessage(input.value); }});
+  document.querySelectorAll(".jarvis-chip").forEach(button => button.addEventListener("click", () => sendMessage(button.dataset.prompt)));
+  mic.addEventListener("click", () => {{
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {{
+      addMessage("या browser मध्ये speech recognition उपलब्ध नाही. Chrome/Edge मध्ये microphone permission देऊन प्रयत्न कर, किंवा typing वापर.", "bot");
+      return;
+    }}
+    if (recognition) {{ recognition.stop(); return; }}
+    recognition = new SpeechRecognition();
+    recognition.lang = "mr-IN";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    mic.textContent = "⏺";
+    recognition.onresult = event => {{ input.value = event.results[0][0].transcript; input.focus(); }};
+    recognition.onerror = event => addMessage("Microphone status: " + event.error + ". Permission/settings तपास.", "bot");
+    recognition.onend = () => {{ recognition = null; mic.textContent = "🎙"; }};
+    try {{ recognition.start(); }} catch (_) {{ recognition = null; mic.textContent = "🎙"; }}
+  }});
+  // Optional read-aloud mode: double-click the header to toggle speech output.
+  document.querySelector(".jarvis-chat-head").addEventListener("dblclick", () => {{
+    panel.dataset.speak = panel.dataset.speak === "true" ? "false" : "true";
+    addMessage("Voice reply " + (panel.dataset.speak === "true" ? "ON" : "OFF") + ". Header वर double-click करून बदलू शकतोस.", "bot");
+  }});
+  refreshContext();
+}})();
+
+</script>
+
 </body>
 </html>
 """
