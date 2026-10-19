@@ -17,7 +17,7 @@ def load_project_config() -> None:
             f".env file not found: {ENV_FILE}"
         )
 
-    load_dotenv(ENV_FILE, override=False)
+    load_dotenv(ENV_FILE, override=True)
 
 
 def get_required_env(name: str) -> str:
