@@ -722,6 +722,35 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             "multi_timeframe": multi_timeframe,
         })
 
+        # Revalidate the latest finalized 1m candle against the newly refreshed
+        # 15m/5m consensus. The prior MTF snapshot may have changed at this 5m close.
+        one_minute_state = LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}
+        one_minute_signal = one_minute_state.get("signal", "UNKNOWN")
+        from entry_confirmation import evaluate_entry_confirmation
+        current_1m_confirmation = evaluate_entry_confirmation(
+            direction_15m=(
+                multi_timeframe.get("direction_15m")
+                or multi_timeframe.get("trend_15m")
+                or ""
+            ),
+            direction_5m=(
+                multi_timeframe.get("direction_5m")
+                or multi_timeframe.get("trend_5m")
+                or ""
+            ),
+            signal=one_minute_signal,
+        )
+        one_minute_state.update({
+            "direction_15m": multi_timeframe.get("direction_15m") or multi_timeframe.get("trend_15m") or "UNKNOWN",
+            "direction_5m": multi_timeframe.get("direction_5m") or multi_timeframe.get("trend_5m") or "UNKNOWN",
+            "entry_confirmed": current_1m_confirmation["entry_confirmed"],
+            "direction": current_1m_confirmation["direction"],
+            "raw_direction": current_1m_confirmation["raw_direction"],
+            "mtf_aligned": current_1m_confirmation["mtf_aligned"],
+            "reason": current_1m_confirmation["reason"],
+        })
+        LIVE_ANALYSIS_STATE["one_minute_analysis"] = one_minute_state
+
         option_data = LIVE_ANALYSIS_STATE.get("option_data") or {}
         options = []
         for item in option_data.get("options") or []:
@@ -1283,6 +1312,12 @@ def _live_dashboard_updater(
                 ),
                 "decision_status": current_decision.get("status", "WAIT"),
                 "decision": current_decision,
+                "active_trade": ACTIVE_TRADE_MANAGER.get_active_trade() or {},
+                "trade_exit_status": (
+                    EXIT_ALERT_STATUS.to_dict()
+                    if "EXIT_ALERT_STATUS" in globals()
+                    else {"status": "IDLE", "message": "No exit event yet"}
+                ),
                 "market_analysis": dashboard_analysis["market_analysis"],
                 "multi_timeframe": dashboard_analysis["multi_timeframe"],
                 "one_minute_analysis": LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {},
