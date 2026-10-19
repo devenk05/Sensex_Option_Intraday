@@ -1187,11 +1187,9 @@ def _live_dashboard_updater(
                 "market_bias": market_bias,
                 "atm_strike": option_data.get("atm_strike"),
                 "expiry": option_data.get("expiry"),
-                "entry_score": (
-                    live_entry_score
-                    if live_entry_score is not None
-                    else current_decision.get("entry_score")
-                ),
+                # Never fall back to a stale decision score when current
+                # component coverage is insufficient. None must reach the UI.
+                "entry_score": live_entry_score,
                 "entry_score_components": globals().get(
                     "LATEST_CONFLUENCE_COMPONENT_SCORES", {}
                 ),
@@ -1520,11 +1518,8 @@ def _generate_live_dashboard(
         "market_bias": market_bias,
 
         # Publish the actual confluence score and component scores to the initial HTML.
-        "entry_score": (
-            LATEST_ENTRY_SCORE
-            if LATEST_ENTRY_SCORE is not None
-            else (CURRENT_SETUP_DECISION or {}).get("entry_score")
-        ),
+        # Use the latest score only; do not display stale score from an older decision.
+        "entry_score": LATEST_ENTRY_SCORE,
         "entry_score_components": globals().get("LATEST_CONFLUENCE_COMPONENT_SCORES", {}),
         "decision_status": (CURRENT_SETUP_DECISION or {}).get("status", "WAIT"),
 
