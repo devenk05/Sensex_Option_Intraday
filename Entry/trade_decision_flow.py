@@ -668,27 +668,47 @@ def run_locked_decision_flow(
             direction=direction,
         )
 
-    # 1-minute confirmation is observational only; it must not block entry.
-    # Keep its state visible in the decision stages for dashboard/debugging.
+    # The strategy requires 15m consensus -> completed 5m confirmation ->
+    # aligned 1m entry timing. A high confluence score must never bypass 1m.
     stages.append(
         {
-            "stage": "ONE_MINUTE_OBSERVATION",
-            "status": "CONFIRMED" if one_minute_confirmed else "SKIPPED_OPTIONAL",
-            "required": False,
+            "stage": "ONE_MINUTE_ENTRY_CONFIRMATION",
+            "status": "CONFIRMED" if one_minute_confirmed else "WAIT",
+            "required": True,
             "reason": (
                 "1M_DIRECTION_CONFIRMED"
                 if one_minute_confirmed
-                else "1M_OPTIONAL_NOT_BLOCKING_ENTRY"
+                else "WAITING_FOR_ALIGNED_1M_ENTRY_CANDLE"
             ),
         }
     )
+
+    if not one_minute_confirmed:
+        return {
+            "status": "WAITING_FOR_1M_CONFIRMATION",
+            "action": None,
+            "direction": direction,
+            "reason": "ONE_MINUTE_ENTRY_CONFIRMATION_REQUIRED",
+            "entry_score": entry_score,
+            "stages": stages,
+            "flow_order": [
+                "GAP_CONTEXT",
+                "MARKET_ANALYSIS",
+                "CE_PE_COMPARISON",
+                "PIVOT_SR_LOCATION",
+                "REVERSAL_CONTINUATION",
+                "ONE_MINUTE_ENTRY_CONFIRMATION_REQUIRED",
+                "FINAL_SCORE",
+                "TRADE_WAIT",
+            ],
+        }
 
     if entry_score is None:
         return {
             "status": "READY_FOR_FINAL_SCORE",
             "action": None,
             "direction": direction,
-            "reason": "ENTRY_SCORE_PENDING_1M_OPTIONAL",
+            "reason": "ENTRY_SCORE_PENDING",
             "entry_score": None,
             "stages": stages,
             "flow_order": [
@@ -697,13 +717,28 @@ def run_locked_decision_flow(
                 "CE_PE_COMPARISON",
                 "PIVOT_SR_LOCATION",
                 "REVERSAL_CONTINUATION",
-                "ONE_MINUTE_OBSERVATION_OPTIONAL",
+                "ONE_MINUTE_ENTRY_CONFIRMATION",
                 "FINAL_SCORE",
                 "TRADE_WAIT",
             ],
         }
 
-    score = float(entry_score)
+    try:
+        score = float(entry_score)
+    except (TypeError, ValueError):
+        return _no_trade(
+            stages,
+            "ENTRY_SCORE_INVALID",
+            direction=direction,
+        )
+
+    if not (score == score and 0.0 <= score <= 100.0):
+        return _no_trade(
+            stages,
+            "ENTRY_SCORE_OUT_OF_RANGE",
+            direction=direction,
+            entry_score=score,
+        )
 
     if score < float(min_entry_score):
         return _no_trade(
@@ -726,7 +761,7 @@ def run_locked_decision_flow(
             "CE_PE_COMPARISON",
             "PIVOT_SR_LOCATION",
             "REVERSAL_CONTINUATION",
-            "ONE_MINUTE_OBSERVATION_OPTIONAL",
+            "ONE_MINUTE_ENTRY_CONFIRMATION",
             "FINAL_SCORE",
             "TRADE_WAIT",
         ],
