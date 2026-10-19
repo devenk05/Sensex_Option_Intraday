@@ -28,13 +28,21 @@ def calculate_confluence_score(
     if unknown:
         raise ValueError(f"Unknown score components: {sorted(unknown)}")
 
-    if not component_scores:
+    # A total based on one or two components is misleading for a live entry
+    # score. Require at least four genuine component scores before publishing
+    # a normalized total; never turn one strong component into 100/100.
+    MIN_COMPONENTS_FOR_TOTAL = 4
+    if len(component_scores) < MIN_COMPONENTS_FOR_TOTAL:
         return {
-            "status": "NO_DATA",
+            "status": "INSUFFICIENT_DATA",
             "score": None,
             "max_score": MAX_SCORE,
-            "available_components": [],
-            "unavailable_components": list(SCORING_WEIGHTS),
+            "available_components": list(component_scores),
+            "unavailable_components": [
+                component for component in SCORING_WEIGHTS
+                if component not in component_scores
+            ],
+            "required_components": MIN_COMPONENTS_FOR_TOTAL,
         }
 
     weighted_score = 0.0
