@@ -895,6 +895,17 @@ def handle_finalized_candle(candle):
         "HISTORY_COUNT:", len(history),
     )
     if expected_sensex_token is not None and int(token) == int(expected_sensex_token):
+        # Never carry a prior candle's confirmation forward if this candle's
+        # analysis fails. Each finalized 1m candle must independently confirm.
+        LIVE_ANALYSIS_STATE["one_minute_analysis"] = {
+            "status": "WAIT",
+            "direction": "WAIT",
+            "raw_direction": "WAIT",
+            "signal": "UNKNOWN",
+            "entry_confirmed": False,
+            "reason": "CURRENT_1M_CANDLE_NOT_YET_CONFIRMED",
+            "candle_time": candle["minute"].strftime("%Y-%m-%d %H:%M"),
+        }
         try:
             # Keep 1m diagnostics isolated so they cannot block 5m aggregation.
             if len(history) >= 2:
