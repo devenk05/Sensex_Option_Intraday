@@ -10,6 +10,7 @@ for folder in (PROJECT_ROOT, PROJECT_ROOT / "Entry", PROJECT_ROOT / "exit", PROJ
         sys.path.insert(0, folder_path)
 import config
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from config_loader import load_project_config
 from kite_client import create_kite_client
@@ -486,7 +487,7 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
 
     # Enforce the configured local trading window and stop issuing fresh
     # recommendations at NO_NEW_RECOMMENDATIONS_AFTER.
-    current_time = datetime.now().time()
+    current_time = datetime.now(ZoneInfo(config.TIMEZONE)).time()
     if current_time < config.TRADING_START or current_time > config.NO_NEW_RECOMMENDATIONS_AFTER:
         print("TRADE_REGISTRATION_REJECTED: Outside recommendation window.", current_time.isoformat())
         return False
