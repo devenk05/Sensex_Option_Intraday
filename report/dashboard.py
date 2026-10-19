@@ -2503,6 +2503,19 @@ async function updateDashboardLive() {{
         if (!response.ok) return;
 
         const data = await response.json();
+        const recoveryStatus = document.getElementById("trade-recovery-status");
+        if (recoveryStatus) {{
+            const recovery = data.trade_recovery || {{}};
+            if (recovery.blocked) {{
+                recoveryStatus.textContent = "TRADE RECOVERY · BLOCKED";
+                recoveryStatus.style.borderColor = "#ef4444";
+                recoveryStatus.title = String(recovery.reason || "Recovery failed; fresh recommendations disabled.");
+            }} else {{
+                recoveryStatus.textContent = "TRADE RECOVERY · OK";
+                recoveryStatus.style.borderColor = "#22c55e";
+                recoveryStatus.title = "Persisted trade state checked.";
+            }}
+        }}
         const feedStatus = document.getElementById("live-main-feed-status");
         if (feedStatus) {{
             const tickTime = (data.live_sensex || data.sensex || {{}}).timestamp;
@@ -2741,8 +2754,9 @@ setInterval(updateSensex30Live, 1000);
 </script>
 <div id="live-connection-diagnostic" role="status" aria-live="polite"
  style="position:fixed;right:12px;bottom:12px;z-index:99999;background:#071522;color:#e8f8ff;border:1px solid #38e8ff;border-radius:8px;padding:8px 11px;font:11px/1.5 ui-monospace,Consolas,monospace;box-shadow:0 4px 18px #0008;max-width:420px;pointer-events:none">
-  <div id="live-main-feed-status">LIVE CHECK · starting…</div>
+  <div id="live-main-feed-status">SENSEX FEED · starting…</div>
   <div id="live-sensex30-feed-status">SENSEX 30 · starting…</div>
+  <div id="trade-recovery-status">TRADE RECOVERY · checking…</div>
 </div>
 </body>
 </html>
