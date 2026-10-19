@@ -2134,14 +2134,22 @@ function formatLiveNumber(value, digits = 2) {
 }
 
 async function updateSensex30Live() {
+    const diag = document.getElementById("live-sensex30-feed-status");
     try {
         const response = await fetch("live_sensex30.json?ts=" + Date.now(), {
             cache: "no-store"
         });
 
-        if (!response.ok) return;
+        if (!response.ok) {
+            if (diag) diag.textContent = "SENSEX 30 · HTTP " + response.status;
+            console.error("SENSEX30_HTTP_ERROR:", response.status);
+            return;
+        }
 
         const data = await response.json();
+        const stocks = Array.isArray(data.stocks) ? data.stocks : [];
+        const validTicks = stocks.filter(stock => stock.current_ltp !== null && stock.current_ltp !== undefined).length;
+        if (diag) diag.textContent = "SENSEX 30 · JSON " + (data.timestamp || "no timestamp") + " · valid LTP " + validTicks + "/" + stocks.length;
 
         for (const stock of (data.stocks || [])) {
             const row = Array.from(
@@ -2619,7 +2627,8 @@ setInterval(updateSensex30Live, 1000);
 <!-- Live feed diagnostic: distinguishes browser polling from actual broker ticks. -->
 <div id="live-connection-diagnostic" role="status" aria-live="polite"
  style="position:fixed;right:12px;bottom:12px;z-index:99999;background:#071522;color:#e8f8ff;border:1px solid #38e8ff;border-radius:8px;padding:8px 11px;font:11px/1.5 ui-monospace,Consolas,monospace;box-shadow:0 4px 18px #0008;max-width:360px">
-  LIVE CHECK · starting…
+  <div id="live-main-feed-status">LIVE CHECK · starting…</div>
+  <div id="live-sensex30-feed-status">SENSEX 30 · starting…</div>
 </div>
 <script>
 
