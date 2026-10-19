@@ -1347,7 +1347,7 @@ def _build_confluence_component_scores(
         for source in sources:
             if not isinstance(source, dict):
                 continue
-            for key in ("component_score", "confluence_score", "confidence_score", "score"):
+            for key in ("component_score", "confluence_score", "confidence_score", "liquidity_score", "score"):
                 value = source.get(key)
                 if isinstance(value, dict):
                     value = value.get("score")
