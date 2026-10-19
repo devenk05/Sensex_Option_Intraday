@@ -2460,8 +2460,11 @@ async function updateDashboardLive() {{
         if (!response.ok) return;
 
         const data = await response.json();
-        updateOptionChainLive(data);
-        updateAtmOptionMomentum(data);
+        // A single panel exception must not stop the remaining live dashboard fields.
+        try {{ updateOptionChainLive(data); }}
+        catch (error) {{ console.error("OPTION_CHAIN_LIVE_UPDATE_ERROR:", error); }}
+        try {{ updateAtmOptionMomentum(data); }}
+        catch (error) {{ console.error("ATM_MOMENTUM_LIVE_UPDATE_ERROR:", error); }}
 
         const sensex = data.live_sensex || data.sensex || {{}};
         const spotElement = document.querySelector('[data-field="sensex-ltp"]');
@@ -2566,6 +2569,37 @@ async function updateDashboardLive() {{
             }}
         }});
 
+        // Refresh 15m/5m analysis cards from the live JSON; the HTML is
+        // regenerated periodically, so static initial card text is not enough.
+        const mtf = data.multi_timeframe || {{}};
+        const mtfSpecs = [
+            ["15 MIN ANALYSIS", mtf.direction_15m || mtf.trend_15m || "UNKNOWN"],
+            ["5 MIN CONFIRMATION", mtf.direction_5m || mtf.trend_5m || "UNKNOWN"]
+        ];
+        mtfSpecs.forEach(([title, value]) => {{
+            const card = Array.from(document.querySelectorAll(".analysis-card")).find(node => {{
+                const heading = node.querySelector(".card-header span");
+                return heading && heading.textContent.trim().toUpperCase() === title;
+            }});
+            if (!card) return;
+            const direction = String(value).toUpperCase();
+            const directionEl = card.querySelector(".analysis-direction");
+            const dotEl = card.querySelector(".mini-dot");
+            const cls = direction.includes("BULL") ? "bullish" : direction.includes("BEAR") ? "bearish" : "neutral";
+            if (directionEl) {{
+                directionEl.textContent = direction.replace(/_/g, " ");
+                directionEl.classList.remove("bullish", "bearish", "neutral");
+                directionEl.classList.add(cls);
+            }}
+            if (dotEl) {{
+                dotEl.classList.remove("bullish", "bearish", "neutral");
+                dotEl.classList.add(cls);
+            }}
+            const details = card.querySelector(".detail-list");
+            if (details) details.innerHTML = '<div class="detail-row"><span>Alignment</span><strong>' +
+                String(mtf.alignment || "UNKNOWN").replace(/_/g, " ") + '</strong></div>';
+        }});
+
         const decisionElement = document.querySelector(
             ".decision-card .metric-value .status-badge"
         );
@@ -2583,7 +2617,9 @@ async function updateDashboardLive() {{
         }}
 
     }} catch (error) {{
-        console.log("LIVE_STATE_UPDATE_ERROR:", error);
+        console.error("LIVE_STATE_UPDATE_ERROR:", error);
+        const meta = document.getElementById("jarvis-review-meta");
+        if (meta) meta.textContent = "Live dashboard refresh error: " + String(error && error.message || error);
     }}
 }}
 
