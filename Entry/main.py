@@ -1335,10 +1335,13 @@ def _build_confluence_component_scores(
     fii_dii_analysis=None,
     liquidity_greeks_analysis=None,
 ):
-    """Return only component scores explicitly produced by the source engines.
+    """Build a transparent evidence score from source-engine outputs.
 
-    Direction/alignment/status alone is not a numeric score. Do not turn a
-    successful condition into an arbitrary 75/100 component score.
+    Explicit source-engine scores take precedence. For engines that currently
+    publish signals/measurements rather than a numeric score, use documented
+    deterministic mappings below. These are evidence indices, NOT win
+    probabilities and must be calibrated against historical trades before
+    being treated as predictive confidence.
     """
     def explicit_score(*sources):
         for source in sources:
@@ -1356,7 +1359,34 @@ def _build_confluence_component_scores(
                     return round(score, 2)
         return None
 
+    def number(value):
+        try:
+            result = float(value)
+            return result if result == result and abs(result) != float("inf") else None
+        except (TypeError, ValueError):
+            return None
+
+    def directional_score(signal, expected):
+        signal = str(signal or "").strip().upper()
+        expected = str(expected or "").strip().upper()
+        if not expected or expected in {"UNKNOWN", "NEUTRAL", "NONE", "WAIT"}:
+            return None
+        if signal == expected:
+            return 100.0
+        if signal in {"UNKNOWN", "NEUTRAL", "NONE", "WAIT", ""}:
+            return 50.0
+        return 0.0
+
     scores = {}
+    # Directional expectation is taken from the existing 15m/5m consensus.
+    mtf = multi_timeframe if isinstance(multi_timeframe, dict) else {}
+    dir15 = str(mtf.get("direction_15m") or "").upper()
+    dir5 = str(mtf.get("direction_5m") or "").upper()
+    expected = dir5 if dir15 == dir5 and dir5 in {"BULLISH", "BEARISH"} else ""
+    if not expected and isinstance(market_analysis, dict):
+        trend = str(market_analysis.get("trend") or "").upper()
+        expected = {"UP": "BULLISH", "DOWN": "BEARISH"}.get(trend, "")
+
     source_map = {
         "market_structure": (market_analysis, multi_timeframe),
         "support_resistance": (support_resistance,),
@@ -1371,6 +1401,64 @@ def _build_confluence_component_scores(
         value = explicit_score(*sources)
         if value is not None:
             scores[component] = value
+
+    # 15m/5m structure: alignment is scored as agreement evidence only.
+    if "market_structure" not in scores:
+        if dir15 in {"BULLISH", "BEARISH"} and dir5 in {"BULLISH", "BEARISH"}:
+            scores["market_structure"] = 100.0 if dir15 == dir5 else 0.0
+        elif dir15 in {"NEUTRAL", "BEARISH", "BULLISH"} and dir5 in {"NEUTRAL", "BEARISH", "BULLISH"}:
+            scores["market_structure"] = 50.0
+
+    # Price action: score agreement with the consensus, with breakout/breakdown
+    # as stronger evidence than a non-breakout directional candle.
+    if "price_action" not in scores and isinstance(price_action, dict):
+        signal = str(price_action.get("signal") or "").upper()
+        expected_signal = "BULLISH" if expected == "BULLISH" else "BEARISH" if expected == "BEARISH" else ""
+        if expected_signal and signal in {"BULLISH_BREAKOUT", "BEARISH_BREAKDOWN"}:
+            scores["price_action"] = 100.0 if signal.startswith(expected_signal) else 0.0
+        elif expected_signal and signal in {"BULLISH", "BEARISH"}:
+            scores["price_action"] = 75.0 if signal == expected_signal else 0.0
+        elif signal == "NEUTRAL":
+            scores["price_action"] = 50.0
+
+    # Support/resistance: score the close's location within the observed range
+    # in the expected direction; unavailable if range/close are not valid.
+    if "support_resistance" not in scores and isinstance(support_resistance, dict):
+        low = number(support_resistance.get("support"))
+        high = number(support_resistance.get("resistance"))
+        close = number((market_analysis or {}).get("latest_close")) if isinstance(market_analysis, dict) else None
+        if low is not None and high is not None and close is not None and high > low and low <= close <= high:
+            position = (close - low) / (high - low)
+            if expected == "BULLISH":
+                scores["support_resistance"] = round(position * 100.0, 2)
+            elif expected == "BEARISH":
+                scores["support_resistance"] = round((1.0 - position) * 100.0, 2)
+
+    # Pivot engine already emits a 0-10 evidence score in PivotState.
+    if "pivot_points" not in scores and isinstance(pivot_analysis, dict):
+        pivot_state = pivot_analysis.get("state") if isinstance(pivot_analysis.get("state"), dict) else pivot_analysis
+        pivot_raw = number(pivot_state.get("score")) if isinstance(pivot_state, dict) else None
+        if pivot_raw is not None and 0.0 <= pivot_raw <= 10.0:
+            scores["pivot_points"] = round(pivot_raw * 10.0, 2)
+
+    # Volume ratio: 1x historical average = 50, 2x or more = 100; no data stays missing.
+    if "volume_analysis" not in scores and isinstance(volume_analysis, dict):
+        ratio = number(volume_analysis.get("volume_ratio"))
+        if ratio is not None and ratio >= 0:
+            scores["volume_analysis"] = round(min(100.0, ratio * 50.0), 2)
+
+    # FII/DII is daily cash-market context, not live intraday flow. Score only
+    # when both net fields are present and their combined sign is unambiguous.
+    if "fii_dii" not in scores and isinstance(fii_dii_analysis, dict):
+        fii = number(fii_dii_analysis.get("fii_net"))
+        dii = number(fii_dii_analysis.get("dii_net"))
+        if fii is not None and dii is not None and expected:
+            net = fii + dii
+            supportive = net > 0 if expected == "BULLISH" else net < 0
+            scores["fii_dii"] = 100.0 if supportive else 0.0 if net != 0 else 50.0
+
+    # CE/PE stage is categorical. Only score it when the engine's existing
+    # confidence field is numeric; LOW/HIGH strings are intentionally omitted.
 
     print(
         "CONFLUENCE_SCORE_DATA_QUALITY:",
