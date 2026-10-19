@@ -25,16 +25,23 @@ class TradeExitAlertDeduplicator:
             str(signal.get("reason", "")),
         )
 
-    def is_duplicate(self, signal: Dict[str, Any]) -> bool:
+    def has_processed(self, signal: Dict[str, Any]) -> bool:
+        """Check the dedupe set without mutating it."""
         if not isinstance(signal, dict):
             raise TypeError("signal must be a dictionary.")
+        return self._make_key(signal) in self._processed_signal_keys
 
-        key = self._make_key(signal)
+    def mark_processed(self, signal: Dict[str, Any]) -> None:
+        """Mark a signal only after its side effect succeeded."""
+        if not isinstance(signal, dict):
+            raise TypeError("signal must be a dictionary.")
+        self._processed_signal_keys.add(self._make_key(signal))
 
-        if key in self._processed_signal_keys:
+    def is_duplicate(self, signal: Dict[str, Any]) -> bool:
+        """Legacy check-and-mark API retained for existing callers."""
+        if self.has_processed(signal):
             return True
-
-        self._processed_signal_keys.add(key)
+        self.mark_processed(signal)
         return False
 
     def reset(self) -> None:
