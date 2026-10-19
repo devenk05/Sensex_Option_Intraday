@@ -25,10 +25,10 @@ class TradeExitAlertPipeline:
             }
 
         try:
-            if self.deduplicator.is_duplicate(signal):
+            if self.deduplicator.has_processed(signal):
                 return {
                     "status": "DUPLICATE",
-                    "reason": "Exit signal has already been processed.",
+                    "reason": "Exit alert was already delivered successfully.",
                 }
         except Exception as exc:
             return {
@@ -36,4 +36,11 @@ class TradeExitAlertPipeline:
                 "reason": f"Deduplication failed: {exc}",
             }
 
-        return self.alert_service.process_exit_signal(signal)
+        result = self.alert_service.process_exit_signal(signal)
+        # Failed/disabled sends are not marked as delivered: the next monitor
+        # tick must be able to retry. Only successful delivery is deduplicated.
+        if isinstance(result, dict) and result.get("status") == "PROCESSED":
+            send_result = result.get("send_result") or {}
+            if str(send_result.get("status", "")).upper() == "SENT":
+                self.deduplicator.mark_processed(signal)
+        return result
