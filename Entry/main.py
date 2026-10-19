@@ -1913,14 +1913,17 @@ def main():
     EXIT_ALERT_INTEGRATION = TradeExitAlertIntegration(send_exit_message)
 
     def handle_exit_alert(signal):
-        if EXIT_ALERT_DEDUPLICATOR.is_duplicate(signal):
-            EXIT_ALERT_STATUS.update("DUPLICATE", "Repeated exit signal ignored.")
-            print("TRADE_EXIT_ALERT_DUPLICATE:", signal)
-            return
+        # Close/persist first. If persistence fails, return an error so the
+        # monitor retries instead of deduplicating an uncompleted closure.
+        close_ok = _close_active_trade_from_exit(signal)
+        if close_ok is False:
+            EXIT_ALERT_STATUS.update("ERROR", "Trade closure/persistence failed; retrying.")
+            return {"status": "ERROR", "reason": "TRADE_CLOSE_FAILED"}
 
-        # Close/persist lifecycle first so the active-trade lock is released
-        # immediately after the confirmed exit signal.
-        _close_active_trade_from_exit(signal)
+        if EXIT_ALERT_DEDUPLICATOR.is_duplicate(signal):
+            EXIT_ALERT_STATUS.update("DUPLICATE", "Repeated exit notification ignored.")
+            print("TRADE_EXIT_ALERT_DUPLICATE:", signal)
+            return {"status": "DUPLICATE", "reason": "Already notified"}
 
         result = EXIT_ALERT_INTEGRATION.on_exit_signal(signal)
         EXIT_ALERT_STATUS.update(
@@ -1928,6 +1931,7 @@ def main():
             result.get("reason", ""),
         )
         print("TRADE_EXIT_ALERT_RESULT:", result)
+        return result
 
     EXIT_SIGNAL_HANDLER = TradeExitSignalHandler(handle_exit_alert)
 
