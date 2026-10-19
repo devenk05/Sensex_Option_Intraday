@@ -20,5 +20,5 @@ jobs:
           python-version: "3.12"
       - name: Install test runner
         run: python -m pip install --upgrade pip pytest
-      - name: Run structural stop-loss and 1m confirmation tests
-        run: python -m pytest -q tests/test_risk_manager.py tests/test_entry_confirmation.py
+      - name: Run critical live-decision and trade-lock regression tests
+        run: python -m pytest -q tests/test_risk_manager.py tests/test_entry_confirmation.py tests/test_active_trade_manager.py
