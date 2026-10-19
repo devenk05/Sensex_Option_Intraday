@@ -576,7 +576,7 @@ def _close_active_trade_from_exit(signal: dict) -> None:
 
     if not isinstance(active, dict):
         print("TRADE_EXIT_LIFECYCLE_IGNORED: No active trade.")
-        return
+        return True
 
     close_reason = str(signal.get("reason") or "EXIT")
     exit_price = signal.get("current_option_price")
@@ -608,13 +608,6 @@ def _close_active_trade_from_exit(signal: dict) -> None:
     except (TypeError, ValueError):
         closed["pnl_points"] = None
 
-    # Stop active monitor loop.
-    try:
-        if EXIT_MONITOR_LOOP is not None:
-            EXIT_MONITOR_LOOP.stop()
-    except Exception as exc:
-        print("TRADE_EXIT_MONITOR_STOP_ERROR:", exc)
-
     try:
         TRADE_HISTORY.add_trade(closed)
         TRADE_HISTORY_STORAGE.save(
@@ -641,9 +634,16 @@ def _close_active_trade_from_exit(signal: dict) -> None:
             },
         )
         print("ACTIVE_TRADE_LOCK_RELEASED: New setup search enabled.")
+        try:
+            if EXIT_MONITOR_LOOP is not None:
+                EXIT_MONITOR_LOOP.stop()
+        except Exception as exc:
+            print("TRADE_EXIT_MONITOR_STOP_ERROR:", exc)
+        return True
 
     except Exception as exc:
         print("TRADE_CLOSE_LIFECYCLE_ERROR:", exc)
+        return False
 
 TRADE_HISTORY_STORAGE = TradeHistoryStorage()
 TRADE_HISTORY = TradeHistory()
