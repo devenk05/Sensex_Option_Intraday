@@ -583,8 +583,11 @@ def _close_active_trade_from_exit(signal: dict) -> None:
             TRADE_HISTORY.get_all_trades()
         )
 
-        ACTIVE_TRADE_MANAGER.close_trade()
+        # Remove the persisted lock before releasing the in-memory lock.
+        # If persistence fails, keep the trade active so restart cannot silently
+        # lose the open recommendation. TradeHistory.add_trade is idempotent by ID.
         ACTIVE_TRADE_STATE_STORAGE.clear()
+        ACTIVE_TRADE_MANAGER.close_trade()
 
         CURRENT_SETUP_DECISION = None
         NEARBY_CURRENT_CANDIDATE = None
@@ -1852,12 +1855,11 @@ def main():
     EXIT_ALERT_DEDUPLICATOR = TradeExitAlertDeduplicator()
     EXIT_ALERT_STATUS = TradeExitAlertStatus()
 
-    # Alert callback: currently logs/prints the alert message.
-    # Connect your Telegram sender here when its exact function is available.
+    # Exit notifications must be delivered to Telegram, not only printed.
     def send_exit_message(message):
-        print("TRADE_EXIT_TELEGRAM_MESSAGE:")
-        print(message)
-        return {"status": "PRINTED_ONLY"}
+        result = send_telegram_message(message)
+        print("TRADE_EXIT_TELEGRAM_SENT:", result.get("message_id"))
+        return result
 
     EXIT_ALERT_INTEGRATION = TradeExitAlertIntegration(send_exit_message)
 
