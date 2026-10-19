@@ -37,7 +37,7 @@ def check_dashboard():
             if response.status != 200 or not isinstance(data, dict):
                 return fail("DASHBOARD_JSON", "HTTP response is not a JSON object")
         print("DASHBOARD_JSON: PASS; keys =", ",".join(sorted(data.keys())[:25]))
-        if not any(key in data for key in ("live_sensex", "sensex", "spot")):
+        if not any(key in data for key in ("live_sensex", "sensex", "sensex_price", "spot")):
             return fail("DASHBOARD_MARKET_STATE", "No Sensex market-state field found")
         print("DASHBOARD_MARKET_STATE: PASS")
         return True
