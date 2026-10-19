@@ -16,6 +16,13 @@ class TradeHistory:
         if not trade:
             raise ValueError("Trade record cannot be empty.")
 
+        # Exit callbacks can be retried after a storage/API error. Use the
+        # stable trade ID to prevent duplicate history rows for one trade.
+        trade_id = trade.get("trade_id")
+        if trade_id is not None and any(
+            existing.get("trade_id") == trade_id for existing in self._trades
+        ):
+            return
         self._trades.append(dict(trade))
 
     def get_all_trades(self) -> list[dict[str, Any]]:
