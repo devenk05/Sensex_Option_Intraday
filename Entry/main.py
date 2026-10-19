@@ -515,17 +515,19 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
         print("TRADE_REGISTRATION_ERROR:", exc)
         return False
 
+    # Lock this setup before the monitor thread can observe an immediate exit.
+    LIVE_FINALIZED = True
+
     if not _start_exit_monitor():
         try:
             if ACTIVE_TRADE_MANAGER.has_active_trade():
+                ACTIVE_TRADE_STATE_STORAGE.clear()
                 ACTIVE_TRADE_MANAGER.close_trade()
-            ACTIVE_TRADE_STATE_STORAGE.clear()
         except Exception as exc:
             print("TRADE_ROLLBACK_ERROR:", exc)
+        LIVE_FINALIZED = False
         print("TRADE_REGISTRATION_REJECTED: Exit monitor unavailable.")
         return False
-
-    LIVE_FINALIZED = True
 
     print(
         "ACTIVE_TRADE_STARTED:",
