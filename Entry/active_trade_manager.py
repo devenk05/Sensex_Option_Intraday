@@ -29,6 +29,16 @@ class ActiveTradeManager:
                 raise RuntimeError("An active trade already exists.")
             self._active_trade = dict(trade)
 
+    def update_trade(self, updates: dict[str, Any]) -> dict[str, Any]:
+        """Atomically update the active trade and return a defensive copy."""
+        if not isinstance(updates, dict) or not updates:
+            raise ValueError("Trade updates must be a non-empty dictionary.")
+        with self._lock:
+            if self._active_trade is None:
+                raise RuntimeError("No active trade to update.")
+            self._active_trade.update(updates)
+            return dict(self._active_trade)
+
     def close_trade(self) -> dict[str, Any]:
         """Atomically close and return the active trade."""
         with self._lock:
