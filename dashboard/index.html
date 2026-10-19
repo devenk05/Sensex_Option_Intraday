@@ -2365,7 +2365,7 @@ async function updateJarvisAgentReview() {
 }
 
 async function updateDashboardLive() {
-    const diag = document.getElementById("live-connection-diagnostic");
+    const diag = document.getElementById("live-main-feed-status");
     try {
         const response = await fetch("live_state.json?ts=" + Date.now(), {
             cache: "no-store"
