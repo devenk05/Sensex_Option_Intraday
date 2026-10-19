@@ -1,6 +1,7 @@
 name: Critical regression tests
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - "fix/live-5m-decision-runtime"
