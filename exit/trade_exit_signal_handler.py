@@ -29,12 +29,26 @@ class TradeExitSignalHandler:
                 "reason": "Signal does not indicate an exit.",
             }
 
-        self.last_signal = signal
-        self.notify_callback(signal)
+        callback_result = self.notify_callback(signal)
+        if callback_result is False or (
+            isinstance(callback_result, dict)
+            and str(callback_result.get("status", "")).upper() in {"ERROR", "FAILED", "FAILURE"}
+        ):
+            return {
+                "status": "ERROR",
+                "reason": (
+                    callback_result.get("reason", "Exit callback failed.")
+                    if isinstance(callback_result, dict)
+                    else "Exit callback failed."
+                ),
+                "signal": signal,
+            }
 
+        self.last_signal = signal
         return {
             "status": "HANDLED",
             "signal": signal,
+            "callback_result": callback_result,
         }
 
     def get_last_signal(self):
