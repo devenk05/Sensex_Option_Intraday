@@ -1282,41 +1282,44 @@ def _live_dashboard_updater(
 
             # 2. Save live JSON every second.
             live_state_path = PROJECT_ROOT / "dashboard" / "live_state.json"
-            live_state_path.write_text(
-                json.dumps(
-                    dashboard_data,
-                    ensure_ascii=False,
-                    default=str,
-                ),
+            dashboard_data["timestamp"] = datetime.now().isoformat(timespec="milliseconds")
+            dashboard_data["live_update"] = dashboard_data["timestamp"]
+            live_state_tmp = live_state_path.with_suffix(".json.tmp")
+            live_state_tmp.write_text(
+                json.dumps(dashboard_data, ensure_ascii=False, default=str),
                 encoding="utf-8",
             )
+            # Atomic replace prevents the browser reading half-written JSON.
+            live_state_tmp.replace(live_state_path)
 
-            # 3. Generate the existing HTML dashboard.
-            _generate_live_dashboard(
-                market_analysis=dashboard_analysis["market_analysis"],
-                market_status=market_status,
-                candle_structure=dashboard_analysis["candle_structure"],
-                support_resistance=dashboard_analysis["support_resistance"],
-                multi_timeframe=(
-                    LIVE_ANALYSIS_STATE.get("multi_timeframe")
-                    or multi_timeframe
-                ),
-                price_action=dashboard_analysis["price_action"],
-                pivot_analysis=(
-                    LIVE_ANALYSIS_STATE.get("pivot_analysis")
-                    or pivot_analysis
-                ),
-                oi_summary=(
-                    LIVE_ANALYSIS_STATE.get("oi_summary")
-                    or oi_summary
-                ),
-                option_data=option_data,
-                option_summary=(
-                    LIVE_ANALYSIS_STATE.get("option_summary")
-                    or option_summary
-                ),
-                sensex30_instruments=sensex30_instruments,
+            # 3. Publish Sensex 30 snapshot independently. Do not regenerate
+            # the full HTML page in this 1-second loop; expensive HTML rendering
+            # can delay live JSON updates and the browser should only poll JSON.
+            sensex30_rows = []
+            for instrument in sensex30_instruments or []:
+                token = instrument.get("instrument_token")
+                tick = LIVE_STOCK_TICK_STATE.get(token, {})
+                sensex30_rows.append({
+                    "symbol": instrument.get("tradingsymbol"),
+                    "instrument_token": token,
+                    "open": tick.get("open"),
+                    "current_ltp": tick.get("last_price"),
+                    "last_close": tick.get("last_close"),
+                    "change": tick.get("change"),
+                    "change_percent": tick.get("change_percent"),
+                    "volume_traded": tick.get("volume_traded"),
+                    "timestamp": tick.get("timestamp"),
+                })
+            sensex30_path = PROJECT_ROOT / "dashboard" / "live_sensex30.json"
+            sensex30_tmp = sensex30_path.with_suffix(".json.tmp")
+            sensex30_tmp.write_text(
+                json.dumps({
+                    "timestamp": datetime.now().isoformat(timespec="milliseconds"),
+                    "stocks": sensex30_rows,
+                }, ensure_ascii=False, default=str),
+                encoding="utf-8",
             )
+            sensex30_tmp.replace(sensex30_path)
 
         except Exception as exc:
             print("LIVE_DASHBOARD_UPDATER_ERROR:", repr(exc))
