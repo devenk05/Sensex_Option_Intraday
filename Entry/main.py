@@ -1553,13 +1553,19 @@ def _generate_live_dashboard(
 
         "market_status": market_status,
 
-        "spot": LIVE_SENSEX_TICK_STATE.get("last_price", option_data.get("spot")),
-        "sensex_price": LIVE_SENSEX_TICK_STATE.get("last_price", option_data.get("spot")),
+        "spot": LIVE_SENSEX_TICK_STATE.get("last_price") or option_data.get("spot"),
+        "sensex_price": LIVE_SENSEX_TICK_STATE.get("last_price") or option_data.get("spot"),
+        "live_sensex": dict(LIVE_SENSEX_TICK_STATE),
         "market_bias": market_bias,
 
-        # No final entry score exists in the current main flow.
-        "entry_score": None,
-        "decision_status": "WAIT",
+        # Publish the actual confluence score and component scores to the initial HTML.
+        "entry_score": (
+            LATEST_ENTRY_SCORE
+            if LATEST_ENTRY_SCORE is not None
+            else (CURRENT_SETUP_DECISION or {}).get("entry_score")
+        ),
+        "entry_score_components": globals().get("LATEST_CONFLUENCE_COMPONENT_SCORES", {}),
+        "decision_status": (CURRENT_SETUP_DECISION or {}).get("status", "WAIT"),
 
         "atm_strike": option_data.get("atm_strike"),
         "expiry": option_data.get("expiry"),
