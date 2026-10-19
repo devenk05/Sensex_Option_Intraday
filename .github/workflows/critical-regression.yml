@@ -22,7 +22,7 @@ jobs:
       - name: Install test runner
         run: python -m pip install --upgrade pip pytest
       - name: Compile project Python files
-        run: python -m compileall -q Entry exit report tests
+        run: python -m compileall -q Entry exit report tests scripts
       - name: Run available critical regression tests
         run: >-
           python -m pytest -q
