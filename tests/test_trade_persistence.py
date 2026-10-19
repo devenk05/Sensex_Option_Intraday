@@ -52,6 +52,10 @@ class TradePersistenceTests(unittest.TestCase):
             path.write_text(json.dumps({"status": "ACTIVE", "symbol": "X"}), encoding="utf-8")
             with self.assertRaises(ValueError):
                 TradeStateStorage(path).load()
+            invalid = dict(VALID_TRADE, option_sl=210.0, option_target=300.0)
+            path.write_text(json.dumps(invalid), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                TradeStateStorage(path).load()
 
     def test_trade_history_round_trip(self):
         with tempfile.TemporaryDirectory() as temp:
