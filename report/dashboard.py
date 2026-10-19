@@ -272,12 +272,12 @@ def _trade_setup(trade: Any) -> str:
 
             <div>
                 <span>Stop Loss</span>
-                <strong>₹{_number(trade.get("sl"))}</strong>
+                <strong>₹{_number(trade.get("option_sl", trade.get("sl")))}</strong>
             </div>
 
             <div>
                 <span>Target</span>
-                <strong>₹{_number(trade.get("target"))}</strong>
+                <strong>₹{_number(trade.get("option_target", trade.get("target")))}</strong>
             </div>
 
             <div>
@@ -2123,7 +2123,7 @@ input, textarea, select {{ color: var(--text); }}
                     <span>{_status_badge(decision_status)}</span>
                 </div>
 
-                {_trade_setup(active_trade)}
+                <div id="active-trade-panel">{_trade_setup(active_trade)}</div>
 
             </div>
 
@@ -2451,6 +2451,36 @@ function updateOptionChainLive(data) {{
         }}).join("");
 }}
 
+function escapeLiveText(value) {{
+    return String(value == null ? "—" : value).replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[ch]));
+}}
+
+function updateActiveTradePanel(data) {{
+    const panel = document.getElementById("active-trade-panel");
+    if (!panel) return;
+    const trade = data.active_trade;
+    if (!trade || typeof trade !== "object" || !trade.symbol) {{
+        panel.innerHTML = '<div class="empty-trade"><strong>No Active Trade</strong><span>Waiting for a confirmed setup</span></div>';
+        return;
+    }}
+    const action = trade.action || ("BUY_" + (trade.direction || trade.option_type || ""));
+    const sl = trade.option_sl ?? trade.sl;
+    const target = trade.option_target ?? trade.target;
+    panel.innerHTML =
+        '<div class="trade-setup"><div class="trade-direction">' + escapeLiveText(action) + '</div>' +
+        '<div class="trade-grid">' +
+        '<div><span>Symbol</span><strong>' + escapeLiveText(trade.symbol) + '</strong></div>' +
+        '<div><span>Strike</span><strong>' + escapeLiveText(trade.strike) + '</strong></div>' +
+        '<div><span>Entry</span><strong>₹' + escapeLiveText(formatLiveNumber(trade.entry ?? trade.entry_price, 2)) + '</strong></div>' +
+        '<div><span>Stop Loss</span><strong>₹' + escapeLiveText(formatLiveNumber(sl, 2)) + '</strong></div>' +
+        '<div><span>Target</span><strong>₹' + escapeLiveText(formatLiveNumber(target, 2)) + '</strong></div>' +
+        '<div><span>Score</span><strong>' + escapeLiveText(trade.score ?? trade.entry_score) + '</strong></div>' +
+        '<div><span>Risk / lot</span><strong>₹' + escapeLiveText(formatLiveNumber(trade.risk_per_lot_inr, 2)) + '</strong></div>' +
+        '</div></div>';
+}}
+
 async function updateDashboardLive() {{
     try {{
         const response = await fetch("live_state.json?ts=" + Date.now(), {{
@@ -2460,6 +2490,8 @@ async function updateDashboardLive() {{
         if (!response.ok) return;
 
         const data = await response.json();
+        try {{ updateActiveTradePanel(data); }}
+        catch (error) {{ console.error("ACTIVE_TRADE_LIVE_UPDATE_ERROR:", error); }}
         // A single panel exception must not stop the remaining live dashboard fields.
         try {{ updateOptionChainLive(data); }}
         catch (error) {{ console.error("OPTION_CHAIN_LIVE_UPDATE_ERROR:", error); }}
