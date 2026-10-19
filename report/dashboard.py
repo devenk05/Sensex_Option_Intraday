@@ -417,6 +417,35 @@ def generate_dashboard(
     )
 
     sensex30_stocks = data.get("sensex30_stocks", [])
+    score_components = _dict(data.get("entry_score_components"))
+    score_component_labels = [
+        ("market_structure", "MARKET STRUCTURE"),
+        ("price_action", "PRICE ACTION"),
+        ("volume_analysis", "VOLUME"),
+        ("atm_ce_pe_strength", "ATM CE/PE"),
+        ("support_resistance", "SUPPORT / RESISTANCE"),
+        ("pivot_points", "PIVOT POINTS"),
+        ("liquidity_greeks", "LIQUIDITY / GREEKS"),
+        ("fii_dii", "FII / DII"),
+    ]
+    score_nodes_html = ""
+    for component_key, component_label in score_component_labels:
+        component_value = score_components.get(component_key)
+        if isinstance(component_value, dict):
+            component_value = component_value.get("score", component_value.get("value"))
+        try:
+            component_display = f"{float(component_value):.0f}"
+            component_class = "strong" if float(component_value) >= 70 else ("moderate" if float(component_value) >= 40 else "weak")
+        except (TypeError, ValueError):
+            component_display = "—"
+            component_class = "unavailable"
+        score_nodes_html += f"""
+        <div class="score-node score-node-{component_key} {component_class}">
+            <span class="score-node-name">{escape(component_label)}</span>
+            <strong data-score-component="{escape(component_key)}">{escape(component_display)}</strong>
+        </div>
+        """
+    score_display = _safe(entry_score)
     # ------------------------------------------------------------
     # HTML
     # ------------------------------------------------------------
@@ -1687,12 +1716,22 @@ input, textarea, select {{ color: var(--text); }}
             "market-bias-card",
         )}
 
-        {_metric_card(
-            "AI ENTRY SCORE",
-            _safe(entry_score),
-            "Minimum required: 80",
-            "entry-score-card",
-        )}
+        <div class="metric-card entry-score-card">
+            <div class="metric-title">AI ENTRY SCORE</div>
+            <div class="score-breakdown-heading">
+                <div class="metric-value" data-field="entry-score">{score_display}</div>
+                <div class="metric-subtitle">Minimum required: 80 · Confluence engine</div>
+            </div>
+            <div class="score-radial-map" aria-label="AI entry score component breakdown">
+                {score_nodes_html}
+                <div class="score-ai-core">
+                    <span>AI CONFLUENCE</span>
+                    <strong data-field="score-core">{score_display}</strong>
+                    <span>MINIMUM 80</span>
+                </div>
+            </div>
+            <div class="score-component-footnote">Component scores update from the live confluence snapshot.</div>
+        </div>
 
         {_metric_card(
             "ATM STRIKE",
@@ -2268,6 +2307,23 @@ async function updateDashboardLive() {{
         if (scoreElement && data.entry_score != null) {{
             scoreElement.textContent = data.entry_score;
         }}
+        const scoreCore = document.querySelector('[data-field="score-core"]');
+        if (scoreCore && data.entry_score != null) {{
+            scoreCore.textContent = data.entry_score;
+        }}
+        const liveComponents = data.entry_score_components || {{}};
+        Object.entries(liveComponents).forEach(([key, raw]) => {{
+            const el = document.querySelector('[data-score-component="' + key + '"]');
+            if (!el) return;
+            const value = (raw && typeof raw === "object") ? (raw.score ?? raw.value) : raw;
+            if (value == null || !Number.isFinite(Number(value))) return;
+            el.textContent = Number(value).toFixed(0);
+            const node = el.closest(".score-node");
+            if (node) {{
+                node.classList.remove("strong", "moderate", "weak", "unavailable");
+                node.classList.add(Number(value) >= 70 ? "strong" : (Number(value) >= 40 ? "moderate" : "weak"));
+            }}
+        }});
 
         const decisionElement = document.querySelector(
             ".decision-card .metric-value .status-badge"
