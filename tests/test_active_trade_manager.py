@@ -31,6 +31,13 @@ class ActiveTradeManagerTests(unittest.TestCase):
 
         self.assertEqual(manager.get_active_trade()["status"], "ACTIVE")
 
+    def test_update_trade_is_atomic_and_persistable_by_caller(self):
+        manager = ActiveTradeManager()
+        manager.start_trade({"trade_id": "A", "status": "ACTIVE"})
+        updated = manager.update_trade({"telegram_status": "SENT"})
+        self.assertEqual(updated["telegram_status"], "SENT")
+        self.assertEqual(manager.get_active_trade()["telegram_status"], "SENT")
+
     def test_close_clears_active_state(self):
         manager = ActiveTradeManager()
         manager.start_trade({"trade_id": "A"})
