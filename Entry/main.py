@@ -1347,7 +1347,9 @@ def _build_confluence_component_scores(
         for source in sources:
             if not isinstance(source, dict):
                 continue
-            for key in ("component_score", "confluence_score", "confidence_score", "liquidity_score", "score"):
+            # Generic "score" is deliberately excluded here: PivotState.score
+            # is on a 0-10 scale, unlike these normalized 0-100 component fields.
+            for key in ("component_score", "confluence_score", "confidence_score", "liquidity_score"):
                 value = source.get(key)
                 if isinstance(value, dict):
                     value = value.get("score")
