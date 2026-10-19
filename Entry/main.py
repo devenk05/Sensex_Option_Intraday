@@ -260,6 +260,8 @@ ACTIVE_TRADE_MANAGER = ActiveTradeManager()
 
 # Final live trade lifecycle state
 LIVE_FINALIZED = False
+RECOVERY_BLOCKED = False
+RECOVERY_BLOCK_REASON = None
 CURRENT_SETUP_DECISION = None
 NEARBY_CURRENT_CANDIDATE = None
 EXIT_MONITOR_LOOP = None
@@ -481,6 +483,10 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
     """Register and persist exactly one active trade recommendation."""
     global LIVE_FINALIZED
 
+    if RECOVERY_BLOCKED:
+        print("TRADE_REGISTRATION_REJECTED: Recovery state is unsafe.", RECOVERY_BLOCK_REASON)
+        return False
+
     if ACTIVE_TRADE_MANAGER.has_active_trade():
         print("TRADE_REGISTRATION_IGNORED: Active trade already exists.")
         return False
@@ -688,6 +694,9 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
     """Recompute the recommendation decision after each completed live 5m candle."""
     global CURRENT_SETUP_DECISION, NEARBY_CURRENT_CANDIDATE, LATEST_ENTRY_SCORE
 
+    if RECOVERY_BLOCKED:
+        print("LIVE_DECISION_SKIPPED: TRADE_RECOVERY_BLOCKED", RECOVERY_BLOCK_REASON)
+        return
     if ACTIVE_TRADE_MANAGER.has_active_trade() or LIVE_FINALIZED:
         print("LIVE_DECISION_SKIPPED: ACTIVE_TRADE_LOCK")
         return
@@ -1313,6 +1322,10 @@ def _live_dashboard_updater(
                 "decision_status": current_decision.get("status", "WAIT"),
                 "decision": current_decision,
                 "active_trade": ACTIVE_TRADE_MANAGER.get_active_trade() or {},
+                "trade_recovery": {
+                    "blocked": RECOVERY_BLOCKED,
+                    "reason": RECOVERY_BLOCK_REASON,
+                },
                 "trade_exit_status": (
                     EXIT_ALERT_STATUS.to_dict()
                     if "EXIT_ALERT_STATUS" in globals()
@@ -1888,18 +1901,30 @@ def main():
     print("DAILY_REPORT_LOOP_STARTED")
 
 
-    # Load persisted closed-trade history
-    saved_history = TRADE_HISTORY_STORAGE.load()
-    for saved_trade in saved_history:
-        TRADE_HISTORY.add_trade(saved_trade)
+    # Load persisted history and active state fail-closed. A corrupt file must
+    # not silently permit fresh recommendations while a previous trade may exist.
+    global RECOVERY_BLOCKED, RECOVERY_BLOCK_REASON
+    try:
+        saved_history = TRADE_HISTORY_STORAGE.load()
+        for saved_trade in saved_history:
+            TRADE_HISTORY.add_trade(saved_trade)
+    except Exception as exc:
+        RECOVERY_BLOCKED = True
+        RECOVERY_BLOCK_REASON = "TRADE_HISTORY_LOAD_FAILED: " + str(exc)[:250]
+        print("TRADE_HISTORY_RECOVERY_BLOCKED:", RECOVERY_BLOCK_REASON)
 
-    # Restore active trade, if one was saved previously
-    recovery = TradeRecovery(
-        trade_manager=ACTIVE_TRADE_MANAGER,
-        storage=ACTIVE_TRADE_STATE_STORAGE,
-    )
-    recovered_trade = recovery.recover()
-    print("TRADE_RECOVERY:", recovered_trade)
+    try:
+        recovery = TradeRecovery(
+            trade_manager=ACTIVE_TRADE_MANAGER,
+            storage=ACTIVE_TRADE_STATE_STORAGE,
+        )
+        recovered_trade = recovery.recover()
+        print("TRADE_RECOVERY:", recovered_trade)
+    except Exception as exc:
+        RECOVERY_BLOCKED = True
+        RECOVERY_BLOCK_REASON = "ACTIVE_TRADE_RECOVERY_FAILED: " + str(exc)[:250]
+        recovered_trade = None
+        print("TRADE_RECOVERY_BLOCKED:", RECOVERY_BLOCK_REASON)
 
     lifecycle = TradeLifecycleManager(
         active_trade_manager=ACTIVE_TRADE_MANAGER,
