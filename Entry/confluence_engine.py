@@ -18,11 +18,10 @@ MAX_SCORE = 100
 def calculate_confluence_score(
     component_scores: Mapping[str, float],
 ) -> dict[str, object]:
-    """Calculate a normalized weighted score from available components.
+    """Calculate weighted evidence out of 100 without inflating missing data.
 
-    Components whose data is genuinely unavailable are omitted rather than
-    being assigned a fabricated score. The returned score is normalized to
-    0-100 using only the available component weights.
+    Missing components earn no points and are reported separately. This is
+    a partial evidence score, not a calibrated win probability.
     """
 
     unknown = set(component_scores) - set(SCORING_WEIGHTS)
@@ -62,7 +61,9 @@ def calculate_confluence_score(
             "unavailable_components": list(SCORING_WEIGHTS),
         }
 
-    normalized_score = weighted_score * 100 / available_weight
+    # A single available component must not imply 100% confidence.
+    # Preserve the full 100-point scale; missing evidence contributes no points.
+    normalized_score = weighted_score
     unavailable = [
         component
         for component in SCORING_WEIGHTS
@@ -72,6 +73,8 @@ def calculate_confluence_score(
     return {
         "status": "OK",
         "score": round(normalized_score, 2),
+        "coverage_percent": available_weight,
+        "is_complete": available_weight == 100,
         "max_score": MAX_SCORE,
         "available_components": list(component_scores),
         "unavailable_components": unavailable,
