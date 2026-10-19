@@ -205,6 +205,10 @@ def _option_card(
             ₹{_number(ltp)}
         </div>
 
+        <div class="atm-momentum-chart-wrap">
+            <div class="atm-chart-heading"><span>LIVE PREMIUM · LAST 60 UPDATES</span><span data-field="chart-status">WAITING FOR TICKS</span></div>
+            <canvas class="atm-momentum-chart" data-chart="{css}" height="88" aria-label="{option_type.upper()} live premium chart"></canvas>
+        </div>
         <div class="option-grid">
             <div>
                 <span>Strike</span>
@@ -1617,6 +1621,16 @@ input, textarea, select {{ color: var(--text); }}
  .metrics-mtf-section .analysis-grid {{ grid-template-columns:1fr !important; }}
 }}
 
+
+/* Direct dashboard Agentic AI review and live ATM premium mini-charts */
+.jarvis-review-panel {{ margin:16px 0 22px; }}
+.jarvis-review-body {{ min-height:76px; }}
+.atm-momentum-chart-wrap {{ margin:10px 0 12px; padding:8px 9px 4px; border:1px solid rgba(100,140,170,.22); border-radius:10px; background:rgba(10,24,40,.035); }}
+.atm-chart-heading {{ display:flex; justify-content:space-between; gap:8px; font-size:9px; letter-spacing:.06em; color:#70849a; }}
+.atm-momentum-chart {{ display:block; width:100%; height:88px; margin-top:5px; }}
+@media (max-width:1250px) {{ .metrics {{ grid-template-columns:repeat(3,minmax(0,1fr)) !important; }} .entry-score-card {{ grid-column:span 2 !important; }} .metrics-mtf-section {{ grid-column:1 / -1 !important; }} }}
+@media (max-width:760px) {{ .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)) !important; }} .entry-score-card {{ grid-column:1 / -1 !important; }} .metrics-mtf-section .analysis-grid {{ grid-template-columns:1fr !important; }} }}
+
 </style>
 </head>
 
@@ -2207,6 +2221,55 @@ function updateAtmOptionMomentum(data) {{
         }});
         setField("oi", ["oi", "open_interest"], v => formatLiveNumber(v, 0));
         setField("volume", ["volume", "volume_traded", "minute_volume"], v => formatLiveNumber(v, 0));
+
+        // Keep a rolling 60-point history in the browser; redraw on every live-state poll.
+        const ltpRaw = value(["ltp", "last_price", "last_1m_close"]);
+        const chart = card.querySelector("canvas.atm-momentum-chart");
+        if (chart && ltpRaw != null && Number.isFinite(Number(ltpRaw))) {{
+            const key = "__atmChartHistory_" + side;
+            const history = window[key] || (window[key] = []);
+            const point = {{ t: Date.now(), v: Number(ltpRaw) }};
+            if (!history.length || history[history.length - 1].v !== point.v) history.push(point);
+            while (history.length > 60) history.shift();
+            const ctx = chart.getContext("2d");
+            const rect = chart.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            const width = Math.max(240, Math.floor(rect.width || 320));
+            const height = 88;
+            if (chart.width !== width * dpr || chart.height !== height * dpr) {{
+                chart.width = width * dpr;
+                chart.height = height * dpr;
+            }}
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, width, height);
+            if (history.length >= 2) {{
+                const values = history.map(p => p.v);
+                let min = Math.min(...values), max = Math.max(...values);
+                if (max === min) {{ max += 0.5; min -= 0.5; }}
+                const pad = 8, plotH = height - 16, plotW = width - 16;
+                ctx.strokeStyle = side === "ce" ? "#0d9b75" : "#dc4b57";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                history.forEach((p, i) => {{
+                    const x = pad + (history.length === 1 ? 0 : i * plotW / (history.length - 1));
+                    const y = pad + (max - p.v) * plotH / (max - min);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }});
+                ctx.stroke();
+                ctx.fillStyle = side === "ce" ? "#0d9b75" : "#dc4b57";
+                ctx.font = "10px sans-serif";
+                ctx.fillText("₹" + Number(ltpRaw).toFixed(2), pad, 11);
+            }} else {{
+                ctx.fillStyle = "#718096";
+                ctx.font = "10px sans-serif";
+                ctx.fillText("Collecting live ticks…", 8, 22);
+            }}
+            const status = card.querySelector('[data-field="chart-status"]');
+            if (status) status.textContent = "LIVE · " + history.length + "/60";
+        }} else {{
+            const status = card.querySelector('[data-field="chart-status"]');
+            if (status) status.textContent = "NO LIVE TICK";
+        }}
     }}
 }}
 
@@ -2399,7 +2462,9 @@ async function updateJarvisAgentReview() {{
     try {{
         const response = await fetch("latest_agentic_review.json?ts=" + Date.now(), {{ cache: "no-store" }});
         if (!response.ok) {{
-            metaEl.textContent = "Review status: waiting for the next completed 5-minute decision";
+            headlineEl.textContent = "Agentic AI review pending";
+            bodyEl.textContent = "This panel refreshes automatically. It will show the latest review when the AgenticAI engine publishes a snapshot after a completed 5-minute decision. No review data has been fabricated.";
+            metaEl.textContent = "Waiting for latest_agentic_review.json";
             return;
         }}
         const review = await response.json();
@@ -2447,7 +2512,6 @@ setInterval(updateDashboardLive, 1000);
 updateSensex30Live();
 setInterval(updateSensex30Live, 1000);
 </script>
-<!-- JARVIS Chat: browser-local, dashboard-aware assistant; no broker actions -->
 </body>
 </html>
 """
