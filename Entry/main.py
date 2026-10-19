@@ -59,6 +59,7 @@ from trade_state_storage import TradeStateStorage
 from trade_monitor import TradeMonitor
 from trade_engine import decide_trade
 from telegram_engine import send_telegram_message
+from telegram_outbox import TelegramOutbox
 from google_sheets_engine import append_google_sheet_row
 from excel_report import save_trade_report
 from report.dashboard import generate_dashboard
@@ -268,6 +269,7 @@ EXIT_MONITOR_LOOP = None
 EXIT_MONITOR_THREAD = None
 
 ACTIVE_TRADE_STATE_STORAGE = TradeStateStorage()
+TELEGRAM_OUTBOX = TelegramOutbox()
 
 def _recent_option_reversal_low(option_record: dict, direction: str) -> float | None:
     """Return the latest usable option-premium reversal/swing low."""
@@ -548,26 +550,31 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
         },
     )
 
-    # Entry alert ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â recommendation only; no order is placed.
+    # Recommendation only; never place a broker order. Failed Telegram sends
+    # are durably queued and retried by the background outbox worker.
+    entry_alert_message = "\n".join(
+        [
+            "SENSEX OPTION TRADE ALERT",
+            f"Action: {trade['action']}",
+            f"Symbol: {trade['symbol']}",
+            f"Strike: {trade['strike']}",
+            f"Entry: {trade['entry']:.2f}",
+            f"SL: {trade['option_sl']:.2f}",
+            f"Target: {trade['option_target']:.2f}",
+            f"Score: {trade['score']}",
+            f"Expiry: {trade['expiry']}",
+        ]
+    )
     try:
-        send_telegram_message(
-            "\n".join(
-                [
-                    "SENSEX OPTION TRADE ALERT",
-                    f"Action: {trade['action']}",
-                    f"Symbol: {trade['symbol']}",
-                    f"Strike: {trade['strike']}",
-                    f"Entry: {trade['entry']:.2f}",
-                    f"SL: {trade['option_sl']:.2f}",
-                    f"Target: {trade['option_target']:.2f}",
-                    f"Score: {trade['score']}",
-                    f"Expiry: {trade['expiry']}",
-                ]
-            )
-        )
+        send_telegram_message(entry_alert_message)
         print("TRADE_ENTRY_TELEGRAM_SENT")
     except Exception as exc:
-        print("TRADE_ENTRY_TELEGRAM_ERROR:", exc)
+        try:
+            TELEGRAM_OUTBOX.enqueue(trade["trade_id"], entry_alert_message)
+            print("TRADE_ENTRY_TELEGRAM_QUEUED_FOR_RETRY:", trade["trade_id"])
+        except Exception as queue_exc:
+            print("TRADE_ENTRY_TELEGRAM_OUTBOX_ERROR:", type(queue_exc).__name__, str(queue_exc)[:200])
+        print("TRADE_ENTRY_TELEGRAM_ERROR:", type(exc).__name__, str(exc)[:200])
 
     return True
 
@@ -1900,6 +1907,23 @@ def main():
     daily_report_thread.start()
     print("DAILY_REPORT_LOOP_STARTED")
 
+
+    # Retry undelivered recommendation alerts independently from market decisions.
+    def run_telegram_outbox():
+        import time
+        while True:
+            try:
+                TELEGRAM_OUTBOX.deliver_pending(send_telegram_message, limit=1)
+            except Exception as exc:
+                print("TELEGRAM_OUTBOX_WORKER_ERROR:", type(exc).__name__, str(exc)[:200])
+            time.sleep(5)
+
+    Thread(
+        target=run_telegram_outbox,
+        name="telegram-outbox",
+        daemon=True,
+    ).start()
+    print("TELEGRAM_OUTBOX_WORKER_STARTED")
 
     # Load persisted history and active state fail-closed. A corrupt file must
     # not silently permit fresh recommendations while a previous trade may exist.
