@@ -73,12 +73,21 @@ class TradeExitMonitorLoop:
                 }
 
             # Mark before callback to prevent repeated dispatch if callback fails.
+            callback_result = self.on_exit_signal(result)
+            callback_status = str(callback_result.get("status", "")).upper() if isinstance(callback_result, dict) else ""
+            if callback_status in {"ERROR", "FAILED", "FAILURE"} or callback_result is False:
+                return {
+                    **result,
+                    "exit_signal_dispatched": False,
+                    "callback_status": callback_status or "FAILED",
+                    "reason": "Exit callback failed; retrying on next tick.",
+                }
             self._last_exit_trade_key = trade_key
-            self.on_exit_signal(result)
 
             return {
                 **result,
                 "exit_signal_dispatched": True,
+                "callback_status": callback_status or "ACCEPTED",
             }
 
         return result
