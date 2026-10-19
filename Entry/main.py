@@ -707,6 +707,10 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
     if ACTIVE_TRADE_MANAGER.has_active_trade() or LIVE_FINALIZED:
         print("LIVE_DECISION_SKIPPED: ACTIVE_TRADE_LOCK")
         return
+    now_local = datetime.now(ZoneInfo(config.TIMEZONE)).time()
+    if now_local < config.TRADING_START or now_local > config.NO_NEW_RECOMMENDATIONS_AFTER:
+        print("LIVE_DECISION_SKIPPED: OUTSIDE_RECOMMENDATION_WINDOW", now_local.isoformat())
+        return
     if len(live_5m) < 20:
         print("LIVE_DECISION_SKIPPED: INSUFFICIENT_5M_HISTORY", len(live_5m))
         return
