@@ -1663,8 +1663,6 @@ def _generate_live_dashboard(
 
         "active_trade": active_trade,
         "sensex30_stocks": sensex30_rows,
-
-        "decision": {},
     }
 
     try:
