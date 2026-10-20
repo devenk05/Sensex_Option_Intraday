@@ -112,6 +112,8 @@ def update_live_vega_snapshots(
             "timestamp": tick_time.isoformat(),
             "iv": greek_result["iv"],
             "vega": greek_result["vega"],
+            "delta": greek_result.get("delta"),
+            "spot": float(spot) if spot is not None else None,
             "last_price": tick.get("last_price"),
             "iv_price_source": greek_result.get("iv_price_source"),
         }
