@@ -515,7 +515,7 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
 
     try:
         send_telegram_message(
-            "\\n".join(
+            "\n".join(
                 [
                     "SENSEX OPTION TRADE ALERT",
                     f"Action: {trade['action']}",
