@@ -209,19 +209,22 @@ def analyze_liquidity_greeks(
     option_type = str(option.get("option_type") or "").upper()
     years = _years_to_expiry(option.get("expiry"))
 
-    if bid is None or ask is None or bid <= 0 or ask <= 0 or ask < bid:
-        return {
-            "status": "NO_DATA",
-            "reason": "VALID_BID_ASK_UNAVAILABLE",
-            "bid": bid,
-            "ask": ask,
-            "liquidity_passed": False,
-            "liquidity_score": None,
-            "greeks_status": "UNAVAILABLE",
-        }
+    valid_bid_ask = (
+        bid is not None
+        and ask is not None
+        and bid > 0
+        and ask > 0
+        and ask >= bid
+    )
 
-    midpoint = (bid + ask) / 2.0
-    spread_percent = ((ask - bid) / midpoint) * 100.0 if midpoint > 0 else None
+    # Liquidity needs a valid live bid/ask. Greeks can still be estimated
+    # from LTP when depth is missing, but that must not count as liquidity.
+    midpoint = (bid + ask) / 2.0 if valid_bid_ask else None
+    spread_percent = (
+        ((ask - bid) / midpoint) * 100.0
+        if valid_bid_ask and midpoint is not None and midpoint > 0
+        else None
+    )
     liquid = spread_percent is not None and spread_percent <= max_spread_percent
     if spread_percent is None:
         liquidity_score = None
@@ -234,7 +237,7 @@ def analyze_liquidity_greeks(
     else:
         liquidity_score = 25.0
 
-    market_price = midpoint if midpoint > 0 else last_price
+    market_price = midpoint if midpoint is not None and midpoint > 0 else last_price
     iv = None
     greeks = None
     greeks_reason = "MODEL_INPUTS_UNAVAILABLE"
@@ -263,11 +266,12 @@ def analyze_liquidity_greeks(
 
     greeks_available = iv is not None and greeks is not None
     return {
-        "status": "OK",
+        "status": "OK" if valid_bid_ask else "NO_DATA",
+        "reason": None if valid_bid_ask else "VALID_BID_ASK_UNAVAILABLE",
         "bid": bid,
         "ask": ask,
         "last_price": last_price,
-        "midpoint": round(midpoint, 4),
+        "midpoint": round(midpoint, 4) if midpoint is not None else None,
         "spread_percent": round(spread_percent, 4) if spread_percent is not None else None,
         "max_spread_percent": max_spread_percent,
         "liquidity_passed": liquid,
@@ -289,6 +293,6 @@ def analyze_liquidity_greeks(
         "dividend_yield_percent": round(dividend_yield * 100.0, 4),
         "years_to_expiry": round(years, 8) if years is not None else None,
         "greeks_reason": greeks_reason,
-        "iv_price_source": "BID_ASK_MIDPOINT" if midpoint > 0 else "LTP",
+        "iv_price_source": "BID_ASK_MIDPOINT" if valid_bid_ask and midpoint is not None else "LTP",
         "model_assumptions": "EUROPEAN_BLACK_SCHOLES_SPOT_BASED",
     }
