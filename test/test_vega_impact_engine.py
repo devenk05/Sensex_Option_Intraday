@@ -70,3 +70,22 @@ def test_missing_iv_or_vega_is_non_blocking_unavailable():
 
     assert result["status"] == "UNAVAILABLE"
     assert result["reason"] == "IV_OR_VEGA_UNAVAILABLE"
+
+def test_delta_spot_and_vega_iv_effects_are_combined():
+    previous = _snapshot()
+    previous["spot"] = 72000.0
+    current = _snapshot(
+        timestamp="2026-10-20T10:05:00+05:30",
+        iv=19.0,
+        vega=12.5,
+    )
+    current["spot"] = 72020.0
+    current["delta"] = 0.5
+
+    result = analyze_vega_impact(previous, current)
+
+    assert result["status"] == "OK"
+    assert result["estimated_vega_premium_impact_points"] == 12.5
+    assert result["estimated_delta_premium_impact_points"] == 10.0
+    assert result["estimated_premium_impact_points"] == 22.5
+    assert result["method"] == "DELTA_SPOT_PLUS_VEGA_IV_LINEAR_APPROXIMATION"
