@@ -374,6 +374,11 @@ def generate_dashboard(
     volume = _dict(data.get("volume_analysis"))
     oi = _dict(data.get("oi_summary"))
     gap = _dict(data.get("gap_context"))
+    vega_impact = _dict(data.get("vega_impact"))
+    vega_ce = _dict(vega_impact.get("ce"))
+    vega_pe = _dict(vega_impact.get("pe"))
+    vega_ce_impact = _dict(vega_ce.get("impact"))
+    vega_pe_impact = _dict(vega_pe.get("impact"))
 
     ce = _dict(data.get("ce"))
     pe = _dict(data.get("pe"))
@@ -1402,6 +1407,37 @@ td {{
 
     </section>
 
+    <!-- ===================================================== -->
+    <!-- VEGA / DELTA PREMIUM IMPACT -->
+    <!-- ===================================================== -->
+    <section class="section">
+        <div class="section-title">
+            <h2>Vega / Delta Premium Impact</h2>
+            <span>Model estimate · diagnostic only</span>
+        </div>
+        <div class="option-cards" id="vega-impact-cards">
+            <div class="option-card ce">
+                <div class="option-header"><span>ATM CALL · CE</span><span class="option-type">CE</span></div>
+                <div class="option-grid">
+                    <div><span>IV</span><strong id="vega-ce-iv">{_number(vega_ce.get("iv"))}%</strong></div>
+                    <div><span>Vega</span><strong id="vega-ce-vega">{_number(vega_ce.get("vega"))}</strong></div>
+                    <div><span>Est. premium impact</span><strong id="vega-ce-impact">{_number(vega_ce_impact.get("estimated_premium_impact_points"))} pts</strong></div>
+                    <div><span>Impact direction</span><strong id="vega-ce-direction">{_safe(vega_ce_impact.get("impact_direction"), "WAITING")}</strong></div>
+                </div>
+            </div>
+            <div class="option-card pe">
+                <div class="option-header"><span>ATM PUT · PE</span><span class="option-type">PE</span></div>
+                <div class="option-grid">
+                    <div><span>IV</span><strong id="vega-pe-iv">{_number(vega_pe.get("iv"))}%</strong></div>
+                    <div><span>Vega</span><strong id="vega-pe-vega">{_number(vega_pe.get("vega"))}</strong></div>
+                    <div><span>Est. premium impact</span><strong id="vega-pe-impact">{_number(vega_pe_impact.get("estimated_premium_impact_points"))} pts</strong></div>
+                    <div><span>Impact direction</span><strong id="vega-pe-direction">{_safe(vega_pe_impact.get("impact_direction"), "WAITING")}</strong></div>
+                </div>
+            </div>
+        </div>
+        <p class="muted">Estimate = Delta × spot change + Vega × IV change. First-order model estimate; not a standalone market-direction signal.</p>
+    </section>
+
 
     <!-- ===================================================== -->
     <!-- CHART + TRADE -->
@@ -1700,6 +1736,27 @@ function updateOptionChainLive(data) {{
         }}).join("");
 }}
 
+function updateVegaImpact(data) {{
+    if (!data || typeof data !== "object") return;
+    for (const side of ["ce", "pe"]) {{
+        const leg = data[side] || {{}};
+        const impact = leg.impact || {{}};
+        const prefix = "vega-" + side + "-";
+        const set = (suffix, value) => {{
+            const element = document.getElementById(prefix + suffix);
+            if (element) element.textContent = value;
+        }};
+        set("iv", leg.iv == null ? "—" : Number(leg.iv).toFixed(2) + "%");
+        set("vega", leg.vega == null ? "—" : Number(leg.vega).toFixed(4));
+        set("impact", impact.status === "OK" && impact.estimated_premium_impact_points != null
+            ? Number(impact.estimated_premium_impact_points).toFixed(2) + " pts"
+            : "Waiting for snapshots");
+        set("direction", impact.status === "OK"
+            ? String(impact.impact_direction || "NEUTRAL").replace(/_/g, " ")
+            : String(impact.reason || "WAITING").replace(/_/g, " "));
+    }}
+}}
+
 async function updateDashboardLive() {{
     try {{
         const response = await fetch("live_state.json?ts=" + Date.now(), {{
@@ -1711,6 +1768,7 @@ async function updateDashboardLive() {{
         const data = await response.json();
         updateOptionChainLive(data);
         updateAtmOptionMomentum(data);
+        updateVegaImpact(data.vega_impact);
 
         const spotElement = document.querySelector(
             ".sensex-spot-card .metric-value"
