@@ -492,9 +492,30 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
     )
 
     # Entry alert ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â recommendation only; no order is placed.
+    vega_alert_lines = []
+    try:
+        side = "ce" if str(trade.get("symbol", "")).upper().endswith("CE") else "pe"
+        vega_state = LIVE_ANALYSIS_STATE.get("vega_impact") or {}
+        vega_leg = vega_state.get(side) or {}
+        vega_impact = vega_leg.get("impact") or {}
+        if vega_leg.get("status") == "OK" and vega_impact.get("status") == "OK":
+            vega_alert_lines = [
+                f"IV: {vega_leg.get('iv')}%",
+                f"Vega: {vega_leg.get('vega')} premium points per 1 IV point",
+                f"Estimated Delta+Vega premium impact: {vega_impact.get('estimated_premium_impact_points')} points",
+                f"Premium impact: {vega_impact.get('impact_direction')}",
+                "Note: model estimate; not a standalone market-direction signal",
+            ]
+        else:
+            vega_alert_lines = [
+                "Vega/Delta impact: warming up (awaiting 2 fresh snapshots)"
+            ]
+    except Exception as vega_alert_exc:
+        print("VEGA_TELEGRAM_CONTEXT_WARNING:", repr(vega_alert_exc))
+
     try:
         send_telegram_message(
-            "\n".join(
+            "\\n".join(
                 [
                     "SENSEX OPTION TRADE ALERT",
                     f"Action: {trade['action']}",
@@ -504,6 +525,7 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
                     f"SL: {trade['option_sl']:.2f}",
                     f"Target: {trade['option_target']:.2f}",
                     f"Score: {trade['score']}",
+                    *vega_alert_lines,
                     f"Expiry: {trade['expiry']}",
                 ]
             )
@@ -1660,6 +1682,7 @@ def _generate_live_dashboard(
         "gap_context": None,
         "fii_dii": None,
         "liquidity_greeks": LIVE_ANALYSIS_STATE.get("liquidity_greeks"),
+        "vega_impact": LIVE_ANALYSIS_STATE.get("vega_impact"),
 
         "ce": ce,
         "pe": pe,
