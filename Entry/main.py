@@ -26,6 +26,7 @@ from indicator_engine import calculate_indicators
 from oi_engine import analyze_oi_data
 from market_engine import analyze_market_structure
 from liquidity_greeks_engine import analyze_liquidity_greeks
+from vega_snapshot_engine import update_live_vega_snapshots
 from pivot_engine import PivotEngine, calculate_pivot_points
 from price_action_engine import analyze_price_action
 from multi_timeframe_engine import analyze_multi_timeframe
@@ -109,6 +110,8 @@ LIVE_ANALYSIS_STATE = {
     "candles_15m": [],
     "fii_dii": None,
     "liquidity_greeks": None,
+    "vega_impact": None,
+    "selected_options": {},
     "market_status": {},
     "candle_structure": {},
     "support_resistance": {},
@@ -135,6 +138,9 @@ LIVE_ANALYSIS_STATE = {
 LIVE_5M_CANDLE_HISTORY = []
 LIVE_5M_CURRENT = None
 LIVE_5M_LAST_REFRESH = None
+
+# Latest same-contract IV snapshots used only for Vega impact estimation.
+VEGA_PREVIOUS_SNAPSHOTS = {}
 
 
 def _aggregate_live_1m_into_5m(candle):
@@ -929,6 +935,30 @@ def handle_finalized_candle(candle):
                 LIVE_ANALYSIS_STATE["live_5m_last_completed"] = (
                     completed_5m["minute"].strftime("%Y-%m-%d %H:%M")
                 )
+                # Sample Vega only when a completed Sensex 5m candle refreshes.
+                # It is diagnostic context and does not alter trade eligibility.
+                try:
+                    selected_options = LIVE_ANALYSIS_STATE.get("selected_options") or {}
+                    if selected_options:
+                        live_spot_for_vega = LIVE_SENSEX_TICK_STATE.get("last_price")
+                        if live_spot_for_vega is None:
+                            live_spot_for_vega = (LIVE_ANALYSIS_STATE.get("option_data") or {}).get("spot")
+                        vega_snapshot_result = update_live_vega_snapshots(
+                            selected_options=selected_options,
+                            live_tick_state=LIVE_TICK_STATE,
+                            spot=live_spot_for_vega,
+                            previous_snapshots=VEGA_PREVIOUS_SNAPSHOTS,
+                        )
+                        LIVE_ANALYSIS_STATE["vega_impact"] = {
+                            key: value for key, value in vega_snapshot_result.items()
+                            if key != "snapshots"
+                        }
+                        VEGA_PREVIOUS_SNAPSHOTS.update(
+                            vega_snapshot_result.get("snapshots") or {}
+                        )
+                        print("LIVE_VEGA_IMPACT:", LIVE_ANALYSIS_STATE["vega_impact"])
+                except Exception as vega_exc:
+                    print("LIVE_VEGA_SNAPSHOT_ERROR:", repr(vega_exc))
                 live_5m = list(LIVE_5M_CANDLE_HISTORY)
 
                 if len(live_5m) >= 2:
@@ -1235,6 +1265,7 @@ def _live_dashboard_updater(
                 "oi_summary": dashboard_analysis["oi_summary"],
                 "option_summary": dashboard_analysis["option_summary"],
                 "sensex": dict(LIVE_SENSEX_TICK_STATE),
+                "vega_impact": LIVE_ANALYSIS_STATE.get("vega_impact") or {},
             }
 
             # Keep nearby option-chain premiums live in the dashboard JSON.
@@ -2194,9 +2225,14 @@ def main():
         else:
             print(f"ATM_{option_type}: NO_MATCH")
 
+    LIVE_ANALYSIS_STATE["selected_options"] = {
+        "CE": dict(ce) if ce else {},
+        "PE": dict(pe) if pe else {},
+    }
+
     # ============================================================
     # OPTION LIQUIDITY FROM REAL BID/ASK DEPTH
-    # Greeks/IV remain unavailable unless an actual source supplies them.
+    # Greeks/IV are Black-Scholes estimates, not native Kite fields.
     # ============================================================
     try:
         # Use the real spot, strike, expiry, option type and current quote
