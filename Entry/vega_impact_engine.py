@@ -107,10 +107,29 @@ def analyze_vega_impact(
         return {**unavailable, "reason": "IV_OR_VEGA_UNAVAILABLE"}
 
     iv_change = current_iv - previous_iv
-    impact = current_vega * iv_change
-    if impact > 1e-9:
+    vega_impact = current_vega * iv_change
+
+    previous_spot = _number(previous_snapshot.get("spot"))
+    current_spot = _number(current_snapshot.get("spot"))
+    current_delta = _number(current_snapshot.get("delta"))
+    spot_change = (
+        current_spot - previous_spot
+        if previous_spot is not None and current_spot is not None
+        else None
+    )
+    delta_impact = (
+        current_delta * spot_change
+        if current_delta is not None and spot_change is not None
+        else None
+    )
+    total_impact = (
+        vega_impact + delta_impact
+        if delta_impact is not None
+        else vega_impact
+    )
+    if total_impact > 1e-9:
         direction = "PREMIUM_UP"
-    elif impact < -1e-9:
+    elif total_impact < -1e-9:
         direction = "PREMIUM_DOWN"
     else:
         direction = "NEUTRAL"
@@ -129,8 +148,17 @@ def analyze_vega_impact(
         "current_iv": round(current_iv, 4),
         "iv_change_points": round(iv_change, 4),
         "vega": round(current_vega, 6),
-        "estimated_premium_impact_points": round(impact, 4),
+        "estimated_vega_premium_impact_points": round(vega_impact, 4),
+        "previous_spot": round(previous_spot, 4) if previous_spot is not None else None,
+        "current_spot": round(current_spot, 4) if current_spot is not None else None,
+        "spot_change_points": round(spot_change, 4) if spot_change is not None else None,
+        "delta": round(current_delta, 6) if current_delta is not None else None,
+        "estimated_delta_premium_impact_points": round(delta_impact, 4) if delta_impact is not None else None,
+        "estimated_premium_impact_points": round(total_impact, 4),
         "impact_direction": direction,
-        "method": "LINEAR_VEGA_APPROXIMATION",
-        "warning": "Estimate only; ignores gamma, theta, spot movement, and changing IV/Greeks.",
+        "method": (
+            "DELTA_SPOT_PLUS_VEGA_IV_LINEAR_APPROXIMATION"
+            if delta_impact is not None else "LINEAR_VEGA_APPROXIMATION"
+        ),
+        "warning": "Estimate only; ignores gamma, theta, and changing IV/Greeks. Spot and IV effects are first-order approximations.",
     }
