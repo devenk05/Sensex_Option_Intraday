@@ -737,6 +737,7 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             cepe_comparison=cepe_comparison,
             fii_dii_analysis=fii_dii_analysis,
             liquidity_greeks_analysis=liquidity_greeks_analysis,
+            vega_impact_analysis=LIVE_ANALYSIS_STATE.get("vega_impact"),
         )
         confluence = calculate_confluence_score(component_scores)
         entry_score = confluence.get("score")
@@ -1386,6 +1387,7 @@ def _build_confluence_component_scores(
     cepe_comparison,
     fii_dii_analysis=None,
     liquidity_greeks_analysis=None,
+    vega_impact_analysis=None,
 ):
     """Build deterministic 0-100 scores from genuine analysis outputs only."""
     scores = {}
@@ -1440,14 +1442,44 @@ def _build_confluence_component_scores(
             scores["atm_ce_pe_strength"] = 50.0
 
     liquidity = liquidity_greeks_analysis or {}
+    liquidity_score = None
     try:
-        liquidity_score = float(liquidity.get("score"))
+        raw_liquidity_score = float(liquidity.get("score"))
         if liquidity.get("status") == "OK":
-            scores["liquidity_greeks"] = max(
-                0.0, min(100.0, liquidity_score)
-            )
+            liquidity_score = max(0.0, min(100.0, raw_liquidity_score))
     except (TypeError, ValueError):
         pass
+
+    # Vega/Delta is a supporting option-premium confirmation only.
+    # The existing 15m/5m market direction remains the primary decision input.
+    vega_confirmation_score = None
+    vega_context = vega_impact_analysis or {}
+    if market in {"UP", "DOWN"}:
+        candidate_leg = "ce" if market == "UP" else "pe"
+        leg_context = vega_context.get(candidate_leg) or {}
+        impact_context = leg_context.get("impact") or {}
+        if leg_context.get("status") == "OK" and impact_context.get("status") == "OK":
+            try:
+                estimated_impact = float(
+                    impact_context.get("estimated_premium_impact_points")
+                )
+                if estimated_impact > 0.5:
+                    vega_confirmation_score = 100.0
+                elif estimated_impact < -0.5:
+                    vega_confirmation_score = 0.0
+                else:
+                    vega_confirmation_score = 50.0
+            except (TypeError, ValueError):
+                pass
+
+    if liquidity_score is not None and vega_confirmation_score is not None:
+        scores["liquidity_greeks"] = round(
+            (liquidity_score + vega_confirmation_score) / 2.0, 2
+        )
+    elif liquidity_score is not None:
+        scores["liquidity_greeks"] = liquidity_score
+    elif vega_confirmation_score is not None:
+        scores["liquidity_greeks"] = vega_confirmation_score
 
     # Include FII/DII only when genuine NSE data was fetched.
     # Positive score means the latest daily flow supports the market direction.
