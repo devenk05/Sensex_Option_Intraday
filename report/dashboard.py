@@ -256,6 +256,28 @@ def _trade_setup(trade: Any) -> str:
     except (TypeError, ValueError):
         pass
     ltp_text = f"₹{_number(current_ltp)}" if current_ltp is not None else "WAITING FOR LIVE TICK"
+    entry_sl_points = entry_target_points = current_sl_points = target_current_points = None
+    entry_sl_pct = entry_target_pct = current_sl_pct = target_current_pct = None
+    try:
+        entry_num = float(entry)
+        sl_num = float(stop_loss)
+        target_num = float(target)
+        entry_sl_points = entry_num - sl_num
+        entry_target_points = target_num - entry_num
+        entry_sl_pct = (entry_sl_points / entry_num) * 100 if entry_num else None
+        entry_target_pct = (entry_target_points / entry_num) * 100 if entry_num else None
+        if current_ltp is not None:
+            current_num = float(current_ltp)
+            current_sl_points = current_num - sl_num
+            target_current_points = target_num - current_num
+            current_sl_pct = (current_sl_points / current_num) * 100 if current_num else None
+            target_current_pct = (target_current_points / current_num) * 100 if current_num else None
+    except (TypeError, ValueError):
+        pass
+    def _distance(points, pct):
+        if points is None:
+            return "—"
+        return f"{points:+,.2f} pts ({pct:+.2f}%)" if pct is not None else f"{points:+,.2f} pts"
 
     return f"""
     <div class="trade-setup">
@@ -300,8 +322,24 @@ def _trade_setup(trade: Any) -> str:
             </div>
 
             <div>
-                <span>P&amp;L / Unit</span>
-                <strong class="{pnl_class}">{escape(pnl_text)}</strong>
+                <span>Entry → Current LTP</span>
+                <strong class="{pnl_class}">{escape(_distance((float(current_ltp) - float(entry)) if current_ltp is not None and entry is not None else None, (((float(current_ltp) - float(entry)) / float(entry)) * 100) if current_ltp is not None and entry not in (None, 0, "0") else None))}</strong>
+            </div>
+            <div>
+                <span>Entry → SL</span>
+                <strong class="bearish">{escape(_distance(entry_sl_points, entry_sl_pct))}</strong>
+            </div>
+            <div>
+                <span>Current LTP → SL</span>
+                <strong>{escape(_distance(current_sl_points, current_sl_pct))}</strong>
+            </div>
+            <div>
+                <span>Entry → Target</span>
+                <strong class="bullish">{escape(_distance(entry_target_points, entry_target_pct))}</strong>
+            </div>
+            <div>
+                <span>Current LTP → Target</span>
+                <strong>{escape(_distance(target_current_points, target_current_pct))}</strong>
             </div>
         </div>
     </div>
@@ -1815,6 +1853,19 @@ function updateActiveTradeLive(data) {{
     const pnlText = hasPnl ? ((pnl > 0 ? "+" : "") + pnl.toFixed(2)) : "—";
     const stopLoss = trade.option_sl != null ? trade.option_sl : trade.sl;
     const target = trade.option_target != null ? trade.option_target : trade.target;
+    const distance = (from, to) => {{
+        const a = Number(from), b = Number(to);
+        if (from == null || to == null || !Number.isFinite(a) || !Number.isFinite(b)) return "—";
+        const points = b - a;
+        const pct = a !== 0 ? (points / a) * 100 : null;
+        return (points > 0 ? "+" : "") + points.toFixed(2) + " pts" +
+            (pct == null ? "" : " (" + (pct > 0 ? "+" : "") + pct.toFixed(2) + "%)");
+    }};
+    const entrySl = distance(trade.entry, stopLoss);
+    const entryTarget = distance(trade.entry, target);
+    const entryCurrent = distance(trade.entry, ltp);
+    const currentSl = distance(ltp, stopLoss);
+    const currentTarget = distance(ltp, target);
     container.innerHTML = '<div class="trade-setup">' +
         '<div class="trade-direction ' + directionClass + '">' + escapeLiveHtml(action) + '</div>' +
         '<div class="trade-grid">' +
@@ -1826,6 +1877,11 @@ function updateActiveTradeLive(data) {{
         '<div><span>Score</span><strong>' + escapeLiveHtml(trade.score) + '</strong></div>' +
         '<div><span>Current LTP</span><strong>' + (ltp != null ? liveTradeMoney(ltp) : 'WAITING FOR LIVE TICK') + '</strong></div>' +
         '<div><span>P&amp;L / Unit</span><strong class="' + pnlClass + '">' + escapeLiveHtml(pnlText) + '</strong></div>' +
+        '<div><span>Entry → Current LTP</span><strong class="' + pnlClass + '">' + escapeLiveHtml(entryCurrent) + '</strong></div>' +
+        '<div><span>Entry → SL</span><strong class="bearish">' + escapeLiveHtml(entrySl) + '</strong></div>' +
+        '<div><span>Current LTP → SL</span><strong>' + escapeLiveHtml(currentSl) + '</strong></div>' +
+        '<div><span>Entry → Target</span><strong class="bullish">' + escapeLiveHtml(entryTarget) + '</strong></div>' +
+        '<div><span>Current LTP → Target</span><strong>' + escapeLiveHtml(currentTarget) + '</strong></div>' +
         '</div></div>';
 }}
 
