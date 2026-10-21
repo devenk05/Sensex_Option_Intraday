@@ -243,6 +243,19 @@ def _trade_setup(trade: Any) -> str:
         """
 
     action = trade.get("action", trade.get("direction", "—"))
+    stop_loss = trade.get("option_sl", trade.get("sl"))
+    target = trade.get("option_target", trade.get("target"))
+    current_ltp = trade.get("current_ltp", trade.get("active_trade_ltp"))
+    entry = trade.get("entry")
+    pnl_text = "—"
+    pnl_class = "neutral"
+    try:
+        pnl_per_unit = float(current_ltp) - float(entry)
+        pnl_text = f"{pnl_per_unit:+,.2f}"
+        pnl_class = "bullish" if pnl_per_unit > 0 else "bearish" if pnl_per_unit < 0 else "neutral"
+    except (TypeError, ValueError):
+        pass
+    ltp_text = f"₹{_number(current_ltp)}" if current_ltp is not None else "WAITING FOR LIVE TICK"
 
     return f"""
     <div class="trade-setup">
@@ -268,17 +281,27 @@ def _trade_setup(trade: Any) -> str:
 
             <div>
                 <span>Stop Loss</span>
-                <strong>₹{_number(trade.get("sl"))}</strong>
+                <strong>₹{_number(stop_loss)}</strong>
             </div>
 
             <div>
                 <span>Target</span>
-                <strong>₹{_number(trade.get("target"))}</strong>
+                <strong>₹{_number(target)}</strong>
             </div>
 
             <div>
                 <span>Score</span>
                 <strong>{_safe(trade.get("score"))}</strong>
+            </div>
+
+            <div>
+                <span>Current LTP</span>
+                <strong>{escape(ltp_text)}</strong>
+            </div>
+
+            <div>
+                <span>P&amp;L / Unit</span>
+                <strong class="{pnl_class}">{escape(pnl_text)}</strong>
             </div>
         </div>
     </div>
