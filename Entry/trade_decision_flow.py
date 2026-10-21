@@ -70,6 +70,15 @@ def derive_market_bias(
     ):
         bias = direction_15m
         reason = "15M_AND_5M_ALIGNED"
+    elif (
+        direction_15m in {"BULLISH", "BEARISH"}
+        and direction_5m in {"BULLISH", "BEARISH"}
+        and direction_15m != direction_5m
+    ):
+        # Explicit 15m/5m disagreement must not be overridden by candle
+        # structure; wait until the two required timeframes agree again.
+        bias = "NEUTRAL"
+        reason = "TIMEFRAME_DIRECTION_CONFLICT"
     elif structure in {"BULLISH", "BEARISH"}:
         bias = structure
         reason = "STRUCTURE_FALLBACK"
