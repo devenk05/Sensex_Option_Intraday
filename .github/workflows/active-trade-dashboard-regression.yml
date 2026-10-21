@@ -1,0 +1,30 @@
+name: Active Trade Dashboard Regression
+
+on:
+  push:
+    branches:
+      - main
+      - fix/active-trade-live-ltp-dashboard
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test runner
+        run: python -m pip install --upgrade pip pytest
+      - name: Compile changed Python modules
+        run: python -m py_compile Entry/main.py report/dashboard.py
+      - name: Run active-trade dashboard regression tests
+        run: python -m pytest -q test/test_active_trade_live_ltp_dashboard.py
