@@ -1780,29 +1780,29 @@ function updateVegaImpact(data) {{
     }}
 }}
 
-function escapeLiveHtml(value) {{{{
+function escapeLiveHtml(value) {{
     return String(value == null ? "—" : value)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/\"/g, "&quot;")
         .replace(/'/g, "&#39;");
-}}}}
+}}
 
-function liveTradeMoney(value) {{{{
+function liveTradeMoney(value) {{
     const number = Number(value);
     if (value == null || value === "" || !Number.isFinite(number)) return "—";
     return "₹" + number.toLocaleString("en-IN", {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
-}}}}
+}}
 
-function updateActiveTradeLive(data) {{{{
+function updateActiveTradeLive(data) {{
     const container = document.getElementById("active-trade-content");
     if (!container) return;
     const trade = data && data.active_trade;
-    if (!trade || typeof trade !== "object" || Array.isArray(trade)) {{{{
+    if (!trade || typeof trade !== "object" || Array.isArray(trade)) {{
         container.innerHTML = '<div class="empty-trade"><div class="empty-icon">◉</div><strong>No Active Trade</strong><span>Waiting for a confirmed setup</span></div>';
         return;
-    }}}}
+    }}
     const action = String(trade.action || trade.direction || "—").toUpperCase();
     const directionClass = /(BEARISH|SELL|PUT|DOWN|NEGATIVE)/.test(action) ? "bearish" :
         (/(BULLISH|BUY|CALL|UP|POSITIVE)/.test(action) ? "bullish" : "neutral");
@@ -1827,7 +1827,7 @@ function updateActiveTradeLive(data) {{{{
         '<div><span>Current LTP</span><strong>' + (ltp != null ? liveTradeMoney(ltp) : 'WAITING FOR LIVE TICK') + '</strong></div>' +
         '<div><span>P&amp;L / Unit</span><strong class="' + pnlClass + '">' + escapeLiveHtml(pnlText) + '</strong></div>' +
         '</div></div>';
-}}}}
+}}
 
 async function updateDashboardLive() {{
     try {{
