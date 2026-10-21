@@ -1159,6 +1159,7 @@ def _live_dashboard_updater(
     option_data,
     option_summary,
     sensex30_instruments=None,
+    get_trade_ltp=None,
 ):
     """Regenerate dashboard and live JSON state using latest analysis."""
     import time
@@ -1249,6 +1250,57 @@ def _live_dashboard_updater(
             if not isinstance(current_decision, dict):
                 current_decision = {}
 
+            # Keep the active recommendation and its live premium in the
+            # same JSON snapshot consumed by the browser dashboard.
+            active_trade_raw = None
+            try:
+                active_trade_manager = globals().get("ACTIVE_TRADE_MANAGER")
+                if active_trade_manager is not None:
+                    active_trade_raw = active_trade_manager.get_active_trade()
+            except Exception:
+                active_trade_raw = None
+
+            active_trade = (
+                dict(active_trade_raw)
+                if isinstance(active_trade_raw, dict) and active_trade_raw
+                else None
+            )
+            active_trade_ltp = None
+            active_trade_status = "NO ACTIVE TRADE"
+
+            if active_trade is not None:
+                active_trade_status = "WAITING FOR LIVE TICK"
+                token = active_trade.get("instrument_token")
+                tick = None
+                if token is not None:
+                    tick = LIVE_TICK_STATE.get(token)
+                    if tick is None:
+                        tick = LIVE_TICK_STATE.get(str(token))
+
+                if isinstance(tick, dict):
+                    raw_ltp = tick.get("last_price", tick.get("ltp"))
+                    try:
+                        parsed_ltp = float(raw_ltp)
+                        if parsed_ltp > 0:
+                            active_trade_ltp = parsed_ltp
+                    except (TypeError, ValueError):
+                        pass
+
+                # The active contract may no longer be in the current ATM
+                # WebSocket subscription. Fall back to the same broker quote
+                # provider used by the exit monitor; never fabricate a price.
+                if active_trade_ltp is None and callable(get_trade_ltp):
+                    try:
+                        parsed_ltp = float(get_trade_ltp(active_trade))
+                        if parsed_ltp > 0:
+                            active_trade_ltp = parsed_ltp
+                    except Exception:
+                        active_trade_ltp = None
+
+                if active_trade_ltp is not None:
+                    active_trade_status = "LIVE"
+                active_trade["current_ltp"] = active_trade_ltp
+
             # dict.get(key, fallback) does not use the fallback when the
             # key exists with None, so explicitly check the live tick.
             live_spot = LIVE_SENSEX_TICK_STATE.get("last_price")
@@ -1280,6 +1332,9 @@ def _live_dashboard_updater(
                 ),
                 "decision_status": current_decision.get("status", "WAIT"),
                 "decision": current_decision,
+                "active_trade": active_trade,
+                "active_trade_ltp": active_trade_ltp,
+                "active_trade_status": active_trade_status,
                 "market_analysis": dashboard_analysis["market_analysis"],
                 "multi_timeframe": dashboard_analysis["multi_timeframe"],
                 "one_minute_analysis": LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {},
@@ -1402,6 +1457,8 @@ def _live_dashboard_updater(
                     or option_summary
                 ),
                 sensex30_instruments=sensex30_instruments,
+                active_trade_override=active_trade,
+                active_trade_ltp=active_trade_ltp,
             )
 
         except Exception as exc:
@@ -1553,13 +1610,23 @@ def _generate_live_dashboard(
     option_data,
     option_summary,
     sensex30_instruments=None,
+    active_trade_override=None,
+    active_trade_ltp=None,
 ):
     """Generate dashboard from the existing live analysis state only."""
 
-    try:
-        active_trade = ACTIVE_TRADE_MANAGER.get_active_trade()
-    except Exception:
-        active_trade = None
+    if active_trade_override is not None:
+        active_trade = dict(active_trade_override)
+    else:
+        try:
+            active_trade = ACTIVE_TRADE_MANAGER.get_active_trade()
+        except Exception:
+            active_trade = None
+
+    if isinstance(active_trade, dict):
+        active_trade = dict(active_trade)
+        if active_trade_ltp is not None:
+            active_trade["current_ltp"] = active_trade_ltp
 
     # Extract the actual ATM CE/PE records from the already-fetched option chain.
     ce = {}
@@ -2580,6 +2647,7 @@ def main():
             "option_data": option_data,
             "option_summary": summary,
             "sensex30_instruments": sensex30_instruments,
+            "get_trade_ltp": get_trade_ltp,
         },
         daemon=True,
         name="LiveDashboardUpdater",
