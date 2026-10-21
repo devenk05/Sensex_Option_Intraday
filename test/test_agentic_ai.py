@@ -1,6 +1,11 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from AgenticAI.agent_orchestrator import build_review
+from AgenticAI import agent_config
+from AgenticAI.agent_orchestrator import _persist_review, build_review
+from report.dashboard import generate_dashboard
 
 
 class AgenticAITests(unittest.TestCase):
@@ -40,6 +45,40 @@ class AgenticAITests(unittest.TestCase):
         self.assertEqual(review["decision_audit"]["decision_status"], "UNKNOWN")
         self.assertIn("MISSING_SCORE", review["risk_review"]["risk_flags"])
         self.assertEqual(review["mode"], "ADVISORY_ONLY")
+
+    def test_review_is_published_to_dashboard_snapshot(self):
+        original_output = agent_config.OUTPUT_DIR
+        original_dashboard_path = agent_config.DASHBOARD_REVIEW_PATH
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            agent_config.OUTPUT_DIR = root / "agentic_ai"
+            agent_config.DASHBOARD_REVIEW_PATH = root / "dashboard" / "agentic_review.json"
+            review = {
+                "timestamp": "2026-10-21T10:00:00+05:30",
+                "mode": "ADVISORY_ONLY",
+                "decision_audit": {"decision_status": "WAIT"},
+                "risk_review": {"broker_orders_enabled": False},
+            }
+            try:
+                _persist_review(review)
+                dashboard_review = json.loads(agent_config.DASHBOARD_REVIEW_PATH.read_text(encoding="utf-8"))
+                latest_review = json.loads((agent_config.OUTPUT_DIR / "latest_review.json").read_text(encoding="utf-8"))
+                self.assertEqual(dashboard_review, review)
+                self.assertEqual(latest_review, review)
+                self.assertTrue((agent_config.OUTPUT_DIR / "review_history.jsonl").exists())
+            finally:
+                agent_config.OUTPUT_DIR = original_output
+                agent_config.DASHBOARD_REVIEW_PATH = original_dashboard_path
+
+    def test_generated_dashboard_loads_agentic_panel_script(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "index.html"
+            generate_dashboard(
+                {"status": "Starting", "market_bias": "NEUTRAL", "decision": {"status": "WAIT"}},
+                output_path=str(output_path),
+            )
+            html = output_path.read_text(encoding="utf-8")
+            self.assertIn('<script src="agentic_panel.js"></script>', html)
 
 
 if __name__ == "__main__":
