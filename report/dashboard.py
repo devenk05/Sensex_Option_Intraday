@@ -258,6 +258,7 @@ def _trade_setup(trade: Any) -> str:
     ltp_text = f"₹{_number(current_ltp)}" if current_ltp is not None else "WAITING FOR LIVE TICK"
     entry_sl_points = entry_target_points = current_sl_points = target_current_points = None
     entry_sl_pct = entry_target_pct = current_sl_pct = target_current_pct = None
+    entry_current_points = entry_current_pct = None
     try:
         entry_num = float(entry)
         sl_num = float(stop_loss)
@@ -268,6 +269,8 @@ def _trade_setup(trade: Any) -> str:
         entry_target_pct = (entry_target_points / entry_num) * 100 if entry_num else None
         if current_ltp is not None:
             current_num = float(current_ltp)
+            entry_current_points = current_num - entry_num
+            entry_current_pct = (entry_current_points / entry_num) * 100 if entry_num else None
             current_sl_points = current_num - sl_num
             target_current_points = target_num - current_num
             current_sl_pct = (current_sl_points / current_num) * 100 if current_num else None
@@ -323,7 +326,7 @@ def _trade_setup(trade: Any) -> str:
 
             <div>
                 <span>Entry → Current LTP</span>
-                <strong class="{pnl_class}">{escape(_distance((float(current_ltp) - float(entry)) if current_ltp is not None and entry is not None else None, (((float(current_ltp) - float(entry)) / float(entry)) * 100) if current_ltp is not None and entry not in (None, 0, "0") else None))}</strong>
+                <strong class="{pnl_class}">{escape(_distance(entry_current_points, entry_current_pct))}</strong>
             </div>
             <div>
                 <span>Entry → SL</span>
