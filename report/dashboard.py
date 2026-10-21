@@ -243,6 +243,19 @@ def _trade_setup(trade: Any) -> str:
         """
 
     action = trade.get("action", trade.get("direction", "—"))
+    stop_loss = trade.get("option_sl", trade.get("sl"))
+    target = trade.get("option_target", trade.get("target"))
+    current_ltp = trade.get("current_ltp", trade.get("active_trade_ltp"))
+    entry = trade.get("entry")
+    pnl_text = "—"
+    pnl_class = "neutral"
+    try:
+        pnl_per_unit = float(current_ltp) - float(entry)
+        pnl_text = f"{pnl_per_unit:+,.2f}"
+        pnl_class = "bullish" if pnl_per_unit > 0 else "bearish" if pnl_per_unit < 0 else "neutral"
+    except (TypeError, ValueError):
+        pass
+    ltp_text = f"₹{_number(current_ltp)}" if current_ltp is not None else "WAITING FOR LIVE TICK"
 
     return f"""
     <div class="trade-setup">
@@ -268,17 +281,27 @@ def _trade_setup(trade: Any) -> str:
 
             <div>
                 <span>Stop Loss</span>
-                <strong>₹{_number(trade.get("sl"))}</strong>
+                <strong>₹{_number(stop_loss)}</strong>
             </div>
 
             <div>
                 <span>Target</span>
-                <strong>₹{_number(trade.get("target"))}</strong>
+                <strong>₹{_number(target)}</strong>
             </div>
 
             <div>
                 <span>Score</span>
                 <strong>{_safe(trade.get("score"))}</strong>
+            </div>
+
+            <div>
+                <span>Current LTP</span>
+                <strong>{escape(ltp_text)}</strong>
+            </div>
+
+            <div>
+                <span>P&amp;L / Unit</span>
+                <strong class="{pnl_class}">{escape(pnl_text)}</strong>
             </div>
         </div>
     </div>
@@ -1468,7 +1491,7 @@ td {{
                     <span>{_status_badge(decision_status)}</span>
                 </div>
 
-                {_trade_setup(active_trade)}
+                <div id="active-trade-content">{_trade_setup(active_trade)}</div>
 
             </div>
 
@@ -1757,6 +1780,55 @@ function updateVegaImpact(data) {{
     }}
 }}
 
+function escapeLiveHtml(value) {{
+    return String(value == null ? "—" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}}
+
+function liveTradeMoney(value) {{
+    const number = Number(value);
+    if (value == null || value === "" || !Number.isFinite(number)) return "—";
+    return "₹" + number.toLocaleString("en-IN", {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+}}
+
+function updateActiveTradeLive(data) {{
+    const container = document.getElementById("active-trade-content");
+    if (!container) return;
+    const trade = data && data.active_trade;
+    if (!trade || typeof trade !== "object" || Array.isArray(trade)) {{
+        container.innerHTML = '<div class="empty-trade"><div class="empty-icon">◉</div><strong>No Active Trade</strong><span>Waiting for a confirmed setup</span></div>';
+        return;
+    }}
+    const action = String(trade.action || trade.direction || "—").toUpperCase();
+    const directionClass = /(BEARISH|SELL|PUT|DOWN|NEGATIVE)/.test(action) ? "bearish" :
+        (/(BULLISH|BUY|CALL|UP|POSITIVE)/.test(action) ? "bullish" : "neutral");
+    const ltp = data.active_trade_ltp != null ? data.active_trade_ltp : trade.current_ltp;
+    const entry = Number(trade.entry);
+    const current = Number(ltp);
+    const hasPnl = ltp != null && trade.entry != null && Number.isFinite(current) && Number.isFinite(entry);
+    const pnl = hasPnl ? current - entry : null;
+    const pnlClass = !hasPnl || pnl === 0 ? "neutral" : (pnl > 0 ? "bullish" : "bearish");
+    const pnlText = hasPnl ? ((pnl > 0 ? "+" : "") + pnl.toFixed(2)) : "—";
+    const stopLoss = trade.option_sl != null ? trade.option_sl : trade.sl;
+    const target = trade.option_target != null ? trade.option_target : trade.target;
+    container.innerHTML = '<div class="trade-setup">' +
+        '<div class="trade-direction ' + directionClass + '">' + escapeLiveHtml(action) + '</div>' +
+        '<div class="trade-grid">' +
+        '<div><span>Symbol</span><strong>' + escapeLiveHtml(trade.symbol) + '</strong></div>' +
+        '<div><span>Strike</span><strong>' + escapeLiveHtml(trade.strike) + '</strong></div>' +
+        '<div><span>Entry</span><strong>' + liveTradeMoney(trade.entry) + '</strong></div>' +
+        '<div><span>Stop Loss</span><strong>' + liveTradeMoney(stopLoss) + '</strong></div>' +
+        '<div><span>Target</span><strong>' + liveTradeMoney(target) + '</strong></div>' +
+        '<div><span>Score</span><strong>' + escapeLiveHtml(trade.score) + '</strong></div>' +
+        '<div><span>Current LTP</span><strong>' + (ltp != null ? liveTradeMoney(ltp) : 'WAITING FOR LIVE TICK') + '</strong></div>' +
+        '<div><span>P&amp;L / Unit</span><strong class="' + pnlClass + '">' + escapeLiveHtml(pnlText) + '</strong></div>' +
+        '</div></div>';
+}}
+
 async function updateDashboardLive() {{
     try {{
         const response = await fetch("live_state.json?ts=" + Date.now(), {{
@@ -1767,6 +1839,7 @@ async function updateDashboardLive() {{
 
         const data = await response.json();
         updateOptionChainLive(data);
+        updateActiveTradeLive(data);
         updateAtmOptionMomentum(data);
         updateVegaImpact(data.vega_impact);
 
