@@ -320,6 +320,11 @@ def _trade_setup(trade: Any) -> str:
             </div>
 
             <div>
+                <span>Risk / Lot</span>
+                <strong>{("₹" + _number(trade.get("risk_amount_per_lot"))) if trade.get("risk_amount_per_lot") is not None else "Not available"}</strong>
+            </div>
+
+            <div>
                 <span>Current LTP</span>
                 <strong>{escape(ltp_text)}</strong>
             </div>
@@ -1941,6 +1946,7 @@ function updateActiveTradeLive(data) {{
         '<div><span>Stop Loss</span><strong>' + liveTradeMoney(stopLoss) + '</strong></div>' +
         '<div><span>Target</span><strong>' + liveTradeMoney(target) + '</strong></div>' +
         '<div><span>Score</span><strong>' + escapeLiveHtml(trade.score) + '</strong></div>' +
+        '<div><span>Risk / Lot</span><strong>' + (trade.risk_amount_per_lot != null ? liveTradeMoney(trade.risk_amount_per_lot) : 'Not available') + '</strong></div>' +
         '<div><span>Current LTP</span><strong>' + (ltp != null ? liveTradeMoney(ltp) : 'WAITING FOR LIVE TICK') + '</strong></div>' +
         '<div><span>P&amp;L / Unit</span><strong class="' + pnlClass + '">' + escapeLiveHtml(pnlText) + '</strong></div>' +
         '<div><span>Entry → Current LTP</span><strong class="' + pnlClass + '">' + escapeLiveHtml(entryCurrent) + '</strong></div>' +
