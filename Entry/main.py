@@ -1335,6 +1335,14 @@ def _live_dashboard_updater(
                 "active_trade": active_trade,
                 "active_trade_ltp": active_trade_ltp,
                 "active_trade_status": active_trade_status,
+                # History contains completed trades only. Active recommendations
+                # remain in active_trade until the exit monitor confirms SL/target.
+                "trade_history": [
+                    dict(item)
+                    for item in TRADE_HISTORY.get_all_trades()
+                    if isinstance(item, dict)
+                    and str(item.get("status") or "").upper() == "CLOSED"
+                ] if "TRADE_HISTORY" in globals() else [],
                 "market_analysis": dashboard_analysis["market_analysis"],
                 "multi_timeframe": dashboard_analysis["multi_timeframe"],
                 "one_minute_analysis": LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {},
