@@ -58,3 +58,6 @@ TELEGRAM_ENABLED = True
 # Storage
 GOOGLE_SHEETS_ENABLED = True
 LOCAL_STORAGE_ENABLED = True
+
+# Maximum recommended loss per option lot, based on structural SL.
+MAX_RISK_PER_TRADE_INR = 1000
