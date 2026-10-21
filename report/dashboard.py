@@ -913,6 +913,20 @@ body {{
 }}
 
 .option-grid span,
+.trade-tabs {{ display:flex; gap:8px; margin:0 0 14px; border-bottom:1px solid var(--border-color, rgba(128,128,128,.25)); }}
+.trade-tab {{ appearance:none; border:0; border-bottom:2px solid transparent; background:transparent; color:inherit; padding:10px 12px; cursor:pointer; font-weight:700; letter-spacing:.04em; }}
+.trade-tab.active {{ border-bottom-color:var(--accent, #39bdf8); color:var(--accent, #39bdf8); }}
+.trade-tab-panel[hidden] {{ display:none !important; }}
+.trade-setup.trade-arrival {{ animation: tradeArrival .85s ease-out both; }}
+@keyframes tradeArrival {{ 0% {{ opacity:.35; transform:translateY(8px) scale(.99); box-shadow:0 0 0 rgba(57,189,248,0); }} 45% {{ opacity:1; box-shadow:0 0 24px rgba(57,189,248,.38); }} 100% {{ transform:translateY(0) scale(1); box-shadow:0 0 0 rgba(57,189,248,0); }} }}
+@media (prefers-reduced-motion: reduce) {{ .trade-setup.trade-arrival {{ animation:none; }} }}
+.trade-history-wrap {{ overflow-x:auto; }}
+.trade-history-table {{ width:100%; border-collapse:collapse; min-width:680px; }}
+.trade-history-table th,.trade-history-table td {{ padding:9px 10px; text-align:left; border-bottom:1px solid var(--border-color, rgba(128,128,128,.2)); font-size:.86rem; }}
+.trade-history-table th {{ opacity:.75; font-weight:700; }}
+.trade-history-table .win {{ color:#16a34a; font-weight:700; }}
+.trade-history-table .loss {{ color:#ef4444; font-weight:700; }}
+
 .trade-grid span {{
     display: block;
     color: var(--muted);
@@ -1529,7 +1543,16 @@ td {{
                     <span>{_status_badge(decision_status)}</span>
                 </div>
 
-                <div id="active-trade-content">{_trade_setup(active_trade)}</div>
+                <div class="trade-tabs" role="tablist" aria-label="Trade panels">
+                    <button type="button" class="trade-tab active" id="current-trade-tab" role="tab" aria-selected="true" onclick="showTradeTab('current')">CURRENT TRADE</button>
+                    <button type="button" class="trade-tab" id="trade-history-tab" role="tab" aria-selected="false" onclick="showTradeTab('history')">TRADE HISTORY</button>
+                </div>
+                <div id="current-trade-panel" class="trade-tab-panel">
+                    <div id="active-trade-content">{_trade_setup(active_trade)}</div>
+                </div>
+                <div id="trade-history-panel" class="trade-tab-panel" hidden>
+                    <div id="trade-history-content"><div class="empty-trade">Waiting for closed trades</div></div>
+                </div>
 
             </div>
 
@@ -1655,6 +1678,7 @@ async function updateSensex30Live() {{
         if (!response.ok) return;
 
         const data = await response.json();
+        updateTradeHistory(data);
 
         for (const stock of (data.stocks || [])) {{
             const row = Array.from(
@@ -1833,6 +1857,36 @@ function liveTradeMoney(value) {{
     return "₹" + number.toLocaleString("en-IN", {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
 }}
 
+let lastAnimatedTradeId = null;
+function showTradeTab(tab) {{
+    const current = tab === "current";
+    const currentPanel = document.getElementById("current-trade-panel");
+    const historyPanel = document.getElementById("trade-history-panel");
+    const currentButton = document.getElementById("current-trade-tab");
+    const historyButton = document.getElementById("trade-history-tab");
+    if (currentPanel) currentPanel.hidden = !current;
+    if (historyPanel) historyPanel.hidden = current;
+    if (currentButton) {{ currentButton.classList.toggle("active", current); currentButton.setAttribute("aria-selected", String(current)); }}
+    if (historyButton) {{ historyButton.classList.toggle("active", !current); historyButton.setAttribute("aria-selected", String(!current)); }}
+}}
+
+function updateTradeHistory(data) {{
+    const container = document.getElementById("trade-history-content");
+    if (!container) return;
+    const rows = Array.isArray(data && data.trade_history) ? data.trade_history.filter(t => t && String(t.status || "").toUpperCase() === "CLOSED") : [];
+    if (!rows.length) {{
+        container.innerHTML = '<div class="empty-trade"><strong>No Closed Trades Yet</strong><span>SL किंवा Target confirm झाल्यावर trade इथे दिसेल.</span></div>';
+        return;
+    }}
+    const money = v => v == null || v === "" || !Number.isFinite(Number(v)) ? "—" : liveTradeMoney(v);
+    container.innerHTML = '<div class="trade-history-wrap"><table class="trade-history-table"><thead><tr><th>Exit Time</th><th>Symbol</th><th>Entry</th><th>Exit</th><th>SL</th><th>Target</th><th>Result</th><th>P&amp;L / Unit</th></tr></thead><tbody>' +
+        rows.slice().reverse().map(t => {{
+            const result = String(t.result || t.exit_reason || "CLOSED").toUpperCase();
+            const resultClass = result === "WIN" || result === "TARGET" ? "win" : (result === "LOSS" || result === "STOP_LOSS" ? "loss" : "");
+            return '<tr><td>' + escapeLiveHtml(t.exit_time || "—") + '</td><td><strong>' + escapeLiveHtml(t.symbol || "—") + '</strong></td><td>' + money(t.entry) + '</td><td>' + money(t.exit_price) + '</td><td>' + money(t.option_sl ?? t.sl) + '</td><td>' + money(t.option_target ?? t.target) + '</td><td class="' + resultClass + '">' + escapeLiveHtml(result) + '</td><td>' + (t.pnl_points == null ? "—" : ((Number(t.pnl_points) > 0 ? "+" : "") + Number(t.pnl_points).toFixed(2))) + '</td></tr>';
+        }}).join("") + '</tbody></table></div>';
+}}
+
 function updateActiveTradeLive(data) {{
     const container = document.getElementById("active-trade-content");
     if (!container) return;
@@ -1841,6 +1895,8 @@ function updateActiveTradeLive(data) {{
         container.innerHTML = '<div class="empty-trade"><div class="empty-icon">◉</div><strong>No Active Trade</strong><span>Waiting for a confirmed setup</span></div>';
         return;
     }}
+    const tradeId = String(trade.trade_id || trade.symbol || "active-trade");
+    const isNewTrade = lastAnimatedTradeId !== tradeId;
     const action = String(trade.action || trade.direction || "—").toUpperCase();
     const directionClass = /(BEARISH|SELL|PUT|DOWN|NEGATIVE)/.test(action) ? "bearish" :
         (/(BULLISH|BUY|CALL|UP|POSITIVE)/.test(action) ? "bullish" : "neutral");
@@ -1890,6 +1946,8 @@ function updateActiveTradeLive(data) {{
         '<div><span>Entry → Target</span><strong class="bullish">' + escapeLiveHtml(entryTarget) + '</strong></div>' +
         '<div><span>Current LTP → Target</span><strong>' + escapeLiveHtml(currentTarget) + '</strong></div>' +
         '</div></div>';
+    const setup = container.querySelector('.trade-setup');
+    if (setup && isNewTrade) {{ setup.classList.add('trade-arrival'); lastAnimatedTradeId = tradeId; }}
 }}
 
 async function updateDashboardLive() {{
