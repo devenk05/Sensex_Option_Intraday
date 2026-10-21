@@ -49,6 +49,17 @@ def _persist_review(review):
             # Latest snapshot remains useful even if history storage fails.
             pass
 
+        # Publish a read-only copy inside the dashboard's served directory.
+        # The dashboard must not need filesystem access outside its web root.
+        try:
+            dashboard_path = agent_config.DASHBOARD_REVIEW_PATH
+            dashboard_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary_path = dashboard_path.with_suffix(".json.tmp")
+            temporary_path.write_text(dumps(review) + "\n", encoding="utf-8")
+            temporary_path.replace(dashboard_path)
+        except OSError as exc:
+            print("JARVIS_DASHBOARD_PUBLISH_WARNING:", type(exc).__name__, str(exc)[:200])
+
 
 def _worker(context):
     try:
