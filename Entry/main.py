@@ -138,6 +138,8 @@ LIVE_ANALYSIS_STATE = {
 LIVE_5M_CANDLE_HISTORY = []
 LIVE_5M_CURRENT = None
 LIVE_5M_LAST_REFRESH = None
+# Prevent duplicate evaluation when a feed reconnect replays a finalized candle.
+LIVE_LAST_DECISION_TRIGGER_CANDLE = None
 
 # Latest same-contract IV snapshots used only for Vega impact estimation.
 VEGA_PREVIOUS_SNAPSHOTS = {}
@@ -842,6 +844,7 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
 
 def handle_finalized_candle(candle):
     """Receive finalized candles and refresh live analysis state."""
+    global LIVE_LAST_DECISION_TRIGGER_CANDLE
     token = candle["instrument_token"]
 
     history = CANDLE_HISTORY.setdefault(token, [])
@@ -1012,7 +1015,15 @@ def handle_finalized_candle(candle):
                         "LIVE_5M_ANALYSIS_REFRESHED:",
                         completed_5m["minute"].strftime("%H:%M"),
                     )
-                    _evaluate_live_setup_on_completed_5m(live_5m)
+
+            # Re-evaluate the existing 15m/5m setup on EVERY finalized 1m
+            # candle. 1m is a trigger/observation only; it is not a mandatory
+            # confirmation gate. The 15m/5m analyses refresh only on a completed
+            # 5m candle, so this cannot accidentally promote a forming 5m candle.
+            decision_candle_time = candle["minute"].isoformat()
+            if decision_candle_time != LIVE_LAST_DECISION_TRIGGER_CANDLE:
+                LIVE_LAST_DECISION_TRIGGER_CANDLE = decision_candle_time
+                _evaluate_live_setup_on_completed_5m(list(LIVE_5M_CANDLE_HISTORY))
 
         except Exception as exc:
             print("LIVE_5M_ANALYSIS_REFRESH_ERROR:", repr(exc))
