@@ -42,3 +42,33 @@ def test_trade_setup_does_not_invent_an_active_trade():
     html = _trade_setup(None)
     assert "No Active Trade" in html
     assert "Current LTP" not in html
+
+
+def test_generated_dashboard_refreshes_active_trade_from_live_state(tmp_path):
+    from report.dashboard import generate_dashboard
+
+    output = tmp_path / "index.html"
+    generate_dashboard(
+        {
+            "status": "TRADING",
+            "active_trade": {
+                "action": "BUY CALL",
+                "symbol": "SENSEX26OCT75000CE",
+                "strike": 75000,
+                "entry": 100.0,
+                "option_sl": 82.5,
+                "option_target": 140.0,
+                "score": 88,
+                "current_ltp": 125.0,
+            },
+            "active_trade_ltp": 125.0,
+            "options": [],
+        },
+        output_path=str(output),
+    )
+
+    html = output.read_text(encoding="utf-8")
+    assert 'id="active-trade-content"' in html
+    assert "function updateActiveTradeLive(data)" in html
+    assert "updateActiveTradeLive(data);" in html
+    assert "option_target" in html
