@@ -66,6 +66,7 @@ def derive_market_bias(
     if (
         alignment == "ALIGNED"
         and direction_15m in {"BULLISH", "BEARISH"}
+        and direction_5m == direction_15m
     ):
         bias = direction_15m
         reason = "15M_AND_5M_ALIGNED"
@@ -112,14 +113,9 @@ def check_reversal_continuation(
             "reason": "MARKET_BIAS_NOT_CONFIRMED",
         }
 
-    if not location or location.get("status") != "CONFIRMED":
-        return {
-            "stage": "REVERSAL_CONTINUATION",
-            "status": "NOT_CONFIRMED",
-            "signal": "UNKNOWN",
-            "reason": "PIVOT_LOCATION_NOT_CONFIRMED",
-        }
-
+    # Pivot location is supporting context, not a standalone veto. The
+    # selected side is still required to agree with directional price action
+    # below, so this does not permit a trade against a clear opposite signal.
     if not price_action:
         return {
             "stage": "REVERSAL_CONTINUATION",
@@ -154,7 +150,13 @@ def check_reversal_continuation(
         "status": "CONFIRMED",
         "signal": f"{bias}_CONTINUATION",
         "spot": spot,
-        "reason": "MARKET_BIAS_PIVOT_PRICE_ACTION_AND_CE_PE_ALIGNED",
+        "pivot_status": (location or {}).get("status", "NOT_AVAILABLE"),
+        "pivot_reason": (location or {}).get("reason", "PIVOT_DATA_UNAVAILABLE"),
+        "reason": (
+            "MARKET_BIAS_PRICE_ACTION_AND_CE_PE_ALIGNED"
+            if (location or {}).get("status") == "CONFIRMED"
+            else "MARKET_BIAS_PRICE_ACTION_AND_CE_PE_ALIGNED_PIVOT_SUPPORTING_ONLY"
+        ),
     }
 def check_pivot_points(
     market_bias: str,
@@ -412,9 +414,14 @@ def compare_ce_pe(
     # Market bias is PRIMARY.
     # Premium relative strength is SUPPORTING only and must not
     # block the market-bias direction when premium moves disagree.
+    # Missing volume is not equivalent to measured low volume. When the feed
+    # has no usable volume field, keep the setup eligible and expose the gap
+    # in the stage diagnostics. A measured zero/weak volume reading still
+    # blocks the candidate, and opposing price action always blocks it.
+    volume_data_unavailable = volume_basis == "NO_VOLUME_DATA"
     confirmed = bool(
         candidate_direction
-        and volume_active
+        and (volume_active or volume_data_unavailable)
         and pa_confirmed
     )
 
@@ -423,7 +430,7 @@ def compare_ce_pe(
             reason = "CE_PE_PREMIUM_RELATIVE_STRENGTH_BALANCED"
         else:
             reason = "CE_PE_PREMIUM_DATA_UNAVAILABLE"
-    elif not volume_active:
+    elif not volume_active and not volume_data_unavailable:
         reason = "CANDIDATE_OPTION_VOLUME_NOT_ACTIVE"
     elif not pa_confirmed:
         reason = "PRICE_ACTION_NOT_CONFIRMED_FOR_SELECTED_SIDE"
@@ -458,8 +465,14 @@ def compare_ce_pe(
         ),
 
         "candidate_option_volume": candidate_volume,
-        "volume_state": "ACTIVE" if volume_active else "NO_DATA",
+        "volume_state": (
+            "ACTIVE" if volume_active
+            else "UNAVAILABLE_OPTIONAL" if volume_data_unavailable
+            else "LOW_OR_INACTIVE"
+        ),
         "volume_active": volume_active,
+        "volume_data_unavailable": volume_data_unavailable,
+        "volume_is_blocking": not volume_active and not volume_data_unavailable,
         "volume_basis": volume_basis,
 
         "call_oi": call_oi,
