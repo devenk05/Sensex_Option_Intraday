@@ -1861,11 +1861,18 @@ function updateActiveTradeLive(data) {{
         return (points > 0 ? "+" : "") + points.toFixed(2) + " pts" +
             (pct == null ? "" : " (" + (pct > 0 ? "+" : "") + pct.toFixed(2) + "%)");
     }};
-    const entrySl = distance(trade.entry, stopLoss);
-    const entryTarget = distance(trade.entry, target);
+    const range = (base, points) => {{
+        const a = Number(base), p = Number(points);
+        if (base == null || points == null || !Number.isFinite(a) || !Number.isFinite(p)) return "—";
+        const pct = a !== 0 ? (p / a) * 100 : null;
+        return (p > 0 ? "+" : "") + p.toFixed(2) + " pts" +
+            (pct == null ? "" : " (" + (pct > 0 ? "+" : "") + pct.toFixed(2) + "%)");
+    }};
+    const entrySl = range(trade.entry, Number(trade.entry) - Number(stopLoss));
+    const entryTarget = range(trade.entry, Number(target) - Number(trade.entry));
     const entryCurrent = distance(trade.entry, ltp);
-    const currentSl = distance(ltp, stopLoss);
-    const currentTarget = distance(ltp, target);
+    const currentSl = range(ltp, Number(ltp) - Number(stopLoss));
+    const currentTarget = range(ltp, Number(target) - Number(ltp));
     container.innerHTML = '<div class="trade-setup">' +
         '<div class="trade-direction ' + directionClass + '">' + escapeLiveHtml(action) + '</div>' +
         '<div class="trade-grid">' +
