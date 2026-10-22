@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: "20"
       - name: Test JARVIS dashboard helpers
-        run: node --test tests/dashboard_phases.test.cjs
+        run: node --test tests/dashboard_phases.test.cjs tests/jarvis_cartoon_animation.test.cjs
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
