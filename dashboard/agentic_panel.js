@@ -91,7 +91,8 @@
         const market = sections.find(section =>
             (section.querySelector(".section-title h2")?.textContent || "").includes("Market Intelligence")
         );
-        if (mtf) mtf.insertAdjacentElement("afterend", panel);
+        // Place JARVIS review above Multi-Timeframe Analysis, not below it.
+        if (mtf) mtf.insertAdjacentElement("beforebegin", panel);
         else if (market) market.insertAdjacentElement("beforebegin", panel);
         else document.querySelector("main.main")?.appendChild(panel);
     }
