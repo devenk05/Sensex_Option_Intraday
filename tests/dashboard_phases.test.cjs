@@ -10,7 +10,15 @@ test("option-chain rows normalize live price and bid/ask depth", () => {
   assert.equal(rows[0].askQty, 10);
 });
 
-test("option-chain aliases used by the live publisher normalize for heatmap", () => {\n  const rows = getOptions({ options: [{ strike: 73100, type: "PE", last_price: 125, change_percent: -8.5, open_interest: 4200, volume_traded: 950 }] });\n  assert.equal(rows[0].price, 125);\n  assert.equal(rows[0].premium_change_percent, -8.5);\n  assert.equal(rows[0].oi, 4200);\n  assert.equal(rows[0].volume, 950);\n});\n\ntest("risk estimate respects the configured INR cap and never invents missing values", () => {
+test("option-chain aliases used by the live publisher normalize for heatmap", () => {
+  const rows = getOptions({ options: [{ strike: 73100, type: "PE", last_price: 125, change_percent: -8.5, open_interest: 4200, volume_traded: 950 }] });
+  assert.equal(rows[0].price, 125);
+  assert.equal(rows[0].premium_change_percent, -8.5);
+  assert.equal(rows[0].oi, 4200);
+  assert.equal(rows[0].volume, 950);
+});
+
+test("risk estimate respects the configured INR cap and never invents missing values", () => {
   const r = riskSummary({ active_trade: { entry_price: 200, option_sl: 150, option_target: 300, lot_size: 20 }, entry_score: 88 });
   assert.equal(r.riskInr, 1000);
   assert.equal(r.rr, 2);
