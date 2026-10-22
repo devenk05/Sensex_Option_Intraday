@@ -15,6 +15,19 @@
         style.textContent = `
             #${PANEL_ID} { background: var(--panel, #fffdf8); border: 1px solid var(--border, #d8d0c4); border-radius: 12px; padding: 18px; margin: 20px 0; box-shadow: var(--shadow, 0 12px 35px rgba(55,65,81,.12)); }
             #${PANEL_ID} .jarvis-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+            #${PANEL_ID} .jarvis-brand { display:flex; align-items:center; gap:14px; min-width:0; }
+            #${PANEL_ID} .jarvis-core { --core-accent:#38bdf8; position:relative; width:76px; height:76px; flex:0 0 76px; display:grid; place-items:center; border-radius:50%; isolation:isolate; }
+            #${PANEL_ID} .jarvis-core[data-bias="bullish"] { --core-accent:#34d399; }
+            #${PANEL_ID} .jarvis-core[data-bias="bearish"] { --core-accent:#fb7185; }
+            #${PANEL_ID} .jarvis-core[data-bias="unknown"] { --core-accent:#38bdf8; }
+            #${PANEL_ID} .jarvis-core-ring { position:absolute; inset:5px; border:1px solid color-mix(in srgb,var(--core-accent) 75%,transparent); border-radius:50%; box-shadow:0 0 10px color-mix(in srgb,var(--core-accent) 25%,transparent),inset 0 0 10px color-mix(in srgb,var(--core-accent) 18%,transparent); animation:jarvis-core-spin 9s linear infinite; }
+            #${PANEL_ID} .jarvis-core-ring::before, #${PANEL_ID} .jarvis-core-ring::after { content:""; position:absolute; inset:8px -3px; border:1px dashed color-mix(in srgb,var(--core-accent) 70%,transparent); border-radius:50%; transform:rotate(55deg); }
+            #${PANEL_ID} .jarvis-core-ring::after { inset:13px -1px; transform:rotate(-55deg); }
+            #${PANEL_ID} .jarvis-core-orb { width:29px; height:29px; border-radius:50%; background:radial-gradient(circle at 32% 28%,#e0f2fe 0 6%,var(--core-accent) 28%,#0b1e35 76%); box-shadow:0 0 13px var(--core-accent),0 0 28px color-mix(in srgb,var(--core-accent) 45%,transparent); animation:jarvis-core-pulse 2.4s ease-in-out infinite; }
+            #${PANEL_ID} .jarvis-core-caption { position:absolute; bottom:-3px; left:50%; transform:translateX(-50%); white-space:nowrap; font-size:8px; font-weight:800; letter-spacing:1.2px; color:var(--muted,#667085); }
+            @keyframes jarvis-core-spin { to { transform:rotate(360deg); } }
+            @keyframes jarvis-core-pulse { 0%,100% { transform:scale(.92); opacity:.86; } 50% { transform:scale(1.08); opacity:1; } }
+            @media (prefers-reduced-motion:reduce) { #${PANEL_ID} .jarvis-core-ring, #${PANEL_ID} .jarvis-core-orb { animation:none; } }
             #${PANEL_ID} .jarvis-title { font-size:16px; font-weight:800; letter-spacing:.2px; }
             #${PANEL_ID} .jarvis-subtitle { color:var(--muted,#667085); font-size:12px; margin-top:4px; }
             #${PANEL_ID} .jarvis-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
@@ -43,9 +56,16 @@
         panel.setAttribute("aria-live", "polite");
         panel.innerHTML = `
             <div class="jarvis-head">
-                <div>
-                    <div class="jarvis-title">JARVIS · Agentic AI Review</div>
-                    <div class="jarvis-subtitle">Independent diagnostics · advisory only · never places broker orders</div>
+                <div class="jarvis-brand">
+                    <div class="jarvis-core" id="jarvis-holographic-core" data-bias="unknown" role="img" aria-label="JARVIS holographic core, market bias unknown">
+                        <span class="jarvis-core-ring" aria-hidden="true"></span>
+                        <span class="jarvis-core-orb" aria-hidden="true"></span>
+                        <span class="jarvis-core-caption" id="jarvis-core-caption">CORE · IDLE</span>
+                    </div>
+                    <div>
+                        <div class="jarvis-title">JARVIS · Agentic AI Review</div>
+                        <div class="jarvis-subtitle">Independent diagnostics · advisory only · never places broker orders</div>
+                    </div>
                 </div>
                 <span id="jarvis-status" class="jarvis-pill warn">WAITING FOR REVIEW</span>
             </div>
@@ -114,6 +134,26 @@
         }
     }
 
+    function updateHolographicCore(market = {}, audit = {}) {
+        const core = document.getElementById("jarvis-holographic-core");
+        const caption = document.getElementById("jarvis-core-caption");
+        if (!core || !caption) return;
+
+        const rawBias = String(
+            market.market_trend || market.candidate_direction || market.price_action || ""
+        ).toLowerCase();
+        let bias = "unknown";
+        if (/bull|uptrend|buy.call|long/.test(rawBias)) bias = "bullish";
+        else if (/bear|downtrend|buy.put|short/.test(rawBias)) bias = "bearish";
+
+        const score = Number(audit.entry_score);
+        const scoreText = Number.isFinite(score) ? " · " + Math.round(score) : "";
+        const label = bias === "bullish" ? "BULLISH" : bias === "bearish" ? "BEARISH" : "BIAS UNKNOWN";
+        core.dataset.bias = bias;
+        core.setAttribute("aria-label", "JARVIS holographic core, " + label.toLowerCase() + (Number.isFinite(score) ? ", entry score " + Math.round(score) : ""));
+        caption.textContent = (bias === "unknown" ? "CORE · STANDBY" : "CORE · " + label) + scoreText;
+    }
+
     function statusPill(value) {
         const node = document.getElementById("jarvis-status");
         if (!node) return;
@@ -129,6 +169,7 @@
         try {
             const response = await fetch("agentic_review.json?ts=" + Date.now(), { cache: "no-store" });
             if (!response.ok) {
+                updateHolographicCore({}, {});
                 statusPill(response.status === 404 ? "WAITING FOR REVIEW" : "SNAPSHOT UNAVAILABLE");
                 text("jarvis-explanation", "Dashboard snapshot is not available yet. Confirm the trading engine is running and has dispatched an Agentic AI review.");
                 return;
@@ -141,6 +182,7 @@
             const explanation = review.explanation || {};
             const llm = review.local_llm || {};
 
+            updateHolographicCore(market, audit);
             statusPill(audit.decision_status || review.mode || "REVIEW READY");
             text("jarvis-decision", audit.decision_status, "UNKNOWN");
             text("jarvis-score", "Score: " + (audit.entry_score ?? "—") + " / " + (audit.minimum_score ?? 80));
@@ -164,6 +206,7 @@
             text("jarvis-llm", "Local LLM: " + (llm.status || (llm.enabled ? "UNKNOWN" : "DISABLED")) + (llm.text ? " · " + llm.text : ""));
             text("jarvis-timestamp", "Last review: " + (review.timestamp || "—"));
         } catch (error) {
+            updateHolographicCore({}, {});
             statusPill("UPDATE ERROR");
             console.warn("JARVIS_AGENTIC_PANEL_ERROR:", error);
         }
