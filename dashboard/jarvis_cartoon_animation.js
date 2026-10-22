@@ -10,18 +10,18 @@ const statusOf=s=>String(value(s.decision_status,obj(s.decision).status,"WAIT"))
 function hasEntryConfirmation(s){
  const one=obj(s.one_minute_analysis), mtf=obj(s.multi_timeframe);
  const candidates=[s.entry_confirmed,s.one_minute_confirmed,one.confirmed,one.entry_confirmed,one.status,one.signal,s.one_minute_direction,mtf.entry_confirmation];
- return candidates.some(v=>v===true||/ENTRY_CONFIRMED|CONFIRMED|BULLISH_BREAKOUT|BEARISH_BREAKDOWN|ENTRY_READY/i.test(String(v||"")));
+ return candidates.some(v=>v===true||(!/NOT_CONFIRMED|UNCONFIRMED|WAIT|PENDING|FALSE/i.test(String(v||""))&&/ENTRY_CONFIRMED|CONFIRMED|BULLISH_BREAKOUT|BEARISH_BREAKDOWN|ENTRY_READY/i.test(String(v||""))));
 }
 function closedTrades(s){return arr(s.trade_history||s.trades||s.history).filter(t=>t&&(/CLOSED|TARGET|STOP_LOSS|SL_HIT|TARGET_HIT|WIN|LOSS/i.test(String(value(t.status,t.result,t.exit_reason,"")))));}
 function sceneFor(s){
  const d=statusOf(s), trade=obj(value(s.active_trade,s.activeTrade,{})), hist=closedTrades(s);
  const rec=/BUY_CALL|BUY_PUT|TRADE_CANDIDATE/.test(d);
  const tg=obj(value(s.telegram_status,s.telegram,{})), telegram=String(value(tg.status,tg.state,typeof s.telegram_status==="string"?s.telegram_status:null,"")).toUpperCase();
- if(/SENT|SUCCESS|DELIVERED|OK/.test(telegram)) return 9;
- if(hist.length) {const last=hist[hist.length-1],r=String(value(last.result,last.exit_reason,last.status,"")).toUpperCase();if(/TARGET|WIN/.test(r))return 7;if(/STOP|SL_HIT|LOSS/.test(r))return 7;return 8;}
  if(Object.keys(trade).length) return 6;
  if(hasEntryConfirmation(s)) return 5;
  if(rec) return 4;
+ if(hist.length) {const last=hist[hist.length-1],r=String(value(last.result,last.exit_reason,last.status,"")).toUpperCase();if(/TARGET|WIN|STOP|SL_HIT|LOSS/.test(r))return 7;return 8;}
+ if(/SENT|SUCCESS|DELIVERED|OK/.test(telegram)) return 9;
  if(arr(s.option_chain||s.options).length) return 3;
  if(Object.keys(obj(s.multi_timeframe)).length) return 2;
  return 1;
