@@ -424,6 +424,20 @@ body {
 }
 
 .option-grid span,
+.trade-tabs { display:flex; gap:8px; margin:0 0 14px; border-bottom:1px solid var(--border, #d8d0c4); }
+.trade-tab { border:0; border-bottom:2px solid transparent; background:transparent; color:inherit; padding:10px 12px; cursor:pointer; font-weight:700; }
+.trade-tab.active { border-bottom-color:var(--blue, #5b7c99); color:var(--blue, #5b7c99); }
+.trade-tab-panel[hidden] { display:none !important; }
+.trade-setup.trade-arrival { animation: tradeArrival .85s ease-out both; }
+@keyframes tradeArrival { 0% { opacity:.35; transform:translateY(8px) scale(.99); } 45% { opacity:1; box-shadow:0 0 22px rgba(91,124,153,.35); } 100% { transform:translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .trade-setup.trade-arrival { animation:none; } }
+.trade-history-wrap { overflow-x:auto; }
+.trade-history-table { width:100%; border-collapse:collapse; min-width:680px; }
+.trade-history-table th,.trade-history-table td { padding:9px 10px; text-align:left; border-bottom:1px solid var(--border, #d8d0c4); font-size:.86rem; }
+.trade-history-table th { color:var(--muted, #667085); }
+.trade-history-table .win { color:var(--green, #16803a); font-weight:700; }
+.trade-history-table .loss { color:var(--red, #c0392b); font-weight:700; }
+
 .trade-grid span {
     display: block;
     color: var(--muted);
@@ -1505,16 +1519,20 @@ td {
 
                 <div class="section-title">
                     <h2>Current Trade Setup</h2>
-                    <span><span class="status-badge warning">WAIT</span></span>
+                    <span id="active-trade-status"><span class="status-badge warning">WAIT</span></span>
                 </div>
-
-                
-        <div class="empty-trade">
-            <div class="empty-icon">â—Ž</div>
-            <strong>No Active Trade</strong>
-            <span>Waiting for a confirmed setup</span>
-        </div>
-        
+                <div class="trade-tabs" role="tablist" aria-label="Trade panels">
+                    <button type="button" class="trade-tab active" id="current-trade-tab" role="tab" aria-selected="true" onclick="showTradeTab('current')">CURRENT TRADE</button>
+                    <button type="button" class="trade-tab" id="trade-history-tab" role="tab" aria-selected="false" onclick="showTradeTab('history')">TRADE HISTORY</button>
+                </div>
+                <div id="current-trade-panel" class="trade-tab-panel">
+                    <div id="active-trade-content">
+                        <div class="empty-trade"><div class="empty-icon">◉</div><strong>No Active Trade</strong><span>Waiting for a confirmed setup</span></div>
+                    </div>
+                </div>
+                <div id="trade-history-panel" class="trade-tab-panel" hidden>
+                    <div id="trade-history-content"><div class="empty-trade">Waiting for closed trades</div></div>
+                </div>
 
             </div>
 
