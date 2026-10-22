@@ -854,7 +854,7 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
                     "oi_summary": oi_summary,
                     "pivot_analysis": pivot_analysis,
                     "active_trade": ACTIVE_TRADE_MANAGER.has_active_trade(),
-                    "option_chain_available": bool(options),
+                    "option_chain_available": bool((option_data or {}).get("options")) if isinstance(option_data, dict) else False,
                     "one_minute_confirmed": bool(
                         (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("entry_confirmed")
                     ),
