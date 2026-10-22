@@ -13,10 +13,17 @@ def test_trade_setup_uses_option_sl_target_and_live_ltp():
         "current_ltp": 125.0,
     })
 
-    assert "₹82.50" in html
-    assert "₹140.00" in html
-    assert "₹125.00" in html
+    assert "INR 82.50" in html
+    assert "INR 140.00" in html
+    assert "INR 125.00" in html
     assert "+25.00" in html
+    assert "Entry → Current LTP" in html
+    assert "Entry → SL" in html
+    assert "Current LTP → SL" in html
+    assert "Entry → Target" in html
+    assert "Current LTP → Target" in html
+    assert "17.50 pts (+17.50%)" in html
+    assert "40.00 pts (+40.00%)" in html
     assert "WAITING FOR LIVE TICK" not in html
 
 
@@ -33,8 +40,8 @@ def test_trade_setup_shows_waiting_when_live_ltp_is_unavailable():
     })
 
     assert "WAITING FOR LIVE TICK" in html
-    assert "₹82.50" in html
-    assert "₹140.00" in html
+    assert "INR 82.50" in html
+    assert "INR 140.00" in html
     assert "+0.00" not in html
 
 
@@ -72,3 +79,7 @@ def test_generated_dashboard_refreshes_active_trade_from_live_state(tmp_path):
     assert "function updateActiveTradeLive(data)" in html
     assert "updateActiveTradeLive(data);" in html
     assert "option_target" in html
+    assert "CURRENT TRADE" in html
+    assert "TRADE HISTORY" in html
+    assert "function updateTradeHistory(data)" in html
+    assert "trade-arrival" in html

@@ -357,9 +357,40 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
         )
         return None
 
-    # Dynamic target:
-    # minimum 100 premium points, otherwise 2x structural risk.
+    # Keep the latest structural reversal SL; never tighten it artificially.
+    # If broker instrument metadata provides lot size, enforce the ₹1,000
+    # risk budget by rejecting oversized setups instead of recommending an
+    # unsafe trade with a fake/tighter stop.
     risk_points = entry - option_sl
+    lot_size = None
+    try:
+        raw_lot_size = selected.get("lot_size") or (candidate or {}).get("lot_size")
+        parsed_lot_size = int(raw_lot_size)
+        if parsed_lot_size > 0:
+            lot_size = parsed_lot_size
+    except (TypeError, ValueError):
+        pass
+
+    risk_amount_per_lot = (
+        round(risk_points * lot_size, 2) if lot_size is not None else None
+    )
+    risk_limit_inr = float(getattr(config, "MAX_RISK_PER_TRADE_INR", 1000))
+
+    if risk_amount_per_lot is not None and risk_amount_per_lot > risk_limit_inr:
+        print(
+            "TRADE_REGISTRATION_REJECTED: Structural SL exceeds per-trade risk budget.",
+            {
+                "entry": round(entry, 2),
+                "option_sl": round(option_sl, 2),
+                "risk_points": round(risk_points, 2),
+                "lot_size": lot_size,
+                "risk_amount_per_lot": risk_amount_per_lot,
+                "risk_limit_inr": risk_limit_inr,
+            },
+        )
+        return None
+
+    # Dynamic target: minimum 100 premium points, otherwise 2x structural risk.
     target_points = max(100.0, risk_points * 2.0)
     option_target = entry + target_points
 
@@ -388,6 +419,9 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
         "option_target": round(option_target, 2),
         "target_points": round(target_points, 2),
         "risk_points": round(risk_points, 2),
+        "lot_size": lot_size,
+        "risk_amount_per_lot": risk_amount_per_lot,
+        "risk_limit_inr": risk_limit_inr,
         "score": score,
         "entry_score": score,
         "entry_time": now,
@@ -1335,6 +1369,22 @@ def _live_dashboard_updater(
                 "active_trade": active_trade,
                 "active_trade_ltp": active_trade_ltp,
                 "active_trade_status": active_trade_status,
+                # Publish completed trades only; the active recommendation stays
+                # in CURRENT TRADE until the exit monitor confirms its exit.
+                "trade_history": [
+                    dict(item)
+                    for item in TRADE_HISTORY.get_all_trades()
+                    if isinstance(item, dict)
+                    and str(item.get("status") or "").upper() == "CLOSED"
+                ] if "TRADE_HISTORY" in globals() else [],
+                # History contains completed trades only. Active recommendations
+                # remain in active_trade until the exit monitor confirms SL/target.
+                "trade_history": [
+                    dict(item)
+                    for item in TRADE_HISTORY.get_all_trades()
+                    if isinstance(item, dict)
+                    and str(item.get("status") or "").upper() == "CLOSED"
+                ] if "TRADE_HISTORY" in globals() else [],
                 "market_analysis": dashboard_analysis["market_analysis"],
                 "multi_timeframe": dashboard_analysis["multi_timeframe"],
                 "one_minute_analysis": LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {},

@@ -255,7 +255,32 @@ def _trade_setup(trade: Any) -> str:
         pnl_class = "bullish" if pnl_per_unit > 0 else "bearish" if pnl_per_unit < 0 else "neutral"
     except (TypeError, ValueError):
         pass
-    ltp_text = f"₹{_number(current_ltp)}" if current_ltp is not None else "WAITING FOR LIVE TICK"
+    ltp_text = f"INR {_number(current_ltp)}" if current_ltp is not None else "WAITING FOR LIVE TICK"
+    entry_sl_points = entry_target_points = current_sl_points = target_current_points = None
+    entry_sl_pct = entry_target_pct = current_sl_pct = target_current_pct = None
+    entry_current_points = entry_current_pct = None
+    try:
+        entry_num = float(entry)
+        sl_num = float(stop_loss)
+        target_num = float(target)
+        entry_sl_points = entry_num - sl_num
+        entry_target_points = target_num - entry_num
+        entry_sl_pct = (entry_sl_points / entry_num) * 100 if entry_num else None
+        entry_target_pct = (entry_target_points / entry_num) * 100 if entry_num else None
+        if current_ltp is not None:
+            current_num = float(current_ltp)
+            entry_current_points = current_num - entry_num
+            entry_current_pct = (entry_current_points / entry_num) * 100 if entry_num else None
+            current_sl_points = current_num - sl_num
+            target_current_points = target_num - current_num
+            current_sl_pct = (current_sl_points / current_num) * 100 if current_num else None
+            target_current_pct = (target_current_points / current_num) * 100 if current_num else None
+    except (TypeError, ValueError):
+        pass
+    def _distance(points, pct):
+        if points is None:
+            return "—"
+        return f"{points:+,.2f} pts ({pct:+.2f}%)" if pct is not None else f"{points:+,.2f} pts"
 
     return f"""
     <div class="trade-setup">
@@ -276,17 +301,17 @@ def _trade_setup(trade: Any) -> str:
 
             <div>
                 <span>Entry</span>
-                <strong>₹{_number(trade.get("entry"))}</strong>
+                <strong>INR {_number(trade.get("entry"))}</strong>
             </div>
 
             <div>
                 <span>Stop Loss</span>
-                <strong>₹{_number(stop_loss)}</strong>
+                <strong>INR {_number(stop_loss)}</strong>
             </div>
 
             <div>
                 <span>Target</span>
-                <strong>₹{_number(target)}</strong>
+                <strong>INR {_number(target)}</strong>
             </div>
 
             <div>
@@ -295,13 +320,34 @@ def _trade_setup(trade: Any) -> str:
             </div>
 
             <div>
+                <span>Risk / Lot</span>
+                <strong>{("INR " + _number(trade.get("risk_amount_per_lot"))) if trade.get("risk_amount_per_lot") is not None else "Not available"}</strong>
+            </div>
+
+            <div>
                 <span>Current LTP</span>
                 <strong>{escape(ltp_text)}</strong>
             </div>
 
             <div>
-                <span>P&amp;L / Unit</span>
-                <strong class="{pnl_class}">{escape(pnl_text)}</strong>
+                <span>Entry → Current LTP</span>
+                <strong class="{pnl_class}">{escape(_distance(entry_current_points, entry_current_pct))}</strong>
+            </div>
+            <div>
+                <span>Entry → SL</span>
+                <strong class="bearish">{escape(_distance(entry_sl_points, entry_sl_pct))}</strong>
+            </div>
+            <div>
+                <span>Current LTP → SL</span>
+                <strong>{escape(_distance(current_sl_points, current_sl_pct))}</strong>
+            </div>
+            <div>
+                <span>Entry → Target</span>
+                <strong class="bullish">{escape(_distance(entry_target_points, entry_target_pct))}</strong>
+            </div>
+            <div>
+                <span>Current LTP → Target</span>
+                <strong>{escape(_distance(target_current_points, target_current_pct))}</strong>
             </div>
         </div>
     </div>
@@ -875,6 +921,20 @@ body {{
 }}
 
 .option-grid span,
+.trade-tabs {{ display:flex; gap:8px; margin:0 0 14px; border-bottom:1px solid var(--border-color, rgba(128,128,128,.25)); }}
+.trade-tab {{ appearance:none; border:0; border-bottom:2px solid transparent; background:transparent; color:inherit; padding:10px 12px; cursor:pointer; font-weight:700; letter-spacing:.04em; }}
+.trade-tab.active {{ border-bottom-color:var(--accent, #39bdf8); color:var(--accent, #39bdf8); }}
+.trade-tab-panel[hidden] {{ display:none !important; }}
+.trade-setup.trade-arrival {{ animation: tradeArrival .85s ease-out both; }}
+@keyframes tradeArrival {{ 0% {{ opacity:.35; transform:translateY(8px) scale(.99); box-shadow:0 0 0 rgba(57,189,248,0); }} 45% {{ opacity:1; box-shadow:0 0 24px rgba(57,189,248,.38); }} 100% {{ transform:translateY(0) scale(1); box-shadow:0 0 0 rgba(57,189,248,0); }} }}
+@media (prefers-reduced-motion: reduce) {{ .trade-setup.trade-arrival {{ animation:none; }} }}
+.trade-history-wrap {{ overflow-x:auto; }}
+.trade-history-table {{ width:100%; border-collapse:collapse; min-width:680px; }}
+.trade-history-table th,.trade-history-table td {{ padding:9px 10px; text-align:left; border-bottom:1px solid var(--border-color, rgba(128,128,128,.2)); font-size:.86rem; }}
+.trade-history-table th {{ opacity:.75; font-weight:700; }}
+.trade-history-table .win {{ color:#16a34a; font-weight:700; }}
+.trade-history-table .loss {{ color:#ef4444; font-weight:700; }}
+
 .trade-grid span {{
     display: block;
     color: var(--muted);
@@ -1491,7 +1551,16 @@ td {{
                     <span>{_status_badge(decision_status)}</span>
                 </div>
 
-                <div id="active-trade-content">{_trade_setup(active_trade)}</div>
+                <div class="trade-tabs" role="tablist" aria-label="Trade panels">
+                    <button type="button" class="trade-tab active" id="current-trade-tab" role="tab" aria-selected="true" onclick="showTradeTab('current')">CURRENT TRADE</button>
+                    <button type="button" class="trade-tab" id="trade-history-tab" role="tab" aria-selected="false" onclick="showTradeTab('history')">TRADE HISTORY</button>
+                </div>
+                <div id="current-trade-panel" class="trade-tab-panel">
+                    <div id="active-trade-content">{_trade_setup(active_trade)}</div>
+                </div>
+                <div id="trade-history-panel" class="trade-tab-panel" hidden>
+                    <div id="trade-history-content"><div class="empty-trade">Waiting for closed trades</div></div>
+                </div>
 
             </div>
 
@@ -1617,6 +1686,7 @@ async function updateSensex30Live() {{
         if (!response.ok) return;
 
         const data = await response.json();
+        updateTradeHistory(data);
 
         for (const stock of (data.stocks || [])) {{
             const row = Array.from(
@@ -1792,7 +1862,37 @@ function escapeLiveHtml(value) {{
 function liveTradeMoney(value) {{
     const number = Number(value);
     if (value == null || value === "" || !Number.isFinite(number)) return "—";
-    return "₹" + number.toLocaleString("en-IN", {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+    return "INR " + number.toLocaleString("en-IN", {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+}}
+
+let lastAnimatedTradeId = null;
+function showTradeTab(tab) {{
+    const current = tab === "current";
+    const currentPanel = document.getElementById("current-trade-panel");
+    const historyPanel = document.getElementById("trade-history-panel");
+    const currentButton = document.getElementById("current-trade-tab");
+    const historyButton = document.getElementById("trade-history-tab");
+    if (currentPanel) currentPanel.hidden = !current;
+    if (historyPanel) historyPanel.hidden = current;
+    if (currentButton) {{ currentButton.classList.toggle("active", current); currentButton.setAttribute("aria-selected", String(current)); }}
+    if (historyButton) {{ historyButton.classList.toggle("active", !current); historyButton.setAttribute("aria-selected", String(!current)); }}
+}}
+
+function updateTradeHistory(data) {{
+    const container = document.getElementById("trade-history-content");
+    if (!container) return;
+    const rows = Array.isArray(data && data.trade_history) ? data.trade_history.filter(t => t && String(t.status || "").toUpperCase() === "CLOSED") : [];
+    if (!rows.length) {{
+        container.innerHTML = '<div class="empty-trade"><strong>No Closed Trades Yet</strong><span>SL किंवा Target confirm झाल्यावर trade इथे दिसेल.</span></div>';
+        return;
+    }}
+    const money = v => v == null || v === "" || !Number.isFinite(Number(v)) ? "—" : liveTradeMoney(v);
+    container.innerHTML = '<div class="trade-history-wrap"><table class="trade-history-table"><thead><tr><th>Exit Time</th><th>Symbol</th><th>Entry</th><th>Exit</th><th>SL</th><th>Target</th><th>Result</th><th>P&amp;L / Unit</th></tr></thead><tbody>' +
+        rows.slice().reverse().map(t => {{
+            const result = String(t.result || t.exit_reason || "CLOSED").toUpperCase();
+            const resultClass = result === "WIN" || result === "TARGET" ? "win" : (result === "LOSS" || result === "STOP_LOSS" ? "loss" : "");
+            return '<tr><td>' + escapeLiveHtml(t.exit_time || "—") + '</td><td><strong>' + escapeLiveHtml(t.symbol || "—") + '</strong></td><td>' + money(t.entry) + '</td><td>' + money(t.exit_price) + '</td><td>' + money(t.option_sl ?? t.sl) + '</td><td>' + money(t.option_target ?? t.target) + '</td><td class="' + resultClass + '">' + escapeLiveHtml(result) + '</td><td>' + (t.pnl_points == null ? "—" : ((Number(t.pnl_points) > 0 ? "+" : "") + Number(t.pnl_points).toFixed(2))) + '</td></tr>';
+        }}).join("") + '</tbody></table></div>';
 }}
 
 function updateActiveTradeLive(data) {{
@@ -1803,6 +1903,8 @@ function updateActiveTradeLive(data) {{
         container.innerHTML = '<div class="empty-trade"><div class="empty-icon">◉</div><strong>No Active Trade</strong><span>Waiting for a confirmed setup</span></div>';
         return;
     }}
+    const tradeId = String(trade.trade_id || trade.symbol || "active-trade");
+    const isNewTrade = lastAnimatedTradeId !== tradeId;
     const action = String(trade.action || trade.direction || "—").toUpperCase();
     const directionClass = /(BEARISH|SELL|PUT|DOWN|NEGATIVE)/.test(action) ? "bearish" :
         (/(BULLISH|BUY|CALL|UP|POSITIVE)/.test(action) ? "bullish" : "neutral");
@@ -1812,9 +1914,29 @@ function updateActiveTradeLive(data) {{
     const hasPnl = ltp != null && trade.entry != null && Number.isFinite(current) && Number.isFinite(entry);
     const pnl = hasPnl ? current - entry : null;
     const pnlClass = !hasPnl || pnl === 0 ? "neutral" : (pnl > 0 ? "bullish" : "bearish");
-    const pnlText = hasPnl ? ((pnl > 0 ? "+" : "") + pnl.toFixed(2)) : "—";
+    const pnlText = hasPnl ? ((pnl > 0 ? "+" : (pnl < 0 ? "-" : "")) + Math.abs(pnl).toFixed(2)) : "WAITING FOR LIVE TICK";
     const stopLoss = trade.option_sl != null ? trade.option_sl : trade.sl;
     const target = trade.option_target != null ? trade.option_target : trade.target;
+    const distance = (from, to) => {{
+        const a = Number(from), b = Number(to);
+        if (from == null || to == null || !Number.isFinite(a) || !Number.isFinite(b)) return "—";
+        const points = b - a;
+        const pct = a !== 0 ? (points / a) * 100 : null;
+        return (points > 0 ? "+" : "") + points.toFixed(2) + " pts" +
+            (pct == null ? "" : " (" + (pct > 0 ? "+" : "") + pct.toFixed(2) + "%)");
+    }};
+    const range = (base, points) => {{
+        const a = Number(base), p = Number(points);
+        if (base == null || points == null || !Number.isFinite(a) || !Number.isFinite(p)) return "—";
+        const pct = a !== 0 ? (p / a) * 100 : null;
+        return (p > 0 ? "+" : "") + p.toFixed(2) + " pts" +
+            (pct == null ? "" : " (" + (pct > 0 ? "+" : "") + pct.toFixed(2) + "%)");
+    }};
+    const entrySl = range(trade.entry, Number(trade.entry) - Number(stopLoss));
+    const entryTarget = range(trade.entry, Number(target) - Number(trade.entry));
+    const entryCurrent = distance(trade.entry, ltp);
+    const currentSl = range(ltp, Number(ltp) - Number(stopLoss));
+    const currentTarget = range(ltp, Number(target) - Number(ltp));
     container.innerHTML = '<div class="trade-setup">' +
         '<div class="trade-direction ' + directionClass + '">' + escapeLiveHtml(action) + '</div>' +
         '<div class="trade-grid">' +
@@ -1824,9 +1946,17 @@ function updateActiveTradeLive(data) {{
         '<div><span>Stop Loss</span><strong>' + liveTradeMoney(stopLoss) + '</strong></div>' +
         '<div><span>Target</span><strong>' + liveTradeMoney(target) + '</strong></div>' +
         '<div><span>Score</span><strong>' + escapeLiveHtml(trade.score) + '</strong></div>' +
+        '<div><span>Risk / Lot</span><strong>' + (trade.risk_amount_per_lot != null ? liveTradeMoney(trade.risk_amount_per_lot) : 'Not available') + '</strong></div>' +
         '<div><span>Current LTP</span><strong>' + (ltp != null ? liveTradeMoney(ltp) : 'WAITING FOR LIVE TICK') + '</strong></div>' +
         '<div><span>P&amp;L / Unit</span><strong class="' + pnlClass + '">' + escapeLiveHtml(pnlText) + '</strong></div>' +
+        '<div><span>Entry → Current LTP</span><strong class="' + pnlClass + '">' + escapeLiveHtml(entryCurrent) + '</strong></div>' +
+        '<div><span>Entry → SL</span><strong class="bearish">' + escapeLiveHtml(entrySl) + '</strong></div>' +
+        '<div><span>Current LTP → SL</span><strong>' + escapeLiveHtml(currentSl) + '</strong></div>' +
+        '<div><span>Entry → Target</span><strong class="bullish">' + escapeLiveHtml(entryTarget) + '</strong></div>' +
+        '<div><span>Current LTP → Target</span><strong>' + escapeLiveHtml(currentTarget) + '</strong></div>' +
         '</div></div>';
+    const setup = container.querySelector('.trade-setup');
+    if (setup && isNewTrade) {{ setup.classList.add('trade-arrival'); lastAnimatedTradeId = tradeId; }}
 }}
 
 async function updateDashboardLive() {{

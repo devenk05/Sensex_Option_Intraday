@@ -16,6 +16,16 @@ class TradeHistory:
         if not trade:
             raise ValueError("Trade record cannot be empty.")
 
+        # A trade can be re-processed after a restart if the process stopped
+        # between saving the closed record and clearing the active-trade lock.
+        # Use trade_id as an idempotency key so a closed trade is never duplicated.
+        trade_id = trade.get("trade_id")
+        if trade_id is not None:
+            for index, existing in enumerate(self._trades):
+                if existing.get("trade_id") == trade_id:
+                    self._trades[index] = dict(trade)
+                    return
+
         self._trades.append(dict(trade))
 
     def get_all_trades(self) -> list[dict[str, Any]]:
