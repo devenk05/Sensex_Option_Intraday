@@ -2724,7 +2724,7 @@ def main():
                 "oi_summary": oi_summary or {},
                 "pivot_analysis": pivot_analysis or {},
                 "active_trade": ACTIVE_TRADE_MANAGER.has_active_trade(),
-                "option_chain_available": bool(options),
+                "option_chain_available": bool((option_data or {}).get("options")) if isinstance(option_data, dict) else False,
                 "one_minute_confirmed": bool(
                     (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("entry_confirmed")
                 ),
