@@ -1,6 +1,14 @@
 import os
+from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
+
+
+# Load the project-root .env even when this module is imported from another
+# working directory. Existing process environment variables keep precedence.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 
 def send_telegram_message(message: str) -> dict[str, object]:
