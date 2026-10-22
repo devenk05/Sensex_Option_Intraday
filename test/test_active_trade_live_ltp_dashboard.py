@@ -13,9 +13,9 @@ def test_trade_setup_uses_option_sl_target_and_live_ltp():
         "current_ltp": 125.0,
     })
 
-    assert "₹82.50" in html
-    assert "₹140.00" in html
-    assert "₹125.00" in html
+    assert "INR 82.50" in html
+    assert "INR 140.00" in html
+    assert "INR 125.00" in html
     assert "+25.00" in html
     assert "Entry → Current LTP" in html
     assert "Entry → SL" in html
@@ -40,8 +40,8 @@ def test_trade_setup_shows_waiting_when_live_ltp_is_unavailable():
     })
 
     assert "WAITING FOR LIVE TICK" in html
-    assert "₹82.50" in html
-    assert "₹140.00" in html
+    assert "INR 82.50" in html
+    assert "INR 140.00" in html
     assert "+0.00" not in html
 
 
