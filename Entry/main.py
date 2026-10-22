@@ -2705,6 +2705,36 @@ def main():
     dashboard_thread.start()
     print("LIVE_DASHBOARD_UPDATER_STARTED: 1s")
 
+    # Publish an initial advisory snapshot at startup. Without this, the
+    # dashboard keeps requesting agentic_review.json until the first finalized
+    # live candle happens to trigger the regular review dispatch.
+    if dispatch_agent_review is not None:
+        try:
+            startup_review_result = dispatch_agent_review({
+                "decision": CURRENT_SETUP_DECISION if isinstance(CURRENT_SETUP_DECISION, dict) else {"status": "WAIT"},
+                "entry_score": LATEST_ENTRY_SCORE,
+                "minimum_score": float(config.MIN_ENTRY_SCORE),
+                "market_analysis": market_analysis or {},
+                "candle_structure": candle_structure or {},
+                "multi_timeframe": multi_timeframe or {},
+                "support_resistance": support_resistance or {},
+                "price_action": price_action or {},
+                "volume_analysis": {},
+                "cepe_comparison": {},
+                "oi_summary": oi_summary or {},
+                "pivot_analysis": pivot_analysis or {},
+                "active_trade": ACTIVE_TRADE_MANAGER.has_active_trade(),
+                "option_chain_available": bool(options),
+                "one_minute_confirmed": bool(
+                    (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("entry_confirmed")
+                ),
+            })
+            print("JARVIS_STARTUP_REVIEW_QUEUED:", startup_review_result)
+        except Exception as startup_review_exc:
+            print("JARVIS_STARTUP_REVIEW_ERROR:", type(startup_review_exc).__name__, str(startup_review_exc)[:200])
+    else:
+        print("JARVIS_STARTUP_REVIEW_SKIPPED: AgenticAI import unavailable")
+
     if selected_tokens:
         start_live_option_feed(
             kite,
