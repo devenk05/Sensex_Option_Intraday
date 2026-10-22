@@ -39,3 +39,9 @@ class TradeExitAlertDeduplicator:
 
     def reset(self) -> None:
         self._processed_signal_keys.clear()
+
+    def forget(self, signal: Dict[str, Any]) -> None:
+        """Allow retry when processing/delivery did not complete successfully."""
+        if not isinstance(signal, dict):
+            raise TypeError("signal must be a dictionary.")
+        self._processed_signal_keys.discard(self._make_key(signal))
