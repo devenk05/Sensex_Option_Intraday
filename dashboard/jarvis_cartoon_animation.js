@@ -15,7 +15,7 @@ function hasEntryConfirmation(s){
 function closedTrades(s){return arr(s.trade_history||s.trades||s.history).filter(t=>{if(!t||typeof t!=="object")return false;const status=String(value(t.status,"")).toUpperCase();const outcome=String(value(t.exit_reason,t.reason,t.result,"")).toUpperCase();return status==="CLOSED"||/TARGET_HIT|STOP_LOSS|STOPLOSS|SL_HIT|TAKE_PROFIT|PROFIT_TARGET/.test(outcome);});}
 function exitScene(trade){
  const explicit=[trade.exit_reason,trade.reason,trade.result,trade.exit_status,trade.status].filter(v=>v!=null).map(v=>String(v).toUpperCase()).join(" ");
- if(/TARGET_HIT|PROFIT_TARGET|TAKE_PROFIT|STOP_LOSS|STOPLOSS|SL_HIT|STOP_LOSS_HIT/.test(explicit))return 7;
+ if(/TARGET|PROFIT_TARGET|TAKE_PROFIT|STOP_LOSS|STOPLOSS|SL_HIT|STOP_LOSS_HIT|\\bWIN\\b|\\bLOSS\\b/.test(explicit))return 7;
  return 8;
 }
 function sceneFor(s){
