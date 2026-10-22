@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { sceneFor, hasEntryConfirmation, closedTrades, sceneData, scenes } = require("../dashboard/jarvis_cartoon_animation.js");
+const { sceneFor, hasEntryConfirmation, closedTrades, sceneData, scenes, exitScene, collectTriggerEvents, nextDisplayScene } = require("../dashboard/jarvis_cartoon_animation.js");
 
 test("all nine cartoon scenes are defined", () => {
   assert.equal(scenes.length, 9);
@@ -45,4 +45,28 @@ test("missing trade fields remain unavailable rather than using example prices",
   assert.equal(d.sl, undefined);
   assert.equal(d.target, undefined);
   assert.equal(d.score, undefined);
+});
+
+test("explicit target/stop-loss exit wins over generic CLOSED result", () => {
+  assert.equal(sceneFor({ trade_history: [{ status: "CLOSED", result: "CLOSED", exit_reason: "TARGET_HIT" }] }), 7);
+  assert.equal(sceneFor({ trade_history: [{ status: "CLOSED", result: "CLOSED", exit_reason: "STOP_LOSS" }] }), 7);
+  assert.equal(sceneFor({ trade_history: [{ status: "CLOSED", result: "CLOSED", exit_reason: "MANUAL_CLOSE" }] }), 8);
+  assert.equal(exitScene({ status: "CLOSED", result: "CLOSED", reason: "TARGET_HIT" }), 7);
+});
+
+test("both recommendation and entry-confirmation triggers are queued once", () => {
+  const state = { recommendationActive: false, confirmationActive: false, queue: [] };
+  const snapshot = { decision_status: "BUY_PUT", one_minute_analysis: { status: "ENTRY_CONFIRMED" } };
+  assert.deepEqual(collectTriggerEvents(snapshot, state), [4, 5]);
+  assert.deepEqual(collectTriggerEvents(snapshot, state), [4, 5]);
+  assert.equal(state.queue.length, 2);
+});
+
+test("queued recommendation and confirmation scenes play before active-trade scene", () => {
+  const state = { recommendationActive: false, confirmationActive: false, queue: [], currentTrigger: null, triggerUntil: 0 };
+  const snapshot = { decision_status: "BUY_CALL", one_minute_analysis: { status: "ENTRY_CONFIRMED" }, active_trade: { symbol: "SENSEX_OPTION" } };
+  assert.equal(nextDisplayScene(snapshot, state, 1000), 4);
+  assert.equal(nextDisplayScene(snapshot, state, 2000), 4);
+  assert.equal(nextDisplayScene(snapshot, state, 5000), 5);
+  assert.equal(nextDisplayScene(snapshot, state, 9000), 6);
 });
