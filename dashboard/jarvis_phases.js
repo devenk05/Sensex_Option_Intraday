@@ -3,7 +3,7 @@
 "use strict";
 const LIMIT_INR=1000, REFRESH_MS=3000, ID="jarvis-phases-panel";
 const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const num=v=>Number.isFinite(Number(v))?Number(v):null, arr=v=>Array.isArray(v)?v:[], obj=v=>v&&typeof v==="object"&&!Array.isArray(v)?v:{};
+const num=v=>v==null||v===""?null:(Number.isFinite(Number(v))?Number(v):null), arr=v=>Array.isArray(v)?v:[], obj=v=>v&&typeof v==="object"&&!Array.isArray(v)?v:{};
 const fmt=(v,d)=>{const n=num(v);return n==null?"—":n.toLocaleString("en-IN",{maximumFractionDigits:d==null?2:d});};
 const time=v=>{if(!v)return "—";const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit"});};
 function getOptions(s){return arr(s.option_chain||s.options).filter(r=>r&&num(r.strike)!=null).map(r=>({...r,type:String(r.option_type||r.type||"").toUpperCase(),price:num(r.last_price!=null?r.last_price:r.ltp),bid:num(r.bid),ask:num(r.ask),bidQty:num(r.total_bid_quantity!=null?r.total_bid_quantity:r.bid_quantity),askQty:num(r.total_ask_quantity!=null?r.total_ask_quantity:r.ask_quantity)}));}
