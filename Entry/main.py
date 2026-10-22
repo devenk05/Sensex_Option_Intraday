@@ -435,9 +435,8 @@ def _start_exit_monitor() -> bool:
     """Start the live exit-monitor thread when an active recommendation exists."""
     global EXIT_MONITOR_THREAD
 
-    if not ACTIVE_TRADE_MANAGER.has_active_trade():
-        return False
-
+    # Keep the monitor alive even when there is no active trade at startup.
+    # It polls safely until a recommendation is registered.
     if EXIT_MONITOR_LOOP is None:
         print("TRADE_EXIT_MONITOR_START_FAILED: Exit loop not initialized.")
         return False
@@ -1369,22 +1368,27 @@ def _live_dashboard_updater(
                 "active_trade": active_trade,
                 "active_trade_ltp": active_trade_ltp,
                 "active_trade_status": active_trade_status,
-                # Publish completed trades only; the active recommendation stays
-                # in CURRENT TRADE until the exit monitor confirms its exit.
+                # Publish persisted closed trades for both history and last-exit UI.
                 "trade_history": [
                     dict(item)
                     for item in TRADE_HISTORY.get_all_trades()
                     if isinstance(item, dict)
                     and str(item.get("status") or "").upper() == "CLOSED"
                 ] if "TRADE_HISTORY" in globals() else [],
-                # History contains completed trades only. Active recommendations
-                # remain in active_trade until the exit monitor confirms SL/target.
-                "trade_history": [
-                    dict(item)
-                    for item in TRADE_HISTORY.get_all_trades()
-                    if isinstance(item, dict)
-                    and str(item.get("status") or "").upper() == "CLOSED"
-                ] if "TRADE_HISTORY" in globals() else [],
+                "last_exit_status": (
+                    {
+                        "symbol": TRADE_HISTORY.get_all_trades()[-1].get("symbol"),
+                        "reason": TRADE_HISTORY.get_all_trades()[-1].get("exit_reason"),
+                        "result": TRADE_HISTORY.get_all_trades()[-1].get("result"),
+                        "exit_price": TRADE_HISTORY.get_all_trades()[-1].get("exit_price"),
+                        "exit_time": TRADE_HISTORY.get_all_trades()[-1].get("exit_time"),
+                        "pnl_points": TRADE_HISTORY.get_all_trades()[-1].get("pnl_points"),
+                    }
+                    if "TRADE_HISTORY" in globals()
+                    and TRADE_HISTORY.get_all_trades()
+                    and str(TRADE_HISTORY.get_all_trades()[-1].get("status") or "").upper() == "CLOSED"
+                    else None
+                ),
                 "market_analysis": dashboard_analysis["market_analysis"],
                 "multi_timeframe": dashboard_analysis["multi_timeframe"],
                 "one_minute_analysis": LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {},
@@ -2005,10 +2009,8 @@ def main():
         interval_seconds=1.0,
     )
 
-    if ACTIVE_TRADE_MANAGER.has_active_trade():
-        _start_exit_monitor()
-    else:
-        print("TRADE_EXIT_MONITOR_NOT_STARTED: No active trade.")
+    # Start once unconditionally; the loop waits safely when no trade is active.
+    _start_exit_monitor()
 
 
 
