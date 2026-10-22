@@ -105,6 +105,9 @@ CANDLE_HISTORY = {}
 SENSEX_INSTRUMENT_TOKEN = None
 LATEST_ENTRY_SCORE = None
 
+# Dashboard-only notification telemetry; never feeds the trade decision engine.
+LIVE_TELEGRAM_STATUS = {"status": "UNKNOWN", "updated_at": None}
+
 LIVE_ANALYSIS_STATE = {
     "market_analysis": {},
     "candles_15m": [],
@@ -550,7 +553,7 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
         print("VEGA_TELEGRAM_CONTEXT_WARNING:", repr(vega_alert_exc))
 
     try:
-        send_telegram_message(
+        telegram_result = send_telegram_message(
             "\n".join(
                 [
                     "SENSEX OPTION TRADE ALERT",
@@ -566,8 +569,39 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
                 ]
             )
         )
-        print("TRADE_ENTRY_TELEGRAM_SENT")
+        # Only publish SENT when the sender provides positive delivery evidence.
+        status_code = getattr(telegram_result, "status_code", None)
+        response_ok = (
+            telegram_result is True
+            or (isinstance(status_code, int) and 200 <= status_code < 300)
+            or (isinstance(telegram_result, dict) and telegram_result.get("ok") is True)
+            or (
+                isinstance(telegram_result, dict)
+                and str(telegram_result.get("status") or "").upper()
+                in {"SENT", "SUCCESS", "DELIVERED"}
+            )
+        )
+        response_failed = (
+            telegram_result is False
+            or (isinstance(status_code, int) and not 200 <= status_code < 300)
+            or (isinstance(telegram_result, dict) and telegram_result.get("ok") is False)
+            or (
+                isinstance(telegram_result, dict)
+                and str(telegram_result.get("status") or "").upper()
+                in {"ERROR", "FAILED", "FAILURE"}
+            )
+        )
+        if response_ok:
+            LIVE_TELEGRAM_STATUS.update(status="SENT", updated_at=datetime.now().isoformat())
+            print("TRADE_ENTRY_TELEGRAM_SENT")
+        elif response_failed:
+            LIVE_TELEGRAM_STATUS.update(status="ERROR", updated_at=datetime.now().isoformat())
+            print("TRADE_ENTRY_TELEGRAM_NOT_SENT:", telegram_result)
+        else:
+            LIVE_TELEGRAM_STATUS.update(status="UNKNOWN", updated_at=datetime.now().isoformat())
+            print("TRADE_ENTRY_TELEGRAM_STATUS_UNKNOWN:", telegram_result)
     except Exception as exc:
+        LIVE_TELEGRAM_STATUS.update(status="ERROR", updated_at=datetime.now().isoformat())
         print("TRADE_ENTRY_TELEGRAM_ERROR:", exc)
 
     return True
@@ -1356,6 +1390,7 @@ def _live_dashboard_updater(
                     else str(market_status)
                 ),
                 "market_status": market_status,
+                "telegram_status": dict(LIVE_TELEGRAM_STATUS),
                 "market_bias": market_bias,
                 "atm_strike": option_data.get("atm_strike"),
                 "expiry": option_data.get("expiry"),
