@@ -1,9 +1,9 @@
 name: JARVIS Dashboard Phases 2-8
 on:
   pull_request:
-    branches: [main, integration/dashboard-phases]
   push:
     branches: [main, integration/dashboard-phases, feature/jarvis-phases-2-8]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
