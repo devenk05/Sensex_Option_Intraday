@@ -1968,12 +1968,12 @@ def main():
     EXIT_ALERT_DEDUPLICATOR = TradeExitAlertDeduplicator()
     EXIT_ALERT_STATUS = TradeExitAlertStatus()
 
-    # Alert callback: currently logs/prints the alert message.
-    # Connect your Telegram sender here when its exact function is available.
+    # Deliver exit alerts through the project's configured Telegram sender.
+    # Notifications only; this callback never places or closes broker orders.
     def send_exit_message(message):
-        print("TRADE_EXIT_TELEGRAM_MESSAGE:")
-        print(message)
-        return {"status": "PRINTED_ONLY"}
+        result = send_telegram_message(message)
+        print("TRADE_EXIT_TELEGRAM_SEND_RESULT:", result)
+        return result
 
     EXIT_ALERT_INTEGRATION = TradeExitAlertIntegration(send_exit_message)
 
