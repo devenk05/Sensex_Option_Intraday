@@ -51,6 +51,8 @@ test("explicit target/stop-loss exit wins over generic CLOSED result", () => {
   assert.equal(sceneFor({ trade_history: [{ status: "CLOSED", result: "CLOSED", exit_reason: "TARGET_HIT" }] }), 7);
   assert.equal(sceneFor({ trade_history: [{ status: "CLOSED", result: "CLOSED", exit_reason: "STOP_LOSS" }] }), 7);
   assert.equal(sceneFor({ trade_history: [{ status: "CLOSED", result: "CLOSED", exit_reason: "MANUAL_CLOSE" }] }), 8);
+  assert.equal(sceneFor({ trade_history: [{ status: "CLOSED", result: "TARGET" }] }), 7);
+  assert.equal(sceneFor({ trade_history: [{ status: "CLOSED", result: "WIN" }] }), 7);
   assert.equal(exitScene({ status: "CLOSED", result: "CLOSED", reason: "TARGET_HIT" }), 7);
 });
 
