@@ -571,14 +571,30 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
         )
         # Only publish SENT when the sender provides positive delivery evidence.
         status_code = getattr(telegram_result, "status_code", None)
-        if telegram_result is True or (
-            isinstance(status_code, int) and 200 <= status_code < 300
-        ):
+        response_ok = (
+            telegram_result is True
+            or (isinstance(status_code, int) and 200 <= status_code < 300)
+            or (isinstance(telegram_result, dict) and telegram_result.get("ok") is True)
+            or (
+                isinstance(telegram_result, dict)
+                and str(telegram_result.get("status") or "").upper()
+                in {"SENT", "SUCCESS", "DELIVERED"}
+            )
+        )
+        response_failed = (
+            telegram_result is False
+            or (isinstance(status_code, int) and not 200 <= status_code < 300)
+            or (isinstance(telegram_result, dict) and telegram_result.get("ok") is False)
+            or (
+                isinstance(telegram_result, dict)
+                and str(telegram_result.get("status") or "").upper()
+                in {"ERROR", "FAILED", "FAILURE"}
+            )
+        )
+        if response_ok:
             LIVE_TELEGRAM_STATUS.update(status="SENT", updated_at=datetime.now().isoformat())
             print("TRADE_ENTRY_TELEGRAM_SENT")
-        elif telegram_result is False or (
-            isinstance(status_code, int) and not 200 <= status_code < 300
-        ):
+        elif response_failed:
             LIVE_TELEGRAM_STATUS.update(status="ERROR", updated_at=datetime.now().isoformat())
             print("TRADE_ENTRY_TELEGRAM_NOT_SENT:", telegram_result)
         else:
