@@ -255,7 +255,7 @@ def _trade_setup(trade: Any) -> str:
         pnl_class = "bullish" if pnl_per_unit > 0 else "bearish" if pnl_per_unit < 0 else "neutral"
     except (TypeError, ValueError):
         pass
-    ltp_text = f"₹{_number(current_ltp)}" if current_ltp is not None else "WAITING FOR LIVE TICK"
+    ltp_text = f"INR {_number(current_ltp)}" if current_ltp is not None else "WAITING FOR LIVE TICK"
     entry_sl_points = entry_target_points = current_sl_points = target_current_points = None
     entry_sl_pct = entry_target_pct = current_sl_pct = target_current_pct = None
     entry_current_points = entry_current_pct = None
@@ -301,17 +301,17 @@ def _trade_setup(trade: Any) -> str:
 
             <div>
                 <span>Entry</span>
-                <strong>₹{_number(trade.get("entry"))}</strong>
+                <strong>INR {_number(trade.get("entry"))}</strong>
             </div>
 
             <div>
                 <span>Stop Loss</span>
-                <strong>₹{_number(stop_loss)}</strong>
+                <strong>INR {_number(stop_loss)}</strong>
             </div>
 
             <div>
                 <span>Target</span>
-                <strong>₹{_number(target)}</strong>
+                <strong>INR {_number(target)}</strong>
             </div>
 
             <div>
@@ -321,7 +321,7 @@ def _trade_setup(trade: Any) -> str:
 
             <div>
                 <span>Risk / Lot</span>
-                <strong>{("₹" + _number(trade.get("risk_amount_per_lot"))) if trade.get("risk_amount_per_lot") is not None else "Not available"}</strong>
+                <strong>{("INR " + _number(trade.get("risk_amount_per_lot"))) if trade.get("risk_amount_per_lot") is not None else "Not available"}</strong>
             </div>
 
             <div>
@@ -1862,7 +1862,7 @@ function escapeLiveHtml(value) {{
 function liveTradeMoney(value) {{
     const number = Number(value);
     if (value == null || value === "" || !Number.isFinite(number)) return "—";
-    return "₹" + number.toLocaleString("en-IN", {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+    return "INR " + number.toLocaleString("en-IN", {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
 }}
 
 let lastAnimatedTradeId = null;
@@ -1914,7 +1914,7 @@ function updateActiveTradeLive(data) {{
     const hasPnl = ltp != null && trade.entry != null && Number.isFinite(current) && Number.isFinite(entry);
     const pnl = hasPnl ? current - entry : null;
     const pnlClass = !hasPnl || pnl === 0 ? "neutral" : (pnl > 0 ? "bullish" : "bearish");
-    const pnlText = hasPnl ? ((pnl > 0 ? "+" : "") + pnl.toFixed(2)) : "—";
+    const pnlText = hasPnl ? ((pnl > 0 ? "+" : (pnl < 0 ? "-" : "")) + Math.abs(pnl).toFixed(2)) : "WAITING FOR LIVE TICK";
     const stopLoss = trade.option_sl != null ? trade.option_sl : trade.sl;
     const target = trade.option_target != null ? trade.option_target : trade.target;
     const distance = (from, to) => {{
