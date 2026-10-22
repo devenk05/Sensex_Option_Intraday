@@ -424,12 +424,12 @@ body {
 }
 
 .option-grid span,
-.trade-tabs { display:flex; gap:8px; margin:0 0 14px; border-bottom:1px solid var(--border, #d8d0c4); }
-.trade-tab { border:0; border-bottom:2px solid transparent; background:transparent; color:inherit; padding:10px 12px; cursor:pointer; font-weight:700; }
-.trade-tab.active { border-bottom-color:var(--blue, #5b7c99); color:var(--blue, #5b7c99); }
+.trade-tabs { display:flex; gap:8px; margin:0 0 14px; border-bottom:1px solid var(--border-color, rgba(128,128,128,.25)); }
+.trade-tab { appearance:none; border:0; border-bottom:2px solid transparent; background:transparent; color:inherit; padding:10px 12px; cursor:pointer; font-weight:700; letter-spacing:.04em; }
+.trade-tab.active { border-bottom-color:var(--accent, #39bdf8); color:var(--accent, #39bdf8); }
 .trade-tab-panel[hidden] { display:none !important; }
 .trade-setup.trade-arrival { animation: tradeArrival .85s ease-out both; }
-@keyframes tradeArrival { 0% { opacity:.35; transform:translateY(8px) scale(.99); } 45% { opacity:1; box-shadow:0 0 22px rgba(91,124,153,.35); } 100% { transform:translateY(0) scale(1); } }
+@keyframes tradeArrival { 0% { opacity:.35; transform:translateY(8px) scale(.99); box-shadow:0 0 0 rgba(57,189,248,0); } 45% { opacity:1; box-shadow:0 0 24px rgba(57,189,248,.38); } 100% { transform:translateY(0) scale(1); box-shadow:0 0 0 rgba(57,189,248,0); } }
 @media (prefers-reduced-motion: reduce) { .trade-setup.trade-arrival { animation:none; } }
 .trade-history-wrap { overflow-x:auto; }
 .trade-history-table { width:100%; border-collapse:collapse; min-width:680px; }
