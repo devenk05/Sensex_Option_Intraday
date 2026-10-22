@@ -36,4 +36,15 @@ class TradeExitAlertPipeline:
                 "reason": f"Deduplication failed: {exc}",
             }
 
-        return self.alert_service.process_exit_signal(signal)
+        result = self.alert_service.process_exit_signal(signal)
+        # A failed delivery must remain retryable; only successful processing
+        # should reserve this signal key as a duplicate.
+        if not isinstance(result, dict) or result.get("status") != "PROCESSED":
+            try:
+                self.deduplicator.forget(signal)
+            except Exception as exc:
+                return {
+                    "status": "ERROR",
+                    "reason": f"Deduplication rollback failed: {exc}",
+                }
+        return result
