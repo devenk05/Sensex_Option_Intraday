@@ -12,7 +12,12 @@ function hasEntryConfirmation(s){
  const candidates=[s.entry_confirmed,s.one_minute_confirmed,one.confirmed,one.entry_confirmed,one.status,one.signal,s.one_minute_direction,mtf.entry_confirmation];
  return candidates.some(v=>v===true||(!/NOT_CONFIRMED|UNCONFIRMED|WAIT|PENDING|FALSE/i.test(String(v||""))&&/ENTRY_CONFIRMED|CONFIRMED|BULLISH_BREAKOUT|BEARISH_BREAKDOWN|ENTRY_READY/i.test(String(v||""))));
 }
-function closedTrades(s){return arr(s.trade_history||s.trades||s.history).filter(t=>t&&(/CLOSED|TARGET|STOP_LOSS|SL_HIT|TARGET_HIT|WIN|LOSS/i.test(String(value(t.status,t.result,t.exit_reason,"")))));}
+function closedTrades(s){return arr(s.trade_history||s.trades||s.history).filter(t=>{if(!t||typeof t!=="object")return false;const status=String(value(t.status,"")).toUpperCase();const outcome=String(value(t.exit_reason,t.reason,t.result,"")).toUpperCase();return status==="CLOSED"||/TARGET_HIT|STOP_LOSS|STOPLOSS|SL_HIT|TAKE_PROFIT|PROFIT_TARGET/.test(outcome);});}
+function exitScene(trade){
+ const explicit=[trade.exit_reason,trade.reason,trade.result,trade.exit_status,trade.status].filter(v=>v!=null).map(v=>String(v).toUpperCase()).join(" ");
+ if(/TARGET_HIT|PROFIT_TARGET|TAKE_PROFIT|STOP_LOSS|STOPLOSS|SL_HIT|STOP_LOSS_HIT/.test(explicit))return 7;
+ return 8;
+}
 function sceneFor(s){
  const d=statusOf(s), trade=obj(value(s.active_trade,s.activeTrade,{})), hist=closedTrades(s);
  const rec=/BUY_CALL|BUY_PUT|TRADE_CANDIDATE/.test(d);
@@ -20,11 +25,28 @@ function sceneFor(s){
  if(Object.keys(trade).length) return 6;
  if(hasEntryConfirmation(s)) return 5;
  if(rec) return 4;
- if(hist.length) {const last=hist[hist.length-1],r=String(value(last.result,last.exit_reason,last.status,"")).toUpperCase();if(/TARGET|WIN|STOP|SL_HIT|LOSS/.test(r))return 7;return 8;}
- if(/SENT|SUCCESS|DELIVERED|OK/.test(telegram)) return 9;
+ if(hist.length) return exitScene(hist[hist.length-1]);
+ if(/^(SENT|SUCCESS|DELIVERED|OK)$/.test(telegram)) return 9;
  if(arr(s.option_chain||s.options).length) return 3;
  if(Object.keys(obj(s.multi_timeframe)).length) return 2;
  return 1;
+}
+// Queue rising-edge events so recommendation and 1-minute confirmation both animate,
+// even if the live snapshot changes to ACTIVE trade before the next poll.
+function collectTriggerEvents(s,state){
+ const d=statusOf(s),rec=/BUY_CALL|BUY_PUT|TRADE_CANDIDATE/.test(d),confirmed=hasEntryConfirmation(s);
+ state.queue=arr(state.queue);
+ if(rec&&!state.recommendationActive)state.queue.push(4);
+ if(confirmed&&!state.confirmationActive)state.queue.push(5);
+ state.recommendationActive=rec;
+ state.confirmationActive=confirmed;
+ return state.queue;
+}
+function nextDisplayScene(s,state,now){
+ collectTriggerEvents(s,state);
+ if(state.currentTrigger&&now>=state.triggerUntil)state.currentTrigger=null;
+ if(!state.currentTrigger&&state.queue.length){state.currentTrigger=state.queue.shift();state.triggerUntil=now+3500;}
+ return state.currentTrigger||sceneFor(s);
 }
 function sceneData(s){
  const d=statusOf(s),trade=obj(value(s.active_trade,s.activeTrade,{})),hist=closedTrades(s),last=hist[hist.length-1]||{};
@@ -91,9 +113,10 @@ function install(doc){
  panel.querySelector("#jc-scenes").innerHTML=scenes.map(x=>'<article class="jc-scene" data-scene="'+x.n+'"><div class="jc-scene-top"><span class="jc-num">'+x.n+'</span><span class="jc-icon">'+x.icon+'</span></div><h3>'+esc(x.title)+'</h3><p>'+esc(x.desc)+'</p><div class="jc-scene-status" data-scene-status="'+x.n+'">Waiting</div></article>').join("");
  return panel;
 }
+const triggerState={recommendationActive:false,confirmationActive:false,queue:[],currentTrigger:null,triggerUntil:0};
 function render(doc,s){
  const panel=doc&&doc.getElementById(PANEL_ID);if(!panel)return;
- const active=sceneFor(s),d=sceneData(s),status=panel.querySelector("#jc-state"),speech=panel.querySelector("#jc-speech"),detail=panel.querySelector("#jc-detail"),facts=panel.querySelector("#jc-facts");
+ const active=nextDisplayScene(s,triggerState,Date.now()),d=sceneData(s),status=panel.querySelector("#jc-state"),speech=panel.querySelector("#jc-speech"),detail=panel.querySelector("#jc-detail"),facts=panel.querySelector("#jc-facts");
  if(status)status.textContent="SCENE "+active+" / 9 · "+scenes[active-1].title.toUpperCase();
  if(speech)speech.textContent=active===4?"New trade recommendation detected":active===5?"1-minute entry confirmation detected":active===6?"Monitoring the published active trade":active===7?"Recorded trade exit detected":active===8?"Reviewing recorded trade result":active===9?"Telegram delivery status reported":active===3?"Checking live option-chain selection":active===2?"Reading multi-timeframe analysis":"Scanning available market data";
  if(detail)detail.textContent=active===4?"The existing decision engine published "+d.action+". Verify the live values below before any manual order.":active===5?"The existing 1-minute state indicates confirmation. This panel does not create or override confirmation.":active===6?"Active trade details are sourced from live_state.json. No order action is available here.":active>=7?"Closed-trade / notification details are displayed only when present in the live snapshot.":"Current scene follows available live data. Missing fields remain unavailable; no sample trade is inserted.";
@@ -106,7 +129,7 @@ async function refresh(root){
  catch(e){const status=root.document&&root.document.querySelector("#jc-state");if(status)status.textContent="LIVE DATA UNAVAILABLE";}
 }
 function start(root){install(root.document);refresh(root);root.setInterval(()=>refresh(root),REFRESH_MS);}
-const api={sceneFor,hasEntryConfirmation,closedTrades,sceneData,scenes};
+const api={sceneFor,hasEntryConfirmation,closedTrades,sceneData,scenes,exitScene,collectTriggerEvents,nextDisplayScene};
 if(typeof module!=="undefined"&&module.exports)module.exports=api;
 if(root&&root.document){if(root.document.readyState==="loading")root.document.addEventListener("DOMContentLoaded",()=>start(root),{once:true});else start(root);}
 })(typeof window!=="undefined"?window:(typeof globalThis!=="undefined"?globalThis:this));
