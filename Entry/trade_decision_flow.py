@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import math
 
 from atm_ce_pe_relative_strength_engine import (
     ATMCEPERelativeStrengthEngine,
@@ -24,9 +25,10 @@ def _premium_change_percent(option_data: dict[str, Any] | None) -> float | None:
         return None
 
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return result if math.isfinite(result) else None
 
 
 def _num(value: Any) -> float | None:
@@ -158,8 +160,15 @@ def check_pivot_points(
             "reason": "PIVOT_OR_SPOT_UNAVAILABLE",
         }
 
-    spot_price = float(spot)
-    pivot = float(pivot_analysis["pivot"])
+    spot_price = _num(spot)
+    pivot = _num(pivot_analysis["pivot"])
+    if spot_price is None or pivot is None:
+        return {
+            "stage": "PIVOT_POINTS",
+            "status": "NOT_CONFIRMED",
+            "signal": "INVALID_DATA",
+            "reason": "PIVOT_OR_SPOT_NOT_FINITE",
+        }
 
     if bias == "BULLISH":
         confirmed = spot_price > pivot
