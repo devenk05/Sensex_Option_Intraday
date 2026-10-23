@@ -215,6 +215,9 @@ def _aggregate_minute_candle_into_5m(candle):
         "close": candle.get("close"),
         "volume": candle.get("volume") or 0,
         "_minute_count": 1,
+        # Track the first minute in every new bucket; without this, the
+        # completeness check rejects every subsequent 5-minute candle.
+        "_minute_keys": [minute_key],
     }
 
     if completed is not None:
