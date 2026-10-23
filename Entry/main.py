@@ -138,7 +138,7 @@ LIVE_LAST_DECISION_TRIGGER_CANDLE = None
 VEGA_PREVIOUS_SNAPSHOTS = {}
 
 
-def _aggregate_live_1m_into_5m(candle):
+def _aggregate_minute_candle_into_5m(candle):
     """Build a completed 5-minute Sensex candle from finalized 1-minute candles."""
     global LIVE_5M_CURRENT
     global LIVE_5M_LAST_REFRESH
@@ -858,10 +858,10 @@ def handle_finalized_candle(candle):
         "V:", candle["volume"],
     )
 
-    # Sensex index candle -> refresh 1-minute entry analysis and build live 5-minute candles.
+    # Sensex index minute-feed candle -> aggregate live 5-minute candles.
     expected_sensex_token = SENSEX_INSTRUMENT_TOKEN
     print(
-        "LIVE_1M_GATE_CHECK:",
+        "LIVE_5M_AGGREGATION_SOURCE:",
         "CALLBACK_TOKEN:", token,
         "SENSEX_STATE_TOKEN:", expected_sensex_token,
         "HISTORY_COUNT:", len(history),
@@ -870,7 +870,7 @@ def handle_finalized_candle(candle):
         try:
             # Minute candles are only the internal data source for 5-minute aggregation.
             # No 1-minute directional analysis or entry confirmation is performed.
-            completed_5m = _aggregate_live_1m_into_5m(candle)
+            completed_5m = _aggregate_minute_candle_into_5m(candle)
 
             # Keep the currently forming 5-minute candle visible to the dashboard.
             # Analysis below still refreshes only after a 5-minute candle completes.
@@ -886,7 +886,7 @@ def handle_finalized_candle(candle):
                 )
                 LIVE_ANALYSIS_STATE["live_5m"] = live_5m_snapshot
 
-            # Do NOT refresh 5-minute analysis on every 1-minute candle.
+            # Keep 5-minute analysis independent of intermediate minute-feed updates.
             # Refresh only when a 5-minute candle is complete.
             if completed_5m is not None:
                 LIVE_ANALYSIS_STATE["live_5m_last_completed"] = (
