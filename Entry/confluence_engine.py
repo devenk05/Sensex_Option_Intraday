@@ -1,4 +1,5 @@
 from typing import Mapping
+import math
 
 
 SCORING_WEIGHTS = {
@@ -29,6 +30,18 @@ def calculate_confluence_score(
     if unknown:
         raise ValueError(f"Unknown score components: {sorted(unknown)}")
 
+    required_components = {"market_structure", "price_action", "volume_analysis", "atm_ce_pe_strength"}
+    missing_required = sorted(required_components - set(component_scores))
+    if missing_required:
+        return {
+            "status": "WAIT_INCOMPLETE_REQUIRED_DATA",
+            "score": None,
+            "max_score": MAX_SCORE,
+            "available_components": list(component_scores),
+            "unavailable_components": [name for name in SCORING_WEIGHTS if name not in component_scores],
+            "missing_required_components": missing_required,
+        }
+
     if not component_scores:
         return {
             "status": "NO_DATA",
@@ -44,7 +57,7 @@ def calculate_confluence_score(
     for component, score_value in component_scores.items():
         score = float(score_value)
 
-        if not 0 <= score <= 100:
+        if not math.isfinite(score) or not 0 <= score <= 100:
             raise ValueError(
                 f"{component} score must be between 0 and 100."
             )
