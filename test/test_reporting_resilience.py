@@ -26,6 +26,20 @@ class TestReportingResilience(unittest.TestCase):
         self.assertEqual(result["google_sheets"]["status"], "OK")
         self.assertEqual(sheets.calls, 1)
 
+    def test_successful_destination_is_not_resent_when_other_fails(self):
+        telegram = Sender(result={"status": "sent"})
+        sheets = Sender(error=RuntimeError("sheets down"))
+        dispatcher = DailyReportDispatcher(telegram, sheets)
+        first = dispatcher.dispatch({"date": "2026-10-23"})
+        self.assertEqual(first["telegram"]["status"], "OK")
+        self.assertEqual(first["google_sheets"]["status"], "ERROR")
+        sheets.error = None
+        second = dispatcher.dispatch({"date": "2026-10-23"})
+        self.assertEqual(second["telegram"]["status"], "SKIPPED_ALREADY_DELIVERED")
+        self.assertEqual(second["google_sheets"]["status"], "OK")
+        self.assertEqual(telegram.calls, 1)
+        self.assertEqual(sheets.calls, 2)
+
     def test_summary_uses_rupee_pnl_field(self):
         result = DailySummary().generate([
             {"result": "WIN", "pnl": 2000, "pnl_points": 100},
