@@ -1318,6 +1318,49 @@ td {{
 
 
 
+    <section class="section">
+
+        <div class="lower-grid">
+
+            <div class="panel">
+
+                <div class="section-title">
+                    <h2>Live SENSEX Chart</h2>
+                    <span>5 Minute</span>
+                </div>
+
+                <div class="chart-placeholder">
+                    Live chart integration
+                </div>
+
+            </div>
+
+
+            <div class="panel">
+
+                <div class="section-title">
+                    <h2>Current Trade Setup</h2>
+                    <span>{_status_badge(decision_status)}</span>
+                </div>
+
+                <div class="trade-tabs" role="tablist" aria-label="Trade panels">
+                    <button type="button" class="trade-tab active" id="current-trade-tab" role="tab" aria-selected="true" onclick="showTradeTab('current')">CURRENT TRADE</button>
+                    <button type="button" class="trade-tab" id="trade-history-tab" role="tab" aria-selected="false" onclick="showTradeTab('history')">TRADE HISTORY</button>
+                </div>
+                <div id="current-trade-panel" class="trade-tab-panel">
+                    <div id="active-trade-content">{_trade_setup(active_trade)}</div>
+                </div>
+                <div id="trade-history-panel" class="trade-tab-panel" hidden>
+                    <div id="trade-history-content"><div class="empty-trade">Waiting for closed trades</div></div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+<!-- ===================================================== -->
+    
     <!-- ===================================================== -->
     <!-- MULTI TIMEFRAME -->
     <!-- ===================================================== -->
@@ -1525,49 +1568,7 @@ td {{
 
     <!-- ===================================================== -->
 
-    <section class="section">
-
-        <div class="lower-grid">
-
-            <div class="panel">
-
-                <div class="section-title">
-                    <h2>Live SENSEX Chart</h2>
-                    <span>5 Minute</span>
-                </div>
-
-                <div class="chart-placeholder">
-                    Live chart integration
-                </div>
-
-            </div>
-
-
-            <div class="panel">
-
-                <div class="section-title">
-                    <h2>Current Trade Setup</h2>
-                    <span>{_status_badge(decision_status)}</span>
-                </div>
-
-                <div class="trade-tabs" role="tablist" aria-label="Trade panels">
-                    <button type="button" class="trade-tab active" id="current-trade-tab" role="tab" aria-selected="true" onclick="showTradeTab('current')">CURRENT TRADE</button>
-                    <button type="button" class="trade-tab" id="trade-history-tab" role="tab" aria-selected="false" onclick="showTradeTab('history')">TRADE HISTORY</button>
-                </div>
-                <div id="current-trade-panel" class="trade-tab-panel">
-                    <div id="active-trade-content">{_trade_setup(active_trade)}</div>
-                </div>
-                <div id="trade-history-panel" class="trade-tab-panel" hidden>
-                    <div id="trade-history-content"><div class="empty-trade">Waiting for closed trades</div></div>
-                </div>
-
-            </div>
-
-        </div>
-
-    </section>
-<!-- ===================================================== -->
-    <!-- OPTION CHAIN -->
+<!-- OPTION CHAIN -->
     <!-- ===================================================== -->
 
     <section class="section">
