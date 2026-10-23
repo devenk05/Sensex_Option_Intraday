@@ -239,6 +239,7 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                 "instrument_token": token,
                 "last_price": price,
                 "volume_traded": cumulative_volume,
+                "oi": tick.get("oi"),
                 "bid": _safe_number(best_bid_level.get("price")),
                 "ask": _safe_number(best_ask_level.get("price")),
                 "bid_quantity": _safe_number(best_bid_level.get("quantity")),
