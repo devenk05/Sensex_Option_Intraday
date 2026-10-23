@@ -1,4 +1,5 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from kiteconnect import KiteTicker
 
 
@@ -112,10 +113,10 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                         else None
                     ),
                     "change_percent": tick.get("change"),
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "timestamp": datetime.now(ZoneInfo("Asia/Kolkata")).isoformat(),
                 })
 
-                now = datetime.now()
+                now = datetime.now(ZoneInfo("Asia/Kolkata"))
                 minute = now.replace(second=0, microsecond=0)
 
                 if sensex_current_candle is None:
@@ -126,22 +127,35 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                         "high": price,
                         "low": price,
                         "close": price,
-                        "volume": cumulative_volume,
+                        "start_cumulative_volume": None,
+                        "last_cumulative_volume": cumulative_volume,
                     }
+                elif minute < sensex_current_candle["minute"]:
+                    # Ignore out-of-order ticks; never rewind live candle state.
+                    continue
                 elif minute > sensex_current_candle["minute"]:
-                    sensex_candle_history.append(dict(sensex_current_candle))
+                    finalized = dict(sensex_current_candle)
+                    start_volume = finalized.pop("start_cumulative_volume", None)
+                    last_volume = finalized.pop("last_cumulative_volume", None)
+                    finalized["volume"] = (
+                        max(0, last_volume - start_volume)
+                        if start_volume is not None and last_volume is not None
+                        else None
+                    )
+                    sensex_candle_history.append(finalized)
                     print(
                         "SENSEX_CANDLE_1M",
-                        "TIME:", sensex_current_candle["minute"].strftime("%H:%M"),
-                        "O:", sensex_current_candle["open"],
-                        "H:", sensex_current_candle["high"],
-                        "L:", sensex_current_candle["low"],
-                        "C:", sensex_current_candle["close"],
+                        "TIME:", finalized["minute"].strftime("%H:%M"),
+                        "O:", finalized["open"],
+                        "H:", finalized["high"],
+                        "L:", finalized["low"],
+                        "C:", finalized["close"],
+                        "V:", finalized["volume"],
                     )
 
                     if on_candle is not None:
                         try:
-                            on_candle(dict(sensex_current_candle))
+                            on_candle(dict(finalized))
                         except Exception as exc:
                             print("SENSEX_CANDLE_CALLBACK_ERROR:", repr(exc))
                     sensex_current_candle = {
@@ -151,7 +165,8 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                         "high": price,
                         "low": price,
                         "close": price,
-                        "volume": cumulative_volume,
+                        "start_cumulative_volume": last_volume,
+                        "last_cumulative_volume": cumulative_volume,
                     }
                 else:
                     sensex_current_candle["high"] = max(
@@ -161,7 +176,7 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                         sensex_current_candle["low"], price
                     )
                     sensex_current_candle["close"] = price
-                    sensex_current_candle["volume"] = cumulative_volume
+                    sensex_current_candle["last_cumulative_volume"] = cumulative_volume
 
                 print(
                     "SENSEX_LIVE_TICK",
