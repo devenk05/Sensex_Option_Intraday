@@ -45,6 +45,11 @@ class TestLiveRecommendationGate(unittest.TestCase):
     def test_score_below_80_is_blocked(self):
         self.assertEqual(score_gate_reason(79.99, 80), "SCORE_BELOW_MINIMUM")
 
+    def test_nan_and_infinite_scores_are_blocked(self):
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value):
+                self.assertEqual(score_gate_reason(value, 80), "SCORE_BELOW_MINIMUM")
+
     def test_missing_or_invalid_score_is_blocked(self):
         for value in (None, "", "not-a-score"):
             with self.subTest(value=value):

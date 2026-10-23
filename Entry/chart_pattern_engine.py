@@ -1,5 +1,6 @@
 
 from typing import Any
+import math
 
 
 def detect_candle_patterns(
@@ -27,6 +28,9 @@ def detect_candle_patterns(
     high = float(latest["high"])
     low = float(latest["low"])
     close = float(latest["close"])
+
+    if not all(math.isfinite(value) for value in (open_price, high, low, close)):
+        raise ValueError("Latest candle OHLC values must be finite.")
 
     if high < low or not (low <= open_price <= high):
         raise ValueError("Latest candle has invalid OHLC values.")

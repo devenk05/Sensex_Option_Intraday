@@ -1,5 +1,6 @@
 """Pure, testable safety gates for live trade recommendations."""
 from datetime import datetime
+import math
 from zoneinfo import ZoneInfo
 
 import config
@@ -34,7 +35,9 @@ def score_gate_reason(score, minimum=None):
     try:
         numeric_score = float(score)
         numeric_minimum = float(minimum)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        return "SCORE_BELOW_MINIMUM"
+    if not math.isfinite(numeric_score) or not math.isfinite(numeric_minimum):
         return "SCORE_BELOW_MINIMUM"
     if numeric_score < numeric_minimum:
         return "SCORE_BELOW_MINIMUM"

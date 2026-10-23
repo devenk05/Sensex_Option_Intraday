@@ -1,5 +1,6 @@
 
 from typing import Any
+import math
 
 
 def analyze_option_chain(
@@ -37,10 +38,12 @@ def analyze_option_chain(
                 f"Option {index} has invalid option_type: {option_type}"
             )
 
-        if float(option["strike"]) <= 0:
+        strike = float(option["strike"])
+        premium = float(option["last_price"])
+        if not math.isfinite(strike) or strike <= 0:
             raise ValueError(f"Option {index} has invalid strike.")
 
-        if float(option["last_price"]) < 0:
+        if not math.isfinite(premium) or premium < 0:
             raise ValueError(f"Option {index} has invalid last_price.")
 
     return {

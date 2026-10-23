@@ -1,5 +1,6 @@
 
 from typing import Any
+import math
 
 
 def detect_reversal(
@@ -28,6 +29,8 @@ def detect_reversal(
     previous_close = float(previous["close"])
     latest_open = float(latest["open"])
     latest_close = float(latest["close"])
+    if not all(math.isfinite(value) for value in (previous_open, previous_close, latest_open, latest_close)):
+        return {"status": "INVALID_DATA", "signal": "UNKNOWN", "reason": "NON_FINITE_OHLC"}
 
     if (
         previous_close < previous_open

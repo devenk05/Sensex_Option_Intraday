@@ -29,6 +29,7 @@ class TradeExitMonitorLoop:
         self.running = False
 
         self._last_exit_trade_key: Optional[Tuple[str, ...]] = None
+        self.last_error: Optional[str] = None
 
     @staticmethod
     def _get_trade_key(trade: Dict[str, Any]) -> Tuple[str, ...]:
@@ -72,14 +73,20 @@ class TradeExitMonitorLoop:
                     "reason": "Exit signal already dispatched for this trade.",
                 }
 
-            # Mark before callback to prevent repeated dispatch if callback fails.
+            # Mark only after callback succeeds; failures must remain retryable.
+            try:
+                self.on_exit_signal(result)
+            except Exception as exc:
+                self.last_error = f"{type(exc).__name__}: {exc}"
+                return {
+                    **result,
+                    "exit_signal_dispatched": False,
+                    "callback_error": self.last_error,
+                    "reason": "EXIT_CALLBACK_FAILED_RETRY_PENDING",
+                }
             self._last_exit_trade_key = trade_key
-            self.on_exit_signal(result)
-
-            return {
-                **result,
-                "exit_signal_dispatched": True,
-            }
+            self.last_error = None
+            return {**result, "exit_signal_dispatched": True}
 
         return result
 
@@ -87,8 +94,15 @@ class TradeExitMonitorLoop:
         self.running = True
 
         while self.running:
-            self.run_once()
-            time.sleep(self.interval_seconds)
+            try:
+                self.run_once()
+                self.last_error = None
+            except Exception as exc:
+                # A transient feed/storage/callback error must not kill monitoring.
+                self.last_error = f"{type(exc).__name__}: {exc}"
+                print("TRADE_EXIT_MONITOR_LOOP_ERROR:", self.last_error)
+            finally:
+                time.sleep(self.interval_seconds)
 
     def stop(self) -> None:
         self.running = False

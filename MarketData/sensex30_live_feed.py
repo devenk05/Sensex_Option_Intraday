@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 LIVE_STOCK_TICK_STATE = {}
@@ -49,7 +50,7 @@ def start_sensex30_live_feed(kite, instrument_tokens):
                 ),
                 "change_percent": tick.get("change"),
                 "volume_traded": tick.get("volume_traded"),
-                "timestamp": datetime.now().strftime(
+                "timestamp": datetime.now(ZoneInfo("Asia/Kolkata")).strftime(
                     "%Y-%m-%d %H:%M:%S"
                 ),
             }
