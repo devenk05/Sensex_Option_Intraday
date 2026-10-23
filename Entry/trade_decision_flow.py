@@ -36,9 +36,10 @@ def _num(value: Any) -> float | None:
         return None
 
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return result if math.isfinite(result) else None
 
 
 def _option_volume(
