@@ -89,6 +89,7 @@ def main() -> int:
     except Exception as exc:
         state["error"] = f"{type(exc).__name__}: {exc}"
     finally:
+        finished.set()
         try:
             ticker.close()
         except Exception:
