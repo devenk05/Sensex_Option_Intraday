@@ -1941,39 +1941,9 @@ def main():
     print("HISTORICAL_FETCH_OK")
     print("CANDLE_COUNT:", len(candles))
 
-    # Seed the Sensex 1-minute history from Kite historical candles.
-    # The live WebSocket then appends each finalized minute, so 1M analysis
-    # does not have to wait for two new live candles after every restart.
+    # Seed completed historical 5-minute candles as context.
+    # Trade registration still waits for a newly completed live 5-minute candle.
     try:
-        one_minute_candles = fetch_historical_data(
-            kite=kite,
-            instrument_token=token,
-            from_date=from_date,
-            to_date=to_date,
-            interval="minute",
-        )
-        current_minute_key = datetime.now().strftime("%Y-%m-%d %H:%M")
-        seeded_history = []
-        for item in one_minute_candles or []:
-            candle_date = item.get("date")
-            if candle_date is None:
-                continue
-            candle_minute_key = candle_date.strftime("%Y-%m-%d %H:%M")
-            # Do not seed the currently forming minute; the WebSocket owns it.
-            if candle_minute_key >= current_minute_key:
-                continue
-            seeded_history.append({
-                "instrument_token": token,
-                "minute": candle_date.replace(second=0, microsecond=0),
-                "open": float(item["open"]),
-                "high": float(item["high"]),
-                "low": float(item["low"]),
-                "close": float(item["close"]),
-                "volume": item.get("volume"),
-            })
-        CANDLE_HISTORY[token] = seeded_history[-500:]
-        # Seed completed historical 5m candles as context; trade registration
-        # still waits for a newly completed live WebSocket 5m candle.
         seeded_5m = []
         for item in candles or []:
             candle_date = item.get("date") or item.get("minute")
@@ -2001,18 +1971,10 @@ def main():
             except (KeyError, TypeError, ValueError):
                 continue
         LIVE_5M_CANDLE_HISTORY[:] = seeded_5m[-500:]
+        CANDLE_HISTORY.setdefault(token, [])
         print("LIVE_5M_HISTORY_SEEDED:", len(LIVE_5M_CANDLE_HISTORY))
-        print(
-            "SENSEX_1M_HISTORY_SEEDED:",
-            "FETCHED:", len(one_minute_candles or []),
-            "STORED:", len(CANDLE_HISTORY[token]),
-            "LATEST:", (
-                CANDLE_HISTORY[token][-1]["minute"].strftime("%Y-%m-%d %H:%M")
-                if CANDLE_HISTORY[token] else None
-            ),
-        )
     except Exception as exc:
-        print("SENSEX_1M_HISTORY_SEED_ERROR:", repr(exc))
+        print("LIVE_5M_HISTORY_SEED_ERROR:", repr(exc))
         CANDLE_HISTORY.setdefault(token, [])
 
     # Analyze Sensex market structure from historical candles
