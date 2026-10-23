@@ -21,9 +21,14 @@ class DailyReportDispatcher:
 
         results: dict[str, Any] = {}
 
-        results["telegram"] = self.telegram_sender.send_report(report)
-        results["google_sheets"] = (
-            self.google_sheets_sender.send_report(report)
-        )
+        # Deliver independently: one destination failure must not suppress the other.
+        try:
+            results["telegram"] = self.telegram_sender.send_report(report)
+        except Exception as exc:
+            results["telegram"] = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
+        try:
+            results["google_sheets"] = self.google_sheets_sender.send_report(report)
+        except Exception as exc:
+            results["google_sheets"] = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
 
         return results
