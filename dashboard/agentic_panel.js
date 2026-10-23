@@ -59,7 +59,7 @@
                 <div class="jarvis-card">
                     <div class="jarvis-label">Market intelligence</div>
                     <div id="jarvis-trend" class="jarvis-value">Trend: —</div>
-                    <div id="jarvis-mtf" class="jarvis-detail">MTF: —</div>
+                    <div id="jarvis-mtf" class="jarvis-detail">5M direction: —</div>
                     <div id="jarvis-pa" class="jarvis-detail">Price action: —</div>
                 </div>
                 <div class="jarvis-card">
@@ -86,12 +86,12 @@
 
         const sections = Array.from(document.querySelectorAll("main.main > .section"));
         const mtf = sections.find(section =>
-            (section.querySelector(".section-title h2")?.textContent || "").includes("Multi-Timeframe Analysis")
+            (section.querySelector(".section-title h2")?.textContent || "").includes("5-Minute Analysis")
         );
         const market = sections.find(section =>
             (section.querySelector(".section-title h2")?.textContent || "").includes("Market Intelligence")
         );
-        // Place JARVIS review above Multi-Timeframe Analysis, not below it.
+        // Place JARVIS review above the 5-Minute Analysis section.
         if (mtf) mtf.insertAdjacentElement("beforebegin", panel);
         else if (market) market.insertAdjacentElement("beforebegin", panel);
         else document.querySelector("main.main")?.appendChild(panel);
@@ -171,7 +171,7 @@
                     : "Candidate rejected: score " + canonicalScore.toFixed(2) + " is below " + minimumScore)
                 : "Candidate: " + (market.candidate_direction ?? (audit.candidate_present ? "PRESENT" : "—")));
             text("jarvis-trend", "Trend: " + (market.market_trend ?? "UNKNOWN"));
-            text("jarvis-mtf", "MTF: " + (mtf.direction ?? "UNKNOWN") + " · " + (mtf.status ?? "UNKNOWN"));
+            text("jarvis-mtf", "5M direction: " + (mtf.direction_5m ?? "UNKNOWN") + " · " + (mtf.status ?? "UNKNOWN"));
             text("jarvis-pa", "Price action: " + (market.price_action ?? "UNKNOWN"));
             text("jarvis-risk", "Active trade: " + (risk.active_trade ? "YES — lock must hold" : "NO"));
             text("jarvis-risk-limit", "Risk limit: ₹" + (risk.risk_limit_inr ?? "—"));
