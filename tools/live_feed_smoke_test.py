@@ -29,6 +29,20 @@ def main() -> int:
     if not 10 <= args.seconds <= 300:
         parser.error("--seconds must be between 10 and 300")
 
+    # Read only the two required keys from an existing root .env if they are
+    # not already exported. Values are never printed or written by this tool.
+    env_file = ROOT / ".env"
+    if env_file.is_file():
+        for raw_line in env_file.read_text(encoding="utf-8-sig").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("\\\"").strip("'")
+            if key in {"KITE_API_KEY", "KITE_ACCESS_TOKEN"} and value:
+                os.environ.setdefault(key, value)
+
     api_key = os.getenv("KITE_API_KEY")
     access_token = os.getenv("KITE_ACCESS_TOKEN")
     if not api_key or not access_token:
