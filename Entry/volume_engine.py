@@ -1,5 +1,6 @@
 
 from typing import Any
+import math
 
 
 def analyze_volume(
@@ -19,8 +20,9 @@ def analyze_volume(
         if "volume" not in candle:
             raise ValueError(f"Candle {index} is missing volume.")
 
-        if float(candle["volume"]) < 0:
-            raise ValueError(f"Candle {index} has negative volume.")
+        value = float(candle["volume"])
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"Candle {index} has invalid volume.")
 
     latest_volume = float(candles[-1]["volume"])
     previous_volumes = [
