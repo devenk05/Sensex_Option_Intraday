@@ -1,6 +1,6 @@
 # 5-minute-only strategy replay (offline)
 
-This tool is deliberately isolated from the live recommendation runner. It does not change `Entry/main.py`, disable live filters, or place orders.
+This replay utility is offline-only and never places orders. In this branch, the live recommendation runner uses 5-minute direction only; the 15m+5m variant below is retained solely as a historical comparison baseline. The replay tool itself does not alter live trading logic.
 
 ## What it compares
 
