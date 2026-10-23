@@ -171,6 +171,7 @@ def _aggregate_minute_candle_into_5m(candle):
             "volume": candle.get("volume") or 0,
             "_minute_count": 1,
             "_minute_keys": [minute.replace(second=0, microsecond=0)],
+            "_volume_complete": candle.get("volume") is not None,
         }
         return None
 
@@ -189,6 +190,10 @@ def _aggregate_minute_candle_into_5m(candle):
         LIVE_5M_CURRENT["low"] = min(LIVE_5M_CURRENT["low"], candle.get("low"))
         LIVE_5M_CURRENT["close"] = candle.get("close")
         LIVE_5M_CURRENT["volume"] += candle.get("volume") or 0
+        LIVE_5M_CURRENT["_volume_complete"] = (
+            LIVE_5M_CURRENT.get("_volume_complete", True)
+            and candle.get("volume") is not None
+        )
         LIVE_5M_CURRENT["_minute_count"] += 1
         LIVE_5M_CURRENT.setdefault("_minute_keys", []).append(minute_key)
         return None
@@ -199,10 +204,12 @@ def _aggregate_minute_candle_into_5m(candle):
     complete_ok = (
         LIVE_5M_CURRENT.get("_minute_count") == 5
         and received_minutes == expected_minutes
+        and LIVE_5M_CURRENT.get("_volume_complete", False)
     )
     completed = dict(LIVE_5M_CURRENT)
     completed.pop("_minute_count", None)
     completed.pop("_minute_keys", None)
+    completed.pop("_volume_complete", None)
 
     if complete_ok:
         LIVE_5M_CANDLE_HISTORY.append(completed)
@@ -225,6 +232,7 @@ def _aggregate_minute_candle_into_5m(candle):
         # Track the first minute in every new bucket; without this, the
         # completeness check rejects every subsequent 5-minute candle.
         "_minute_keys": [minute_key],
+        "_volume_complete": candle.get("volume") is not None,
     }
 
     if completed is not None:
@@ -385,7 +393,11 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
 
     # Buy-option SL: latest structural reversal level.
     # No artificial 50-point cap is applied here.
-    option_sl = float(reversal_low)
+    option_sl = finite_number(reversal_low)
+
+    if option_sl is None or option_sl <= 0 or not __import__("math").isfinite(entry):
+        print("TRADE_REGISTRATION_REJECTED: Option entry/SL must be finite positive numbers.")
+        return None
 
     if option_sl >= entry:
         print(
