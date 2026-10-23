@@ -1,5 +1,6 @@
 
 from typing import Any
+import math
 
 
 class DailySummary:
@@ -31,11 +32,16 @@ class DailySummary:
             elif result in {"BREAKEVEN", "BE"}:
                 breakeven += 1
 
+            # "pnl" is canonical rupee P&L. Never add premium/index points
+            # to rupees when old records lack the converted field.
             pnl = trade.get("pnl", 0)
 
             try:
-                total_pnl += float(pnl)
-            except (TypeError, ValueError) as exc:
+                numeric_pnl = float(pnl)
+                if not math.isfinite(numeric_pnl):
+                    raise ValueError("P&L must be finite.")
+                total_pnl += numeric_pnl
+            except (TypeError, ValueError, OverflowError) as exc:
                 raise ValueError(
                     f"Invalid P&L value in trade: {pnl!r}"
                 ) from exc
