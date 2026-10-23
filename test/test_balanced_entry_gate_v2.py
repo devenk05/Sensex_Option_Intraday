@@ -76,16 +76,18 @@ def test_pivot_misalignment_is_not_a_standalone_reversal_veto():
     assert result["reason"].endswith("PIVOT_SUPPORTING_ONLY")
 
 
-def test_explicit_mtf_mismatch_does_not_count_as_aligned():
+def test_5m_direction_is_authoritative_without_15m_alignment_gate():
     result = derive_market_bias(
         {
+            # Legacy fields may be present in old snapshots, but live bias is 5m-only.
             "direction_15m": "BULLISH",
             "direction_5m": "BEARISH",
-            "alignment": "ALIGNED",
+            "alignment": "CONFLICT",
         },
         {"structure": "BULLISH"},
     )
 
-    assert result["bias"] == "NEUTRAL"
-    assert result["status"] == "NOT_CONFIRMED"
-    assert result["reason"] == "TIMEFRAME_DIRECTION_CONFLICT"
+    assert result["bias"] == "BEARISH"
+    assert result["status"] == "CONFIRMED"
+    assert result["reason"] == "5M_DIRECTION_CONFIRMED"
+    assert result["source_timeframe"] == "5minute"
