@@ -975,34 +975,34 @@ body {{
 }}
 
 
-.five-minute-card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; height:100%; }
-.five-minute-card-top { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:16px; }
-.five-minute-eyebrow { color:var(--muted); font-size:12px; letter-spacing:1px; }
-.five-minute-direction { font-size:26px; font-weight:900; margin-top:10px; }
-.five-minute-candle-status { display:flex; flex-direction:column; align-items:flex-end; gap:6px; color:var(--muted); font-size:12px; text-align:right; }
-.five-minute-candle-status strong { color:var(--text); font-size:15px; }
-.five-minute-candle-status .live-label { color:var(--red); font-weight:700; }
-.five-minute-candle-status .live-label i { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--red); margin-right:6px; }
-.five-minute-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-.five-minute-metric { min-width:0; background:rgba(107,114,128,.045); border:1px solid rgba(107,114,128,.13); border-radius:9px; padding:12px; }
-.five-minute-metric h3 { margin:0 0 12px; color:var(--muted); font-size:12px; text-transform:uppercase; }
-.five-minute-value-row { display:flex; justify-content:space-between; gap:8px; padding:5px 0; font-size:12px; }
-.five-minute-value-row span { color:var(--muted); }
-.five-minute-value-row strong { text-align:right; overflow-wrap:anywhere; }
-.five-minute-big-value { color:var(--red); font-size:26px; font-weight:800; margin:14px 0; }
-.five-minute-progress { height:9px; background:#d9dde1; border-radius:99px; overflow:hidden; margin:10px 0; }
-.five-minute-progress span { display:block; height:100%; background:var(--red); border-radius:99px; }
-.five-minute-muted { margin-top:10px; color:var(--muted); font-size:11px; }
-.five-minute-breakdown { border-top:1px solid var(--border); margin-top:10px; padding-top:10px; display:flex; justify-content:space-between; gap:8px; font-size:12px; }
-.five-minute-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
-.five-minute-summary > div { padding:0 10px; border-right:1px solid var(--border); min-width:0; }
-.five-minute-summary > div:first-child { padding-left:0; }
-.five-minute-summary > div:last-child { border-right:0; }
-.five-minute-summary span { display:block; color:var(--muted); font-size:12px; margin-bottom:7px; }
-.five-minute-summary strong { display:block; font-size:14px; overflow-wrap:anywhere; }
-.five-minute-note { display:flex; gap:10px; align-items:center; margin-top:14px; padding:12px; border-radius:9px; background:rgba(192,57,43,.07); color:#8f2520; font-size:12px; line-height:1.5; }
-@media(max-width:1000px) { .five-minute-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .five-minute-summary { grid-template-columns:repeat(3,minmax(0,1fr)); row-gap:12px; } }
-@media(max-width:560px) { .five-minute-card-top { flex-direction:column; } .five-minute-candle-status { align-items:flex-start; text-align:left; } .five-minute-metrics { grid-template-columns:1fr; } .five-minute-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.five-minute-card {{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; height:100%; }}
+.five-minute-card-top {{ display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:16px; }}
+.five-minute-eyebrow {{ color:var(--muted); font-size:12px; letter-spacing:1px; }}
+.five-minute-direction {{ font-size:26px; font-weight:900; margin-top:10px; }}
+.five-minute-candle-status {{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; color:var(--muted); font-size:12px; text-align:right; }}
+.five-minute-candle-status strong {{ color:var(--text); font-size:15px; }}
+.five-minute-candle-status .live-label {{ color:var(--red); font-weight:700; }}
+.five-minute-candle-status .live-label i {{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--red); margin-right:6px; }}
+.five-minute-metrics {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }}
+.five-minute-metric {{ min-width:0; background:rgba(107,114,128,.045); border:1px solid rgba(107,114,128,.13); border-radius:9px; padding:12px; }}
+.five-minute-metric h3 {{ margin:0 0 12px; color:var(--muted); font-size:12px; text-transform:uppercase; }}
+.five-minute-value-row {{ display:flex; justify-content:space-between; gap:8px; padding:5px 0; font-size:12px; }}
+.five-minute-value-row span {{ color:var(--muted); }}
+.five-minute-value-row strong {{ text-align:right; overflow-wrap:anywhere; }}
+.five-minute-big-value {{ color:var(--red); font-size:26px; font-weight:800; margin:14px 0; }}
+.five-minute-progress {{ height:9px; background:#d9dde1; border-radius:99px; overflow:hidden; margin:10px 0; }}
+.five-minute-progress span {{ display:block; height:100%; background:var(--red); border-radius:99px; }}
+.five-minute-muted {{ margin-top:10px; color:var(--muted); font-size:11px; }}
+.five-minute-breakdown {{ border-top:1px solid var(--border); margin-top:10px; padding-top:10px; display:flex; justify-content:space-between; gap:8px; font-size:12px; }}
+.five-minute-summary {{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }}
+.five-minute-summary > div {{ padding:0 10px; border-right:1px solid var(--border); min-width:0; }}
+.five-minute-summary > div:first-child {{ padding-left:0; }}
+.five-minute-summary > div:last-child {{ border-right:0; }}
+.five-minute-summary span {{ display:block; color:var(--muted); font-size:12px; margin-bottom:7px; }}
+.five-minute-summary strong {{ display:block; font-size:14px; overflow-wrap:anywhere; }}
+.five-minute-note {{ display:flex; gap:10px; align-items:center; margin-top:14px; padding:12px; border-radius:9px; background:rgba(192,57,43,.07); color:#8f2520; font-size:12px; line-height:1.5; }}
+@media(max-width:1000px) {{ .five-minute-metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .five-minute-summary {{ grid-template-columns:repeat(3,minmax(0,1fr)); row-gap:12px; }} }}
+@media(max-width:560px) {{ .five-minute-card-top {{ flex-direction:column; }} .five-minute-candle-status {{ align-items:flex-start; text-align:left; }} .five-minute-metrics {{ grid-template-columns:1fr; }} .five-minute-summary {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} }}
 
 .chart-placeholder {{
     min-height: 280px;
