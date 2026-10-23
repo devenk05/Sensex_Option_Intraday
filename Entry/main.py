@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 from config_loader import load_project_config
 from live_recommendation_gate import recommendation_time_gate_reason, score_gate_reason
-from entry_quality_engine import evaluate_directional_confluence, finite_number, validate_index_stop
+from entry_quality_engine import evaluate_directional_confluence, finite_number, timestamp_is_fresh, validate_index_stop
 from kite_client import create_kite_client
 from historical_data import fetch_historical_data
 from option_data_pull import fetch_sensex_options
@@ -177,6 +177,10 @@ def _aggregate_minute_candle_into_5m(candle):
     current_bucket = LIVE_5M_CURRENT["minute"]
     minute_key = minute.replace(second=0, microsecond=0)
 
+    if bucket_minute < current_bucket:
+        print("LIVE_5M_CANDLE_IGNORED_OUT_OF_ORDER:", bucket_minute, "CURRENT:", current_bucket)
+        return None
+
     if bucket_minute == current_bucket:
         # Ignore duplicate finalized-minute callbacks.
         if minute_key in LIVE_5M_CURRENT.get("_minute_keys", []):
@@ -255,7 +259,7 @@ def _option_5m_change_percent(option_record: dict) -> float | None:
     except (TypeError, ValueError):
         return None
     history = CANDLE_HISTORY.get(token) or []
-    if len(history) < 6:
+    if len(history) < 6 or not timestamp_is_fresh(history[-1].get("minute"), max_age_seconds=120):
         return None
     old_price = finite_number(history[-6].get("close"))
     latest_price = finite_number(history[-1].get("close"))
@@ -735,6 +739,7 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
                 if tick.get("last_price") is not None:
                     row["last_price"] = tick["last_price"]
                     row["ltp"] = tick["last_price"]
+                row["tick_timestamp"] = tick.get("timestamp")
                 if tick.get("volume_traded") is not None:
                     row["volume"] = tick["volume_traded"]
                 if tick.get("oi") is not None:
@@ -878,6 +883,11 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
                 reversal_signal = (detect_reversal(live_5m) or {}).get("signal")
             except Exception:
                 reversal_signal = None
+            live_data_fresh = (
+                timestamp_is_fresh(live_5m[-1].get("minute"), max_age_seconds=360)
+                and timestamp_is_fresh(ce.get("tick_timestamp"), max_age_seconds=120)
+                and timestamp_is_fresh(pe.get("tick_timestamp"), max_age_seconds=120)
+            )
             quality = evaluate_directional_confluence(
                 market_direction=market_direction,
                 price_action_signal=(price_action or {}).get("signal"),
@@ -890,6 +900,8 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
                 ce_oi_change=ce.get("oi_change"),
                 pe_oi_change=pe.get("oi_change"),
             )
+            if not live_data_fresh:
+                quality = {"status": "WAIT", "reason": "STALE_OR_MISSING_SENSEX_CE_PE_DATA"}
             index_stop = validate_index_stop(spot_value, index_sl_value, market_direction, max_points=50.0)
             CURRENT_SETUP_DECISION["entry_quality"] = quality
             CURRENT_SETUP_DECISION["index_stop_validation"] = index_stop
@@ -964,6 +976,12 @@ def handle_finalized_candle(candle):
     token = candle["instrument_token"]
 
     history = CANDLE_HISTORY.setdefault(token, [])
+    candle_minute = candle.get("minute")
+    if history and candle_minute is not None:
+        previous_minute = history[-1].get("minute")
+        if previous_minute is not None and candle_minute <= previous_minute:
+            print("CANDLE_CALLBACK_IGNORED_DUPLICATE_OR_OUT_OF_ORDER:", token, candle_minute)
+            return
     history.append(candle)
 
     if len(history) > 500:
