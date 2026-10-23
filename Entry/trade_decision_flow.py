@@ -703,7 +703,6 @@ def run_locked_decision_flow(
             "CE_PE_COMPARISON",
             "PIVOT_SR_LOCATION",
             "REVERSAL_CONTINUATION",
-            "ONE_MINUTE_OBSERVATION_OPTIONAL",
             "FINAL_SCORE",
             "TRADE_WAIT",
         ],
