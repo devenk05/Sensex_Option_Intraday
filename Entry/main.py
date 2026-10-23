@@ -1361,9 +1361,24 @@ def _live_dashboard_updater(
             current_market_status = get_market_status()
 
             # 1. Build consolidated live state for frontend.
+            now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+            last_5m_time = LIVE_5M_LAST_REFRESH
+            if isinstance(last_5m_time, datetime):
+                if last_5m_time.tzinfo is None:
+                    last_5m_time = last_5m_time.replace(tzinfo=ZoneInfo("Asia/Kolkata"))
+                else:
+                    last_5m_time = last_5m_time.astimezone(ZoneInfo("Asia/Kolkata"))
+                last_5m_age = (now_ist - last_5m_time).total_seconds()
+            else:
+                last_5m_age = None
+            live_5m_stale = last_5m_age is None or last_5m_age < 0 or last_5m_age > 360
+
             dashboard_data = {
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "live_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": now_ist.isoformat(),
+                "live_update": now_ist.isoformat(),
+                "live_5m_last_refresh": last_5m_time.isoformat() if isinstance(last_5m_time, datetime) else None,
+                "live_5m_age_seconds": round(last_5m_age, 1) if last_5m_age is not None else None,
+                "live_5m_stale": live_5m_stale,
                 "live_5m": LIVE_ANALYSIS_STATE.get("live_5m") or {},
                 "live_option": live_option,
                 "live_sensex": dict(LIVE_SENSEX_TICK_STATE),
@@ -1384,16 +1399,7 @@ def _live_dashboard_updater(
                 "active_trade": active_trade,
                 "active_trade_ltp": active_trade_ltp,
                 "active_trade_status": active_trade_status,
-                # Publish completed trades only; the active recommendation stays
-                # in CURRENT TRADE until the exit monitor confirms its exit.
-                "trade_history": [
-                    dict(item)
-                    for item in TRADE_HISTORY.get_all_trades()
-                    if isinstance(item, dict)
-                    and str(item.get("status") or "").upper() == "CLOSED"
-                ] if "TRADE_HISTORY" in globals() else [],
-                # History contains completed trades only. Active recommendations
-                # remain in active_trade until the exit monitor confirms SL/target.
+                # Publish closed recommendations to the existing dashboard History tab.
                 "trade_history": [
                     dict(item)
                     for item in TRADE_HISTORY.get_all_trades()
@@ -1914,15 +1920,6 @@ def main():
         interval_seconds=30,
     )
 
-    daily_report_thread = Thread(
-        target=daily_report_loop.run_forever,
-        name="daily-report-loop",
-        daemon=True,
-    )
-    daily_report_thread.start()
-    print("DAILY_REPORT_LOOP_STARTED")
-
-
     # Load persisted closed-trade history
     saved_history = TRADE_HISTORY_STORAGE.load()
     for saved_trade in saved_history:
@@ -1945,6 +1942,15 @@ def main():
 
     trade_monitor = TradeMonitor(ACTIVE_TRADE_MANAGER)
     print("ACTIVE_TRADE_STATUS:", trade_monitor.get_status())
+
+    # Start daily reporting only after closed history and recovery are initialized.
+    daily_report_thread = Thread(
+        target=daily_report_loop.run_forever,
+        name="daily-report-loop",
+        daemon=True,
+    )
+    daily_report_thread.start()
+    print("DAILY_REPORT_LOOP_STARTED")
 
     def get_trade_ltp(trade):
         symbol = trade.get("tradingsymbol")
