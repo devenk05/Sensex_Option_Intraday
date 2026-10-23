@@ -1,5 +1,7 @@
 
 import json
+import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,8 +38,22 @@ class TradeStateStorage:
         if not self.file_path.exists():
             return None
 
-        with self.file_path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        try:
+            with self.file_path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            backup = self.file_path.with_name(
+                f"{self.file_path.name}.corrupt-{datetime.now().strftime('%Y%m%d%H%M%S')}.bak"
+            )
+            try:
+                shutil.copy2(self.file_path, backup)
+            except OSError as backup_exc:
+                raise RuntimeError(
+                    f"Corrupt trade state could not be backed up: {backup_exc}"
+                ) from exc
+            raise RuntimeError(
+                f"Corrupt trade state backed up to {backup}; refusing unsafe recovery."
+            ) from exc
 
         if data is None:
             return None
