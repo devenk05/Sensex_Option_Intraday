@@ -1,4 +1,5 @@
 from datetime import date
+import math
 from typing import Any
 
 from kiteconnect import KiteConnect
@@ -153,9 +154,10 @@ def fetch_sensex_options(
 
         def _depth_number(value):
             try:
-                return float(value) if value is not None else None
-            except (TypeError, ValueError):
+                number = float(value) if value is not None else None
+            except (TypeError, ValueError, OverflowError):
                 return None
+            return number if number is not None and math.isfinite(number) else None
 
         bid = _depth_number(best_bid_level.get("price"))
         ask = _depth_number(best_ask_level.get("price"))
