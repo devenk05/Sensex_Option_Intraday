@@ -760,17 +760,17 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             print("LIVE_DECISION_SKIPPED: OPTION_CHAIN_UNAVAILABLE")
             return
 
+        # Keep both ATM legs for comparison first. After the 5-minute market
+        # bias is known, the directional leg must pass the OI/volume build-up gate.
         ce_result = select_option(
             options=options,
             target_strike=option_data.get("atm_strike"),
             option_type="CE",
-            require_oi_increase=True,
         )
         pe_result = select_option(
             options=options,
             target_strike=option_data.get("atm_strike"),
             option_type="PE",
-            require_oi_increase=True,
         )
         ce = ce_result.get("option") if ce_result.get("status") == "OK" else {}
         pe = pe_result.get("option") if pe_result.get("status") == "OK" else {}
@@ -783,6 +783,24 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
         fii_dii_analysis = LIVE_ANALYSIS_STATE.get("fii_dii")
         liquidity_greeks_analysis = LIVE_ANALYSIS_STATE.get("liquidity_greeks")
         cepe_market = derive_market_bias(multi_timeframe, candle_structure)
+        directional_side = "CE" if cepe_market.get("bias") == "BULLISH" else "PE" if cepe_market.get("bias") == "BEARISH" else None
+        if directional_side is None:
+            print("LIVE_DECISION_SKIPPED: MARKET_DIRECTION_UNCONFIRMED")
+            return
+        directional_result = select_option(
+            options=options,
+            target_strike=option_data.get("atm_strike"),
+            option_type=directional_side,
+            require_oi_increase=True,
+        )
+        if directional_result.get("status") != "OK":
+            print("LIVE_DECISION_SKIPPED: DIRECTIONAL_STRIKE_OI_VOLUME_NOT_BUILDING", directional_result.get("reason"))
+            return
+        if directional_side == "CE":
+            ce = directional_result["option"]
+        else:
+            pe = directional_result["option"]
+
         cepe_comparison = compare_ce_pe(
             market_bias=cepe_market.get("bias", "NEUTRAL"),
             pivot_analysis=pivot_analysis,
