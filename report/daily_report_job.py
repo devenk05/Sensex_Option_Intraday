@@ -41,5 +41,13 @@ class DailyReportJob:
             report_date=report_date,
         )
 
-        self._last_run_date = report_date
+        delivery = result.get("delivery_results", {}) if isinstance(result, dict) else {}
+        # Keep the date retryable if a destination failed; the dispatcher
+        # skips destinations already delivered during this process.
+        failed = any(
+            isinstance(value, dict) and str(value.get("status", "")).upper() == "ERROR"
+            for value in delivery.values()
+        )
+        if not failed:
+            self._last_run_date = report_date
         return result
