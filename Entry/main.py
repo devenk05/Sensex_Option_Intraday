@@ -52,8 +52,8 @@ from reversal_engine import detect_reversal
 from volume_engine import analyze_volume
 from veto_engine import check_trade_vetoes
 from trade_lifecycle_manager import TradeLifecycleManager
-from trade_history_storage import TradeHistoryStorage
-from trade_history import TradeHistory
+from report.trade_history_storage import TradeHistoryStorage
+from Entry.trade_history import TradeHistory
 from trade_price_monitor import TradePriceMonitor
 from trade_recovery import TradeRecovery
 from trade_monitor_loop import TradeMonitorLoop
