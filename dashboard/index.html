@@ -1968,9 +1968,9 @@ function updateActiveTradeLive(data) {
         '<div><span>Symbol</span><strong>' + escapeTradeHtml(trade.symbol) + '</strong></div>' +
         '<div><span>Strike</span><strong>' + escapeTradeHtml(trade.strike) + '</strong></div>' +
         '<div><span>Entry</span><strong>' + tradeMoney(trade.entry) + '</strong></div>' +
-        '<div><span>Stop Loss</span><strong>' + tradeMoney(sl) + '</strong></div>' +
-        '<div><span>Target</span><strong>' + tradeMoney(target) + '</strong></div>' +
-        '<div><span>Score</span><strong>' + escapeTradeHtml(trade.score ?? trade.entry_score) + '</strong></div>' +
+        '<div><span>Option Premium SL</span><strong>' + tradeMoney(sl) + '</strong></div>' +
+        '<div><span>Option Premium Target</span><strong>' + tradeMoney(target) + '</strong></div>' +
+        '<div><span>SENSEX Index SL (max 50 pts)</span><strong>' + escapeTradeHtml(trade.index_sl ?? '—') + ' (' + escapeTradeHtml(trade.index_sl_points ?? '—') + ' pts)</strong></div>' +\n        '<div><span>Score</span><strong>' + escapeTradeHtml(trade.score ?? trade.entry_score) + '</strong></div>' +
         '<div><span>Current LTP</span><strong>' + (validLtp ? tradeMoney(ltp) : 'WAITING FOR LIVE TICK') + '</strong></div>' +
         '<div><span>Unrealized P&amp;L / Unit</span><strong class="' + pnlClass + '">' + escapeTradeHtml(pnlText) + '</strong></div>' +
         '<div><span>Entry → Current LTP</span><strong class="' + pnlClass + '">' + distance(trade.entry, validLtp ? ltp : null) + '</strong></div>' +
