@@ -1,4 +1,5 @@
 from datetime import datetime
+import math
 from zoneinfo import ZoneInfo
 from kiteconnect import KiteTicker
 
@@ -231,9 +232,10 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
 
             def _safe_number(value):
                 try:
-                    return float(value) if value is not None else None
-                except (TypeError, ValueError):
+                    number = float(value) if value is not None else None
+                except (TypeError, ValueError, OverflowError):
                     return None
+                return number if number is not None and math.isfinite(number) else None
 
             LIVE_TICK_STATE[token] = {
                 "instrument_token": token,
