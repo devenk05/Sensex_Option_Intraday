@@ -45,7 +45,7 @@ class JarvisLiveContextMappingTests(unittest.TestCase):
             "decision", "entry_score", "minimum_score", "market_analysis",
             "candle_structure", "multi_timeframe", "price_action",
             "cepe_comparison", "active_trade", "option_chain_available",
-            "one_minute_confirmed", "risk_limit_inr",
+            "risk_limit_inr",
         }
         self.assertTrue(required.issubset(context), f"Missing fields: {sorted(required - set(context))}")
 
@@ -66,21 +66,24 @@ class JarvisLiveContextMappingTests(unittest.TestCase):
                 self.assertIsInstance(value, ast.Name, f"{key} should be a direct live variable")
                 self.assertEqual(value.id, expected_name)
 
-    def test_one_minute_confirmation_is_forwarded_without_changing_trade_decision(self):
+    def test_live_dispatch_is_5m_only_and_advisory_remains_separate(self):
         context = _live_dispatch_context()
-        one_minute = context["one_minute_confirmed"]
-        names = {node.id for node in ast.walk(one_minute) if isinstance(node, ast.Name)}
-        self.assertIn("LIVE_ANALYSIS_STATE", names)
-        self.assertIn("one_minute_analysis", {node.value for node in ast.walk(one_minute) if isinstance(node, ast.Constant) and isinstance(node.value, str)})
-        # The advisory call remains a separate call after the deterministic decision is formed.
+        self.assertNotIn("one_minute_confirmed", context)
+        # The deterministic decision and advisory review must both remain present.
         source = (ROOT / "Entry" / "main.py").read_text(encoding="utf-8")
         module = ast.parse(source)
-        target = next(node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "_evaluate_live_setup_on_completed_5m")
-        calls = [node for node in ast.walk(target) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
-        decision_positions = [i for i, call in enumerate(calls) if call.func.id == "run_locked_decision_flow"]
-        advisory_positions = [i for i, call in enumerate(calls) if call.func.id == "dispatch_agent_review"]
-        self.assertTrue(decision_positions, "Deterministic decision call must remain present")
-        self.assertTrue(advisory_positions, "Advisory review call must remain present")
+        target = next(
+            node for node in module.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_evaluate_live_setup_on_completed_5m"
+        )
+        calls = [
+            node for node in ast.walk(target)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        ]
+        call_names = {call.func.id for call in calls}
+        self.assertIn("run_locked_decision_flow", call_names)
+        self.assertIn("dispatch_agent_review", call_names)
 
     def test_synthetic_context_is_preserved_in_advisory_review(self):
         context = {
@@ -94,8 +97,7 @@ class JarvisLiveContextMappingTests(unittest.TestCase):
             "cepe_comparison": {"status": "OK", "candidate_direction": "PE"},
             "active_trade": False,
             "option_chain_available": True,
-            "one_minute_confirmed": True,
-            "risk_limit_inr": 1000,
+                        "risk_limit_inr": 1000,
         }
         review = build_review(context)
         self.assertEqual(review["mode"], "ADVISORY_ONLY")

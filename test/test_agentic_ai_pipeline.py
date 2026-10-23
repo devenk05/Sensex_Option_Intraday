@@ -39,7 +39,7 @@ class AgenticAIPipelineVerificationTests(unittest.TestCase):
             "decision", "entry_score", "minimum_score", "market_analysis",
             "candle_structure", "multi_timeframe", "price_action",
             "cepe_comparison", "active_trade", "option_chain_available",
-            "one_minute_confirmed", "risk_limit_inr",
+            "risk_limit_inr",
         }
         self.assertTrue(required_keys.issubset(context_keys),
                         f"Missing context fields: {sorted(required_keys - context_keys)}")
@@ -59,8 +59,7 @@ class AgenticAIPipelineVerificationTests(unittest.TestCase):
             "cepe_comparison": {"status": "OK", "candidate_direction": "PE"},
             "active_trade": False,
             "option_chain_available": True,
-            "one_minute_confirmed": True,
-            "risk_limit_inr": 1000,
+                        "risk_limit_inr": 1000,
         }
 
         review = build_review(context)

@@ -29,7 +29,7 @@ from liquidity_greeks_engine import analyze_liquidity_greeks
 from vega_snapshot_engine import update_live_vega_snapshots
 from pivot_engine import PivotEngine, calculate_pivot_points
 from price_action_engine import analyze_price_action
-from multi_timeframe_engine import analyze_multi_timeframe
+from multi_timeframe_engine import get_timeframe_direction
 from market_structure_engine import analyze_market_structure as analyze_candle_structure
 from market_status_engine import get_market_status
 from PostMarket.daily_csv_generator import DailyCSVGenerator
@@ -107,7 +107,6 @@ LATEST_ENTRY_SCORE = None
 
 LIVE_ANALYSIS_STATE = {
     "market_analysis": {},
-    "candles_15m": [],
     "fii_dii": None,
     "liquidity_greeks": None,
     "vega_impact": None,
@@ -124,12 +123,6 @@ LIVE_ANALYSIS_STATE = {
     "option_summary": {},
     "live_5m": {},
     "live_5m_last_completed": None,
-    "one_minute_analysis": {
-        "status": "NO_DATA",
-        "direction": "WAIT",
-        "signal": "UNKNOWN",
-        "reason": "WAITING_FOR_LIVE_1M_CANDLES",
-    },
 }
 
 # ============================================================
@@ -145,7 +138,7 @@ LIVE_LAST_DECISION_TRIGGER_CANDLE = None
 VEGA_PREVIOUS_SNAPSHOTS = {}
 
 
-def _aggregate_live_1m_into_5m(candle):
+def _aggregate_minute_candle_into_5m(candle):
     """Build a completed 5-minute Sensex candle from finalized 1-minute candles."""
     global LIVE_5M_CURRENT
     global LIVE_5M_LAST_REFRESH
@@ -174,35 +167,44 @@ def _aggregate_live_1m_into_5m(candle):
             "close": candle.get("close"),
             "volume": candle.get("volume") or 0,
             "_minute_count": 1,
+            "_minute_keys": [minute.replace(second=0, microsecond=0)],
         }
         return None
 
     current_bucket = LIVE_5M_CURRENT["minute"]
+    minute_key = minute.replace(second=0, microsecond=0)
 
     if bucket_minute == current_bucket:
-        LIVE_5M_CURRENT["high"] = max(
-            LIVE_5M_CURRENT["high"],
-            candle.get("high"),
-        )
-        LIVE_5M_CURRENT["low"] = min(
-            LIVE_5M_CURRENT["low"],
-            candle.get("low"),
-        )
+        # Ignore duplicate finalized-minute callbacks.
+        if minute_key in LIVE_5M_CURRENT.get("_minute_keys", []):
+            return None
+        LIVE_5M_CURRENT["high"] = max(LIVE_5M_CURRENT["high"], candle.get("high"))
+        LIVE_5M_CURRENT["low"] = min(LIVE_5M_CURRENT["low"], candle.get("low"))
         LIVE_5M_CURRENT["close"] = candle.get("close")
         LIVE_5M_CURRENT["volume"] += candle.get("volume") or 0
         LIVE_5M_CURRENT["_minute_count"] += 1
+        LIVE_5M_CURRENT.setdefault("_minute_keys", []).append(minute_key)
         return None
 
-    # A new 5-minute bucket means the previous 5-minute candle is complete.
+    # Only accept a five-minute candle when every minute is present exactly once.
+    expected_minutes = [current_bucket + timedelta(minutes=i) for i in range(5)]
+    received_minutes = sorted(LIVE_5M_CURRENT.get("_minute_keys", []))
+    complete_ok = (
+        LIVE_5M_CURRENT.get("_minute_count") == 5
+        and received_minutes == expected_minutes
+    )
     completed = dict(LIVE_5M_CURRENT)
     completed.pop("_minute_count", None)
+    completed.pop("_minute_keys", None)
 
-    LIVE_5M_CANDLE_HISTORY.append(completed)
-
-    if len(LIVE_5M_CANDLE_HISTORY) > 500:
-        del LIVE_5M_CANDLE_HISTORY[:-500]
-
-    LIVE_5M_LAST_REFRESH = completed["minute"]
+    if complete_ok:
+        LIVE_5M_CANDLE_HISTORY.append(completed)
+        if len(LIVE_5M_CANDLE_HISTORY) > 500:
+            del LIVE_5M_CANDLE_HISTORY[:-500]
+        LIVE_5M_LAST_REFRESH = completed["minute"]
+    else:
+        print("LIVE_5M_CANDLE_REJECTED_INCOMPLETE:", current_bucket, received_minutes)
+        completed = None
 
     LIVE_5M_CURRENT = {
         "instrument_token": candle.get("instrument_token"),
@@ -215,16 +217,17 @@ def _aggregate_live_1m_into_5m(candle):
         "_minute_count": 1,
     }
 
-    print(
-        "LIVE_5M_CANDLE_COMPLETED:",
-        completed["minute"].strftime("%H:%M"),
-        "O:", completed["open"],
-        "H:", completed["high"],
-        "L:", completed["low"],
-        "C:", completed["close"],
-        "V:", completed["volume"],
-        "COUNT:", len(LIVE_5M_CANDLE_HISTORY),
-    )
+    if completed is not None:
+        print(
+            "LIVE_5M_CANDLE_COMPLETED:",
+            completed["minute"].strftime("%H:%M"),
+            "O:", completed["open"],
+            "H:", completed["high"],
+            "L:", completed["low"],
+            "C:", completed["close"],
+            "V:", completed["volume"],
+            "COUNT:", len(LIVE_5M_CANDLE_HISTORY),
+        )
 
     return completed
 
@@ -653,39 +656,18 @@ TRADE_HISTORY_STORAGE = TradeHistoryStorage()
 TRADE_HISTORY = TradeHistory()
 
 
-def _aggregate_completed_5m_to_15m(live_5m):
-    """Aggregate only complete groups of three 5-minute candles into 15m candles."""
-    grouped = {}
-    for candle in live_5m:
-        minute = candle.get("minute")
-        if minute is None:
-            continue
-        bucket = minute.replace(
-            minute=(minute.minute // 15) * 15,
-            second=0,
-            microsecond=0,
-        )
-        grouped.setdefault(bucket, []).append(candle)
-
-    result = []
-    for bucket in sorted(grouped):
-        group = sorted(grouped[bucket], key=lambda item: item.get("minute"))
-        expected = [
-            bucket,
-            bucket + timedelta(minutes=5),
-            bucket + timedelta(minutes=10),
-        ]
-        if len(group) != 3 or [item.get("minute") for item in group] != expected:
-            continue
-        result.append({
-            "date": bucket,
-            "open": float(group[0]["open"]),
-            "high": max(float(item["high"]) for item in group),
-            "low": min(float(item["low"]) for item in group),
-            "close": float(group[-1]["close"]),
-            "volume": sum(float(item.get("volume") or 0) for item in group),
-        })
-    return result
+def _analyze_five_minute_only(candles):
+    """Use only completed 5-minute candles for directional analysis."""
+    direction = get_timeframe_direction(candles)
+    alignment = "ALIGNED" if direction in {"BULLISH", "BEARISH"} else (
+        "NEUTRAL" if direction == "NEUTRAL" else "INSUFFICIENT_DATA"
+    )
+    return {
+        "status": "OK" if direction != "UNKNOWN" else "WAIT",
+        "direction_5m": direction,
+        "alignment": alignment,
+        "source_timeframe": "5minute",
+    }
 
 
 def _evaluate_live_setup_on_completed_5m(live_5m):
@@ -716,13 +698,7 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             volume_analysis = None
             print("LIVE_DECISION_VOLUME_WARNING:", repr(exc))
 
-        completed_15m = _aggregate_completed_5m_to_15m(live_5m)
-        if not completed_15m:
-            completed_15m = LIVE_ANALYSIS_STATE.get("candles_15m") or []
-        multi_timeframe = analyze_multi_timeframe(
-            candles_15m=completed_15m,
-            candles_5m=live_5m,
-        )
+        multi_timeframe = _analyze_five_minute_only(live_5m)
         LIVE_ANALYSIS_STATE.update({
             "market_analysis": market_analysis,
             "candle_structure": candle_structure,
@@ -822,9 +798,6 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             min_entry_score=float(config.MIN_ENTRY_SCORE),
             support_resistance=support_resistance,
             gap_context=None,
-            one_minute_confirmed=bool(
-                (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("entry_confirmed")
-            ),
         )
         NEARBY_CURRENT_CANDIDATE = (
             CURRENT_SETUP_DECISION.get("candidate")
@@ -855,9 +828,6 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
                     "pivot_analysis": pivot_analysis,
                     "active_trade": ACTIVE_TRADE_MANAGER.has_active_trade(),
                     "option_chain_available": bool(options),
-                    "one_minute_confirmed": bool(
-                        (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("entry_confirmed")
-                    ),
                     "risk_limit_inr": 1000,
                 })
             except Exception as agentic_dispatch_error:
@@ -898,82 +868,19 @@ def handle_finalized_candle(candle):
         "V:", candle["volume"],
     )
 
-    # Sensex index candle -> refresh 1-minute entry analysis and build live 5-minute candles.
+    # Sensex index minute-feed candle -> aggregate live 5-minute candles.
     expected_sensex_token = SENSEX_INSTRUMENT_TOKEN
     print(
-        "LIVE_1M_GATE_CHECK:",
+        "LIVE_5M_AGGREGATION_SOURCE:",
         "CALLBACK_TOKEN:", token,
         "SENSEX_STATE_TOKEN:", expected_sensex_token,
         "HISTORY_COUNT:", len(history),
     )
     if expected_sensex_token is not None and int(token) == int(expected_sensex_token):
         try:
-            # Keep 1m diagnostics isolated so they cannot block 5m aggregation.
-            if len(history) >= 2:
-                try:
-                    one_minute_pa = analyze_price_action(history[-20:])
-                    one_minute_structure = analyze_candle_structure(history[-20:])
-                    mtf = LIVE_ANALYSIS_STATE.get("multi_timeframe") or {}
-                    direction_15m = str(
-                        mtf.get("direction_15m") or mtf.get("trend_15m") or ""
-                    ).upper()
-                    direction_5m = str(
-                        mtf.get("direction_5m") or mtf.get("trend_5m") or ""
-                    ).upper()
-                    signal = str(one_minute_pa.get("signal", "UNKNOWN")).upper()
-                    if signal.startswith("BULLISH"):
-                        raw_direction = "BULLISH"
-                    elif signal.startswith("BEARISH"):
-                        raw_direction = "BEARISH"
-                    else:
-                        raw_direction = "WAIT"
-
-                    mtf_aligned = (
-                        direction_15m in {"BULLISH", "BEARISH"}
-                        and direction_15m == direction_5m
-                    )
-                    direction_matches_mtf = (
-                        mtf_aligned and raw_direction == direction_15m
-                    )
-                    # The 1-minute candle is the entry-timing check.
-                    # Once 15m and 5m agree, accept a directional 1m candle
-                    # aligned with that direction; requiring a strict breakout
-                    # of only the immediately previous candle was too restrictive.
-                    entry_confirmed = direction_matches_mtf
-                    LIVE_ANALYSIS_STATE["one_minute_analysis"] = {
-                        "status": one_minute_pa.get("status", "UNKNOWN"),
-                        "direction": raw_direction if direction_matches_mtf else "WAIT",
-                        "raw_direction": raw_direction,
-                        "signal": signal,
-                        "entry_confirmed": entry_confirmed,
-                        "reason": (
-                            "1M_DIRECTION_ALIGNED_WITH_15M_5M"
-                            if entry_confirmed
-                            else "WAITING_FOR_DIRECTIONAL_1M_CANDLE_AND_MTF_ALIGNMENT"
-                        ),
-                        "direction_15m": direction_15m or "UNKNOWN",
-                        "direction_5m": direction_5m or "UNKNOWN",
-                        "mtf_aligned": mtf_aligned,
-                        "latest_close": one_minute_pa.get("latest_close"),
-                        "previous_high": one_minute_pa.get("previous_high"),
-                        "previous_low": one_minute_pa.get("previous_low"),
-                        "structure": one_minute_structure.get("structure", "UNKNOWN"),
-                        "candle_time": candle["minute"].strftime("%Y-%m-%d %H:%M"),
-                    }
-                    print(
-                        "LIVE_1M_ENTRY_ANALYSIS:",
-                        LIVE_ANALYSIS_STATE["one_minute_analysis"],
-                    )
-                except Exception as exc:
-                    print("LIVE_1M_ANALYSIS_ERROR:", repr(exc))
-            else:
-                print(
-                    "LIVE_1M_WAITING_FOR_HISTORY:",
-                    "HISTORY_COUNT:", len(history),
-                    "REQUIRED:", 2,
-                )
-
-            completed_5m = _aggregate_live_1m_into_5m(candle)
+            # Minute candles are only the internal data source for 5-minute aggregation.
+            # No 1-minute directional analysis or entry confirmation is performed.
+            completed_5m = _aggregate_minute_candle_into_5m(candle)
 
             # Keep the currently forming 5-minute candle visible to the dashboard.
             # Analysis below still refreshes only after a 5-minute candle completes.
@@ -989,7 +896,7 @@ def handle_finalized_candle(candle):
                 )
                 LIVE_ANALYSIS_STATE["live_5m"] = live_5m_snapshot
 
-            # Do NOT refresh 5-minute analysis on every 1-minute candle.
+            # Keep 5-minute analysis independent of intermediate minute-feed updates.
             # Refresh only when a 5-minute candle is complete.
             if completed_5m is not None:
                 LIVE_ANALYSIS_STATE["live_5m_last_completed"] = (
@@ -1050,14 +957,11 @@ def handle_finalized_candle(candle):
                         completed_5m["minute"].strftime("%H:%M"),
                     )
 
-            # Re-evaluate the existing 15m/5m setup on EVERY finalized 1m
-            # candle. 1m is a trigger/observation only; it is not a mandatory
-            # confirmation gate. The 15m/5m analyses refresh only on a completed
-            # 5m candle, so this cannot accidentally promote a forming 5m candle.
-            decision_candle_time = candle["minute"].isoformat()
-            if decision_candle_time != LIVE_LAST_DECISION_TRIGGER_CANDLE:
-                LIVE_LAST_DECISION_TRIGGER_CANDLE = decision_candle_time
-                _evaluate_live_setup_on_completed_5m(list(LIVE_5M_CANDLE_HISTORY))
+                # Make a new decision only once per completed 5-minute candle.
+                decision_candle_time = completed_5m["minute"].isoformat()
+                if decision_candle_time != LIVE_LAST_DECISION_TRIGGER_CANDLE:
+                    LIVE_LAST_DECISION_TRIGGER_CANDLE = decision_candle_time
+                    _evaluate_live_setup_on_completed_5m(list(LIVE_5M_CANDLE_HISTORY))
 
         except Exception as exc:
             print("LIVE_5M_ANALYSIS_REFRESH_ERROR:", repr(exc))
@@ -1386,15 +1290,6 @@ def _live_dashboard_updater(
                 ] if "TRADE_HISTORY" in globals() else [],
                 "market_analysis": dashboard_analysis["market_analysis"],
                 "multi_timeframe": dashboard_analysis["multi_timeframe"],
-                "one_minute_analysis": LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {},
-                "one_minute_direction": (
-                    (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("direction")
-                    or "WAIT"
-                ),
-                "entry_direction": (
-                    (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("direction")
-                    or "WAIT"
-                ),
                 "candle_structure": dashboard_analysis["candle_structure"],
                 "support_resistance": dashboard_analysis["support_resistance"],
                 "price_action": dashboard_analysis["price_action"],
@@ -1590,7 +1485,7 @@ def _build_confluence_component_scores(
         pass
 
     # Vega/Delta is a supporting option-premium confirmation only.
-    # The existing 15m/5m market direction remains the primary decision input.
+    # The 5-minute market direction is the primary decision input.
     vega_confirmation_score = None
     vega_context = vega_impact_analysis or {}
     if market in {"UP", "DOWN"}:
@@ -2056,39 +1951,9 @@ def main():
     print("HISTORICAL_FETCH_OK")
     print("CANDLE_COUNT:", len(candles))
 
-    # Seed the Sensex 1-minute history from Kite historical candles.
-    # The live WebSocket then appends each finalized minute, so 1M analysis
-    # does not have to wait for two new live candles after every restart.
+    # Seed completed historical 5-minute candles as context.
+    # Trade registration still waits for a newly completed live 5-minute candle.
     try:
-        one_minute_candles = fetch_historical_data(
-            kite=kite,
-            instrument_token=token,
-            from_date=from_date,
-            to_date=to_date,
-            interval="minute",
-        )
-        current_minute_key = datetime.now().strftime("%Y-%m-%d %H:%M")
-        seeded_history = []
-        for item in one_minute_candles or []:
-            candle_date = item.get("date")
-            if candle_date is None:
-                continue
-            candle_minute_key = candle_date.strftime("%Y-%m-%d %H:%M")
-            # Do not seed the currently forming minute; the WebSocket owns it.
-            if candle_minute_key >= current_minute_key:
-                continue
-            seeded_history.append({
-                "instrument_token": token,
-                "minute": candle_date.replace(second=0, microsecond=0),
-                "open": float(item["open"]),
-                "high": float(item["high"]),
-                "low": float(item["low"]),
-                "close": float(item["close"]),
-                "volume": item.get("volume"),
-            })
-        CANDLE_HISTORY[token] = seeded_history[-500:]
-        # Seed completed historical 5m candles as context; trade registration
-        # still waits for a newly completed live WebSocket 5m candle.
         seeded_5m = []
         for item in candles or []:
             candle_date = item.get("date") or item.get("minute")
@@ -2116,18 +1981,10 @@ def main():
             except (KeyError, TypeError, ValueError):
                 continue
         LIVE_5M_CANDLE_HISTORY[:] = seeded_5m[-500:]
+        CANDLE_HISTORY.setdefault(token, [])
         print("LIVE_5M_HISTORY_SEEDED:", len(LIVE_5M_CANDLE_HISTORY))
-        print(
-            "SENSEX_1M_HISTORY_SEEDED:",
-            "FETCHED:", len(one_minute_candles or []),
-            "STORED:", len(CANDLE_HISTORY[token]),
-            "LATEST:", (
-                CANDLE_HISTORY[token][-1]["minute"].strftime("%Y-%m-%d %H:%M")
-                if CANDLE_HISTORY[token] else None
-            ),
-        )
     except Exception as exc:
-        print("SENSEX_1M_HISTORY_SEED_ERROR:", repr(exc))
+        print("LIVE_5M_HISTORY_SEED_ERROR:", repr(exc))
         CANDLE_HISTORY.setdefault(token, [])
 
     # Analyze Sensex market structure from historical candles
@@ -2151,27 +2008,13 @@ def main():
     print("RISK_MANAGER_SKIPPED: Requires option-premium entry and stop-loss values.")
 
 
-    # Fetch 15-minute candles for multi-timeframe comparison
-    candles_15m = fetch_historical_data(
-        kite=kite,
-        instrument_token=token,
-        from_date=from_date,
-        to_date=to_date,
-        interval="15minute",
-    )
-
-    print("15M_CANDLE_COUNT:", len(candles_15m))
-
-    multi_timeframe = analyze_multi_timeframe(
-        candles_15m=candles_15m,
-        candles_5m=candles,
-    )
+    # Directional decision uses only the 5-minute timeframe.
+    multi_timeframe = _analyze_five_minute_only(candles)
     LIVE_ANALYSIS_STATE["multi_timeframe"] = multi_timeframe
-    LIVE_ANALYSIS_STATE["candles_15m"] = list(candles_15m or [])
     LIVE_ANALYSIS_STATE["market_analysis"] = market_analysis
     LIVE_ANALYSIS_STATE["candle_structure"] = candle_structure
     LIVE_ANALYSIS_STATE["support_resistance"] = support_resistance
-    print("MULTI_TIMEFRAME_ANALYSIS:", multi_timeframe)
+    print("FIVE_MINUTE_ONLY_ANALYSIS:", multi_timeframe)
     # Analyze historical price action and volume
     price_action = analyze_price_action(candles)
     print("PRICE_ACTION_ANALYSIS:", price_action)
@@ -2616,9 +2459,6 @@ def main():
             min_entry_score=float(config.MIN_ENTRY_SCORE),
             support_resistance=support_resistance,
             gap_context=None,
-            one_minute_confirmed=bool(
-                (LIVE_ANALYSIS_STATE.get("one_minute_analysis") or {}).get("entry_confirmed")
-            ),
         )
         NEARBY_CURRENT_CANDIDATE = (
             CURRENT_SETUP_DECISION.get("candidate")

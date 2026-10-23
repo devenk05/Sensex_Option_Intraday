@@ -10,12 +10,12 @@ TIMEZONE = "Asia/Kolkata"
 
 # Market session
 TRADING_START = time(9, 10)
-TRADING_END = time(15, 40)
+TRADING_END = time(15, 30)
 NO_NEW_RECOMMENDATIONS_AFTER = time(15, 30)
 
 # Analysis timeframes
 ANALYSIS_TIMEFRAME = "5minute"
-ENTRY_TIMEFRAME = "1minute"
+ENTRY_TIMEFRAME = "5minute"  # Decision timeframe; raw 1m feed is only aggregated into 5m candles.
 MONITORING_INTERVAL_SECONDS = 60
 
 # Entry confirmation

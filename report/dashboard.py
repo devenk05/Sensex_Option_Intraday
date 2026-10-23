@@ -1252,7 +1252,7 @@ td {{
 
         <div class="page-title">
             <h1>Sensex Option Intraday</h1>
-            <p>AI-powered multi-timeframe market intelligence</p>
+            <p>AI-powered 5-minute market intelligence</p>
         </div>
 
         <div class="live-status">
@@ -1362,49 +1362,24 @@ td {{
 <!-- ===================================================== -->
     
     <!-- ===================================================== -->
-    <!-- MULTI TIMEFRAME -->
-    <!-- ===================================================== -->
-
+    <!-- 5-minute-only market analysis -->
+    
     <section class="section">
-
         <div class="section-title">
-            <h2>Multi-Timeframe Analysis</h2>
-            <span>15M → 5M → 1M</span>
+            <h2>5-Minute Analysis</h2>
+            <span>Primary decision timeframe</span>
         </div>
-
         <div class="analysis-grid">
-
             {_analysis_card(
-                "15 MIN ANALYSIS",
-                multi_timeframe.get("direction_15m")
-                or multi_timeframe.get("trend_15m")
-                or market_bias,
-                multi_timeframe,
-            )}
-
-            {_analysis_card(
-                "5 MIN CONFIRMATION",
+                "5 MIN ANALYSIS",
                 multi_timeframe.get("direction_5m")
                 or multi_timeframe.get("trend_5m")
                 or market_bias,
                 multi_timeframe,
             )}
-
-            {_analysis_card(
-                "1 MIN ENTRY",
-                data.get("one_minute_direction")
-                or data.get("entry_direction")
-                or "WAIT",
-                _dict(data.get("one_minute_analysis")),
-            )}
-
         </div>
-
     </section>
 
-
-    <!-- ===================================================== -->
-    <!-- ===================================================== -->
     <!-- SENSEX 30 -->
       <!-- MARKET INTELLIGENCE -->
     <!-- ===================================================== -->
