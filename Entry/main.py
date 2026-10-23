@@ -422,10 +422,11 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
     except (TypeError, ValueError):
         score = None
 
-    now = datetime.now().astimezone().isoformat()
+    now_dt = datetime.now(ZoneInfo("Asia/Kolkata"))
+    now = now_dt.isoformat()
 
     trade = {
-        "trade_id": f"{symbol}_{token}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "trade_id": f"{symbol}_{token}_{now_dt.strftime('%Y%m%d%H%M%S')}",
         "status": "ACTIVE",
         "action": f"BUY_{direction}",
         "direction": direction,
@@ -1810,7 +1811,7 @@ def _generate_live_dashboard(
     live_sensex30_path.write_text(
         json.dumps(
             {
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S"),
                 "stocks": sensex30_rows,
             },
             ensure_ascii=False,
@@ -2078,7 +2079,7 @@ def main():
     print("SENSEX30_INSTRUMENT_COUNT:", len(sensex30_instruments))
     print("SENSEX30_TOKENS:", sensex30_tokens)
 
-    to_date = datetime.now()
+    to_date = datetime.now(ZoneInfo("Asia/Kolkata"))
     from_date = to_date - timedelta(days=5)
 
     candles = fetch_historical_data(
