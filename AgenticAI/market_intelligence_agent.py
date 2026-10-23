@@ -14,7 +14,9 @@ def run(context):
         "candle_structure": first_present(structure, "trend", "structure", "direction", default="UNKNOWN"),
         "multi_timeframe": {
             "status": first_present(mtf, "status", default="UNKNOWN"),
-            "direction": first_present(mtf, "direction", "trend", "bias", default="UNKNOWN"),
+            # The live contract is 5-minute-only; prefer the canonical field.
+            "direction_5m": first_present(mtf, "direction_5m", "direction", "trend", "bias", default="UNKNOWN"),
+            "direction": first_present(mtf, "direction_5m", "direction", "trend", "bias", default="UNKNOWN"),
         },
         "cepe_status": first_present(cepe, "status", default="UNKNOWN"),
         "candidate_direction": first_present(cepe, "candidate_direction", "direction", default="UNKNOWN"),
