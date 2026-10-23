@@ -5,7 +5,7 @@ from pathlib import Path
 import ast
 import py_compile
 
-ROOT = Path(r"D:\Sensex_Option_Intraday")
+ROOT = Path(__file__).resolve().parent
 ENTRY = ROOT / "Entry"
 MAIN = ENTRY / "main.py"
 ENGINE = ENTRY / "nearby_strike_reversal_engine.py"
