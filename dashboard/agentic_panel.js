@@ -127,13 +127,20 @@
 
     async function refreshReview() {
         try {
-            const response = await fetch("agentic_review.json?ts=" + Date.now(), { cache: "no-store" });
+            const [response, liveResponse] = await Promise.all([
+                fetch("agentic_review.json?ts=" + Date.now(), { cache: "no-store" }),
+                fetch("live_state.json?ts=" + Date.now(), { cache: "no-store" }).catch(() => null)
+            ]);
             if (!response.ok) {
                 statusPill(response.status === 404 ? "WAITING FOR REVIEW" : "SNAPSHOT UNAVAILABLE");
                 text("jarvis-explanation", "Dashboard snapshot is not available yet. Confirm the trading engine is running and has dispatched an Agentic AI review.");
                 return;
             }
             const review = await response.json();
+            let liveState = {};
+            if (liveResponse && liveResponse.ok) {
+                try { liveState = await liveResponse.json(); } catch (_) { liveState = {}; }
+            }
             const market = review.market_intelligence || {};
             const mtf = market.multi_timeframe || {};
             const audit = review.decision_audit || {};
@@ -141,10 +148,28 @@
             const explanation = review.explanation || {};
             const llm = review.local_llm || {};
 
-            statusPill(audit.decision_status || review.mode || "REVIEW READY");
-            text("jarvis-decision", audit.decision_status, "UNKNOWN");
-            text("jarvis-score", "Score: " + (audit.entry_score ?? "—") + " / " + (audit.minimum_score ?? 80));
-            text("jarvis-candidate", "Candidate: " + (market.candidate_direction ?? (audit.candidate_present ? "PRESENT" : "—")));
+            // The main trading engine score is authoritative. JARVIS is advisory;
+            // its separate review score must never override the live eligibility gate.
+            const canonicalScore = liveState.entry_score !== null
+                && liveState.entry_score !== undefined
+                && Number.isFinite(Number(liveState.entry_score))
+                ? Number(liveState.entry_score) : null;
+            const minimumScore = Number(audit.minimum_score ?? 80);
+            const reportedDecision = String(audit.decision_status || review.mode || "REVIEW READY").toUpperCase();
+            const reportsCandidate = ["TRADE_CANDIDATE", "BUY_CALL", "BUY_PUT", "CONFIRMED"].includes(reportedDecision);
+            const scoreGateBlocked = reportsCandidate
+                && (canonicalScore === null || canonicalScore < minimumScore);
+            const displayDecision = scoreGateBlocked ? "WAIT — SCORE GATE" : reportedDecision;
+            statusPill(scoreGateBlocked ? "WAIT" : reportedDecision);
+            text("jarvis-decision", displayDecision, "UNKNOWN");
+            text("jarvis-score", canonicalScore === null
+                ? "Official score: unavailable · JARVIS review: " + (audit.entry_score ?? "—") + " / " + minimumScore
+                : "Official score: " + canonicalScore.toFixed(2) + " / " + minimumScore);
+            text("jarvis-candidate", scoreGateBlocked
+                ? (canonicalScore === null
+                    ? "Candidate blocked: official live score unavailable"
+                    : "Candidate rejected: score " + canonicalScore.toFixed(2) + " is below " + minimumScore)
+                : "Candidate: " + (market.candidate_direction ?? (audit.candidate_present ? "PRESENT" : "—")));
             text("jarvis-trend", "Trend: " + (market.market_trend ?? "UNKNOWN"));
             text("jarvis-mtf", "MTF: " + (mtf.direction ?? "UNKNOWN") + " · " + (mtf.status ?? "UNKNOWN"));
             text("jarvis-pa", "Price action: " + (market.price_action ?? "UNKNOWN"));
