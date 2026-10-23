@@ -66,7 +66,8 @@ def signal_direction(row: dict[str, str], strategy: str) -> str | None:
         score = number(row, "score")
     except ValueError:
         return None
-    if score < number(row, "min_score") if row.get("min_score", "").strip() else score < 80:
+    minimum = number(row, "min_score") if row.get("min_score", "").strip() else 80.0
+    if score < minimum:
         return None
     return DIRECTIONS[five]
 
