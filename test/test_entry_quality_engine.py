@@ -58,6 +58,21 @@ class TestEntryQualityEngine(unittest.TestCase):
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(result["option_side"], "CE")
 
+    def test_both_option_premiums_rising_is_not_directional_confirmation(self):
+        result = evaluate_directional_confluence(
+            market_direction="BULLISH",
+            price_action_signal="BULLISH_BREAKOUT",
+            volume_ratio=1.5,
+            ce_change_percent=2.0,
+            pe_change_percent=0.5,
+            reversal_signal="BULLISH_ENGULFING",
+        )
+        self.assertEqual(result["status"], "WAIT")
+        self.assertEqual(
+            result["reason"],
+            "CE_PE_PREMIUMS_NOT_MOVING_IN_OPPOSITE_CONFIRMED_DIRECTIONS",
+        )
+
     def test_missing_or_conflicting_evidence_waits(self):
         base = dict(
             market_direction="BEARISH",
@@ -69,7 +84,7 @@ class TestEntryQualityEngine(unittest.TestCase):
         )
         result = evaluate_directional_confluence(**base)
         self.assertEqual(result["status"], "WAIT")
-        self.assertEqual(result["reason"], "CE_PE_PREMIUM_DIRECTION_NOT_ALIGNED")
+        self.assertEqual(result["reason"], "CE_PE_PREMIUMS_NOT_MOVING_IN_OPPOSITE_CONFIRMED_DIRECTIONS")
         base["ce_change_percent"] = None
         self.assertEqual(evaluate_directional_confluence(**base)["status"], "WAIT")
 
