@@ -27,7 +27,7 @@ One row per completed 5-minute candle. Required headers:
 ## Run
 
 ```powershell
-python -m unittest tests.test_timeframe_replay -v
+python -m unittest discover -s tests -p test_timeframe_replay.py -v
 python tools/timeframe_replay.py path\to\historical_5m_replay.csv --lookahead 12 --out reports\5m_replay_results.json
 ```
 
