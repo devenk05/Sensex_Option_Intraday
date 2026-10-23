@@ -1341,6 +1341,9 @@ def _live_dashboard_updater(
             if live_spot is None:
                 live_spot = option_data.get("spot")
 
+            # Refresh exchange-session status every dashboard cycle; do not reuse startup status.
+            current_market_status = get_market_status()
+
             # 1. Build consolidated live state for frontend.
             dashboard_data = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1350,12 +1353,8 @@ def _live_dashboard_updater(
                 "live_sensex": dict(LIVE_SENSEX_TICK_STATE),
                 "spot": live_spot,
                 "sensex_price": live_spot,
-                "status": (
-                    market_status.get("status", "UNKNOWN")
-                    if isinstance(market_status, dict)
-                    else str(market_status)
-                ),
-                "market_status": market_status,
+                "status": current_market_status.get("status", "UNKNOWN"),
+                "market_status": current_market_status,
                 "market_bias": market_bias,
                 "atm_strike": option_data.get("atm_strike"),
                 "expiry": option_data.get("expiry"),
