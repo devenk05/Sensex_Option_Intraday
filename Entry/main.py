@@ -167,35 +167,44 @@ def _aggregate_minute_candle_into_5m(candle):
             "close": candle.get("close"),
             "volume": candle.get("volume") or 0,
             "_minute_count": 1,
+            "_minute_keys": [minute.replace(second=0, microsecond=0)],
         }
         return None
 
     current_bucket = LIVE_5M_CURRENT["minute"]
+    minute_key = minute.replace(second=0, microsecond=0)
 
     if bucket_minute == current_bucket:
-        LIVE_5M_CURRENT["high"] = max(
-            LIVE_5M_CURRENT["high"],
-            candle.get("high"),
-        )
-        LIVE_5M_CURRENT["low"] = min(
-            LIVE_5M_CURRENT["low"],
-            candle.get("low"),
-        )
+        # Ignore duplicate finalized-minute callbacks.
+        if minute_key in LIVE_5M_CURRENT.get("_minute_keys", []):
+            return None
+        LIVE_5M_CURRENT["high"] = max(LIVE_5M_CURRENT["high"], candle.get("high"))
+        LIVE_5M_CURRENT["low"] = min(LIVE_5M_CURRENT["low"], candle.get("low"))
         LIVE_5M_CURRENT["close"] = candle.get("close")
         LIVE_5M_CURRENT["volume"] += candle.get("volume") or 0
         LIVE_5M_CURRENT["_minute_count"] += 1
+        LIVE_5M_CURRENT.setdefault("_minute_keys", []).append(minute_key)
         return None
 
-    # A new 5-minute bucket means the previous 5-minute candle is complete.
+    # Only accept a five-minute candle when every minute is present exactly once.
+    expected_minutes = [current_bucket + timedelta(minutes=i) for i in range(5)]
+    received_minutes = sorted(LIVE_5M_CURRENT.get("_minute_keys", []))
+    complete_ok = (
+        LIVE_5M_CURRENT.get("_minute_count") == 5
+        and received_minutes == expected_minutes
+    )
     completed = dict(LIVE_5M_CURRENT)
     completed.pop("_minute_count", None)
+    completed.pop("_minute_keys", None)
 
-    LIVE_5M_CANDLE_HISTORY.append(completed)
-
-    if len(LIVE_5M_CANDLE_HISTORY) > 500:
-        del LIVE_5M_CANDLE_HISTORY[:-500]
-
-    LIVE_5M_LAST_REFRESH = completed["minute"]
+    if complete_ok:
+        LIVE_5M_CANDLE_HISTORY.append(completed)
+        if len(LIVE_5M_CANDLE_HISTORY) > 500:
+            del LIVE_5M_CANDLE_HISTORY[:-500]
+        LIVE_5M_LAST_REFRESH = completed["minute"]
+    else:
+        print("LIVE_5M_CANDLE_REJECTED_INCOMPLETE:", current_bucket, received_minutes)
+        completed = None
 
     LIVE_5M_CURRENT = {
         "instrument_token": candle.get("instrument_token"),
@@ -208,16 +217,17 @@ def _aggregate_minute_candle_into_5m(candle):
         "_minute_count": 1,
     }
 
-    print(
-        "LIVE_5M_CANDLE_COMPLETED:",
-        completed["minute"].strftime("%H:%M"),
-        "O:", completed["open"],
-        "H:", completed["high"],
-        "L:", completed["low"],
-        "C:", completed["close"],
-        "V:", completed["volume"],
-        "COUNT:", len(LIVE_5M_CANDLE_HISTORY),
-    )
+    if completed is not None:
+        print(
+            "LIVE_5M_CANDLE_COMPLETED:",
+            completed["minute"].strftime("%H:%M"),
+            "O:", completed["open"],
+            "H:", completed["high"],
+            "L:", completed["low"],
+            "C:", completed["close"],
+            "V:", completed["volume"],
+            "COUNT:", len(LIVE_5M_CANDLE_HISTORY),
+        )
 
     return completed
 
