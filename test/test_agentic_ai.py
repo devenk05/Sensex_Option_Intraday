@@ -29,6 +29,24 @@ class AgenticAITests(unittest.TestCase):
         self.assertFalse(review["risk_review"]["broker_orders_enabled"])
         self.assertTrue(review["risk_review"]["recommendation_only"])
 
+    def test_top_level_candidate_contract_is_not_flagged_as_missing(self):
+        review = build_review({
+            "decision": {
+                "status": "TRADE_CANDIDATE",
+                "direction": "CE",
+                "action": "BUY_CE",
+                "entry_score": 88,
+            },
+            "entry_score": 88,
+            "minimum_score": 80,
+            "option_chain_available": True,
+        })
+        self.assertTrue(review["decision_audit"]["candidate_present"])
+        self.assertNotIn(
+            "TRADE_CANDIDATE_STATUS_WITHOUT_CANDIDATE_OBJECT",
+            review["decision_audit"]["diagnostic_flags"],
+        )
+
     def test_below_minimum_score_is_flagged(self):
         review = build_review({
             "decision": {"status": "WAIT"},
