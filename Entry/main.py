@@ -1960,10 +1960,21 @@ def main():
             if candle_date is None:
                 continue
             try:
+                # Kite historical timestamps may be timezone-aware (IST), while
+                # datetime.now() without a timezone is naive. Normalize both
+                # timestamps to IST before comparing them.
+                ist = ZoneInfo("Asia/Kolkata")
+                if isinstance(candle_date, str):
+                    candle_date = datetime.fromisoformat(candle_date)
+                if candle_date.tzinfo is None:
+                    candle_date = candle_date.replace(tzinfo=ist)
+                else:
+                    candle_date = candle_date.astimezone(ist)
+
                 candle_minute = candle_date.replace(second=0, microsecond=0)
                 if candle_minute.minute % 5 != 0:
                     continue
-                now_minute = datetime.now().replace(second=0, microsecond=0)
+                now_minute = datetime.now(ist).replace(second=0, microsecond=0)
                 current_bucket = now_minute.replace(
                     minute=(now_minute.minute // 5) * 5
                 )
