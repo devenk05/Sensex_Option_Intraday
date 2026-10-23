@@ -1,5 +1,6 @@
 
 from typing import Any
+import math
 
 
 def analyze_oi_data(
@@ -30,8 +31,8 @@ def analyze_oi_data(
         option_type = str(option["option_type"]).upper()
         oi = float(option["oi"])
 
-        if oi < 0:
-            raise ValueError(f"Option {index} has negative OI.")
+        if not math.isfinite(oi) or oi < 0:
+            raise ValueError(f"Option {index} has invalid OI.")
 
         if option_type == "CE":
             call_oi += oi
