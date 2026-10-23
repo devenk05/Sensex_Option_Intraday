@@ -598,7 +598,7 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
     return True
 
 
-def _close_active_trade_from_exit(signal: dict) -> None:
+def _close_active_trade_from_exit(signal: dict) -> bool:
     """Close active recommendation after confirmed SL/target exit."""
     global LIVE_FINALIZED
     global CURRENT_SETUP_DECISION
@@ -608,7 +608,7 @@ def _close_active_trade_from_exit(signal: dict) -> None:
 
     if not isinstance(active, dict):
         print("TRADE_EXIT_LIFECYCLE_IGNORED: No active trade.")
-        return
+        return True
 
     close_reason = str(signal.get("reason") or "EXIT")
     exit_price = signal.get("current_option_price")
@@ -676,9 +676,11 @@ def _close_active_trade_from_exit(signal: dict) -> None:
             },
         )
         print("ACTIVE_TRADE_LOCK_RELEASED: New setup search enabled.")
+        return True
 
     except Exception as exc:
         print("TRADE_CLOSE_LIFECYCLE_ERROR:", exc)
+        return False
 
 TRADE_HISTORY_STORAGE = TradeHistoryStorage()
 TRADE_HISTORY = TradeHistory()
@@ -1973,15 +1975,6 @@ def main():
     trade_monitor = TradeMonitor(ACTIVE_TRADE_MANAGER)
     print("ACTIVE_TRADE_STATUS:", trade_monitor.get_status())
 
-    # Start daily reporting only after closed history and recovery are initialized.
-    daily_report_thread = Thread(
-        target=daily_report_loop.run_forever,
-        name="daily-report-loop",
-        daemon=True,
-    )
-    daily_report_thread.start()
-    print("DAILY_REPORT_LOOP_STARTED")
-
     def get_trade_ltp(trade):
         symbol = trade.get("tradingsymbol")
         if not symbol:
@@ -2025,9 +2018,9 @@ def main():
             print("TRADE_EXIT_ALERT_DUPLICATE:", signal)
             return
 
-        # Close/persist lifecycle first so the active-trade lock is released
-        # immediately after the confirmed exit signal.
-        _close_active_trade_from_exit(signal)
+        # Persistence failure must propagate so the exit monitor retries the callback.
+        if not _close_active_trade_from_exit(signal):
+            raise RuntimeError("Trade close persistence failed; exit callback retry required.")
 
         result = EXIT_ALERT_INTEGRATION.on_exit_signal(signal)
         EXIT_ALERT_STATUS.update(
@@ -2702,6 +2695,15 @@ def main():
     )
     dashboard_thread.start()
     print("LIVE_DASHBOARD_UPDATER_STARTED: 1s")
+
+    # Start daily reporting only after history, recovery, monitoring and dashboard setup.
+    daily_report_thread = Thread(
+        target=daily_report_loop.run_forever,
+        name="daily-report-loop",
+        daemon=True,
+    )
+    daily_report_thread.start()
+    print("DAILY_REPORT_LOOP_STARTED")
 
     if selected_tokens:
         start_live_option_feed(
