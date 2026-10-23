@@ -1,4 +1,5 @@
 """Explain visible decision-state inconsistencies without overriding the decision."""
+import math
 from .agent_utils import as_dict, first_present
 
 
@@ -6,15 +7,29 @@ def run(context):
     decision = as_dict(context.get("decision"))
     status = str(first_present(decision, "status", "decision", "action", default="UNKNOWN")).upper()
     candidate = as_dict(decision.get("candidate"))
+    direction = str(decision.get("direction") or "").strip().upper()
+    action = str(decision.get("action") or "").strip().upper()
+    # The canonical locked flow represents a candidate with top-level status,
+    # direction and action; it does not require a nested candidate object.
+    top_level_candidate = (
+        status == "TRADE_CANDIDATE"
+        and direction in {"CE", "PE"}
+        and action == f"BUY_{direction}"
+    )
+    candidate_present = bool(candidate) or top_level_candidate
     score = context.get("entry_score")
     try:
         score_value = float(score) if score is not None else None
-    except (TypeError, ValueError):
+        if score_value is not None and not math.isfinite(score_value):
+            score_value = None
+    except (TypeError, ValueError, OverflowError):
         score_value = None
     minimum = context.get("minimum_score", 80)
     try:
         minimum_value = float(minimum)
-    except (TypeError, ValueError):
+        if not math.isfinite(minimum_value):
+            minimum_value = 80.0
+    except (TypeError, ValueError, OverflowError):
         minimum_value = 80.0
 
     reasons = []
@@ -24,7 +39,7 @@ def run(context):
         reasons.append("SCORE_BELOW_MINIMUM")
     elif status in {"WAIT", "NO_TRADE", "SKIP", "REJECTED"}:
         reasons.append("SCORE_PASSES_BUT_DECISION_WAITS: inspect confirmation, veto, data freshness and decision stages")
-    if not candidate and status == "TRADE_CANDIDATE":
+    if not candidate_present and status == "TRADE_CANDIDATE":
         reasons.append("TRADE_CANDIDATE_STATUS_WITHOUT_CANDIDATE_OBJECT")
     if context.get("option_chain_available") is False:
         reasons.append("OPTION_CHAIN_UNAVAILABLE")
@@ -36,7 +51,7 @@ def run(context):
         "decision_status": status,
         "entry_score": score_value,
         "minimum_score": minimum_value,
-        "candidate_present": bool(candidate),
+        "candidate_present": candidate_present,
         "diagnostic_flags": reasons or ["NO_BASIC_INCONSISTENCY_DETECTED"],
         "note": "Flags are diagnostic hints, not proof of a bug and never force an entry.",
     }
