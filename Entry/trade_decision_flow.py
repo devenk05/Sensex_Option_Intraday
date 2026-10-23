@@ -50,54 +50,26 @@ def derive_market_bias(
     multi_timeframe: dict[str, Any],
     candle_structure: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    direction_15m = _normalise(
-        multi_timeframe.get("direction_15m")
-    )
-    direction_5m = _normalise(
-        multi_timeframe.get("direction_5m")
-    )
-    alignment = _normalise(
-        multi_timeframe.get("alignment")
-    )
-    structure = _normalise(
-        (candle_structure or {}).get("structure")
-    )
+    direction_5m = _normalise(multi_timeframe.get("direction_5m"))
+    structure = _normalise((candle_structure or {}).get("structure"))
 
-    if (
-        alignment == "ALIGNED"
-        and direction_15m in {"BULLISH", "BEARISH"}
-        and direction_5m == direction_15m
-    ):
-        bias = direction_15m
-        reason = "15M_AND_5M_ALIGNED"
-    elif (
-        direction_15m in {"BULLISH", "BEARISH"}
-        and direction_5m in {"BULLISH", "BEARISH"}
-        and direction_15m != direction_5m
-    ):
-        # Explicit 15m/5m disagreement must not be overridden by candle
-        # structure; wait until the two required timeframes agree again.
-        bias = "NEUTRAL"
-        reason = "TIMEFRAME_DIRECTION_CONFLICT"
+    if direction_5m in {"BULLISH", "BEARISH"}:
+        bias = direction_5m
+        reason = "5M_DIRECTION_CONFIRMED"
     elif structure in {"BULLISH", "BEARISH"}:
         bias = structure
-        reason = "STRUCTURE_FALLBACK"
+        reason = "5M_DIRECTION_UNAVAILABLE_STRUCTURE_FALLBACK"
     else:
         bias = "NEUTRAL"
-        reason = "TIMEFRAME_NOT_CONFIRMED"
+        reason = "5M_DIRECTION_NOT_CONFIRMED"
 
     return {
         "stage": "MARKET_BIAS",
-        "status": (
-            "CONFIRMED"
-            if bias in {"BULLISH", "BEARISH"}
-            else "NOT_CONFIRMED"
-        ),
+        "status": "CONFIRMED" if bias in {"BULLISH", "BEARISH"} else "NOT_CONFIRMED",
         "bias": bias,
         "reason": reason,
-        "direction_15m": direction_15m,
         "direction_5m": direction_5m,
-        "alignment": alignment,
+        "source_timeframe": "5minute",
         "structure": structure,
     }
 
@@ -601,7 +573,6 @@ def run_locked_decision_flow(
     min_entry_score: float = 80.0,
     support_resistance: dict[str, Any] | None = None,
     gap_context: dict[str, Any] | None = None,
-    one_minute_confirmed: bool = False,
 ) -> dict[str, Any]:
 
     stages: list[dict[str, Any]] = []
@@ -690,27 +661,12 @@ def run_locked_decision_flow(
             direction=direction,
         )
 
-    # 1-minute confirmation is observational only; it must not block entry.
-    # Keep its state visible in the decision stages for dashboard/debugging.
-    stages.append(
-        {
-            "stage": "ONE_MINUTE_OBSERVATION",
-            "status": "CONFIRMED" if one_minute_confirmed else "SKIPPED_OPTIONAL",
-            "required": False,
-            "reason": (
-                "1M_DIRECTION_CONFIRMED"
-                if one_minute_confirmed
-                else "1M_OPTIONAL_NOT_BLOCKING_ENTRY"
-            ),
-        }
-    )
-
     if entry_score is None:
         return {
             "status": "READY_FOR_FINAL_SCORE",
             "action": None,
             "direction": direction,
-            "reason": "ENTRY_SCORE_PENDING_1M_OPTIONAL",
+            "reason": "ENTRY_SCORE_PENDING",
             "entry_score": None,
             "stages": stages,
             "flow_order": [
@@ -719,7 +675,6 @@ def run_locked_decision_flow(
                 "CE_PE_COMPARISON",
                 "PIVOT_SR_LOCATION",
                 "REVERSAL_CONTINUATION",
-                "ONE_MINUTE_OBSERVATION_OPTIONAL",
                 "FINAL_SCORE",
                 "TRADE_WAIT",
             ],
