@@ -762,6 +762,7 @@ td {
             <span class="live-dot"></span>
             LIVE ENGINE
             <span class="status-badge neutral">CHECKING SESSION</span>
+            <span id="data-freshness-status" class="status-badge neutral">CHECKING 5M DATA</span>
         </div>
 
     </div>
@@ -2008,6 +2009,13 @@ async function updateDashboardLive() {
         updateOptionChainLive(data);
         updateActiveTradeLive(data);
         updateClosedTradeHistory(data);
+
+        const freshness = document.getElementById("data-freshness-status");
+        if (freshness) {
+            const stale = data.live_5m_stale === true;
+            freshness.textContent = stale ? "STALE 5M DATA" : "5M DATA FRESH";
+            freshness.className = "status-badge " + (stale ? "warning" : "success");
+        }
 
         const spotElement = document.querySelector(
             ".sensex-spot-card .metric-value"
