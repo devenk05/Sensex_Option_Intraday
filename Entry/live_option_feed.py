@@ -244,10 +244,10 @@ def start_live_option_feed(kite, instrument_tokens, on_candle=None, sensex30_tok
                 "bid_quantity": _safe_number(best_bid_level.get("quantity")),
                 "ask_quantity": _safe_number(best_ask_level.get("quantity")),
                 "total_bid_quantity": sum(
-                    float(level.get("quantity") or 0) for level in buy_levels
+                    _safe_number(level.get("quantity")) or 0 for level in buy_levels
                 ),
                 "total_ask_quantity": sum(
-                    float(level.get("quantity") or 0) for level in sell_levels
+                    _safe_number(level.get("quantity")) or 0 for level in sell_levels
                 ),
                 "depth_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
