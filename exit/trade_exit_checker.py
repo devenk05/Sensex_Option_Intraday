@@ -1,4 +1,5 @@
 from typing import Any, Dict
+import math
 
 
 class TradeExitChecker:
@@ -20,7 +21,11 @@ class TradeExitChecker:
                 "reason": "Trade data must be a dictionary.",
             }
 
-        if current_option_price <= 0:
+        try:
+            current_option_price = float(current_option_price)
+        except (TypeError, ValueError, OverflowError):
+            return {"status": "ERROR", "reason": "Current option price must be numeric."}
+        if not math.isfinite(current_option_price) or current_option_price <= 0:
             return {
                 "status": "ERROR",
                 "reason": "Current option price must be greater than zero.",
@@ -43,6 +48,9 @@ class TradeExitChecker:
                 "status": "ERROR",
                 "reason": "SL and target must be numeric values.",
             }
+
+        if not math.isfinite(option_sl) or not math.isfinite(option_target):
+            return {"status": "ERROR", "reason": "SL and target must be finite numbers."}
 
         if option_sl <= 0 or option_target <= 0:
             return {
