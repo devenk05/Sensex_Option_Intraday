@@ -947,12 +947,11 @@ def handle_finalized_candle(candle):
                         completed_5m["minute"].strftime("%H:%M"),
                     )
 
-            # Re-evaluate the recommendation when a 5-minute candle completes.
-            # Minute candles are used only as internal aggregation input.
-            decision_candle_time = candle["minute"].isoformat()
-            if decision_candle_time != LIVE_LAST_DECISION_TRIGGER_CANDLE:
-                LIVE_LAST_DECISION_TRIGGER_CANDLE = decision_candle_time
-                _evaluate_live_setup_on_completed_5m(list(LIVE_5M_CANDLE_HISTORY))
+                # Make a new decision only once per completed 5-minute candle.
+                decision_candle_time = completed_5m["minute"].isoformat()
+                if decision_candle_time != LIVE_LAST_DECISION_TRIGGER_CANDLE:
+                    LIVE_LAST_DECISION_TRIGGER_CANDLE = decision_candle_time
+                    _evaluate_live_setup_on_completed_5m(list(LIVE_5M_CANDLE_HISTORY))
 
         except Exception as exc:
             print("LIVE_5M_ANALYSIS_REFRESH_ERROR:", repr(exc))
