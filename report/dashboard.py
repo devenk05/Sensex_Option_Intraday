@@ -90,6 +90,55 @@ def _metric_card(
     """
 
 
+def _analysis_card(
+    title: str,
+    direction: Any,
+    details: dict[str, Any],
+) -> str:
+    direction_text = _direction_label(direction)
+    direction_css = _direction_class(direction)
+    detail_html = ""
+    preferred_keys = [
+        "trend", "structure", "signal", "alignment", "latest_close",
+        "recent_high", "recent_low", "support", "resistance", "pivot",
+        "r1", "r2", "s1", "s2",
+    ]
+    for key in preferred_keys:
+        if key not in details:
+            continue
+        value = details.get(key)
+        if value is None:
+            continue
+        label = key.replace("_", " ").title()
+        display = _number(value) if isinstance(value, (int, float)) else _safe(value)
+        detail_html += f"""
+        <div class="detail-row">
+            <span>{escape(label)}</span>
+            <strong>{display}</strong>
+        </div>
+        """
+    if not detail_html:
+        detail_html = """
+        <div class="empty-state">
+            No detailed analysis available
+        </div>
+        """
+    return f"""
+    <div class="analysis-card">
+        <div class="card-header">
+            <span>{escape(title)}</span>
+            <span class="mini-dot {direction_css}"></span>
+        </div>
+        <div class="analysis-direction {direction_css}">
+            {escape(direction_text)}
+        </div>
+        <div class="detail-list">
+            {detail_html}
+        </div>
+    </div>
+    """
+
+
 def _five_minute_analysis_panel(
     multi_timeframe: dict[str, Any],
     candle_structure: dict[str, Any],
