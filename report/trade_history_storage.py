@@ -1,5 +1,7 @@
 
 import json
+import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,8 +35,20 @@ class TradeHistoryStorage:
         if not self.file_path.exists():
             return []
 
-        with self.file_path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        try:
+            with self.file_path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            backup = self.file_path.with_name(
+                f"{self.file_path.name}.corrupt-{datetime.now().strftime('%Y%m%d%H%M%S')}.bak"
+            )
+            try:
+                shutil.copy2(self.file_path, backup)
+            except OSError as backup_exc:
+                raise RuntimeError(f"Corrupt trade history could not be backed up: {backup_exc}") from exc
+            raise RuntimeError(
+                f"Corrupt trade history backed up to {backup}; refusing unsafe startup."
+            ) from exc
 
         if not isinstance(data, list):
             raise ValueError("Saved trade history must be a JSON list.")
