@@ -90,84 +90,98 @@ def _metric_card(
     """
 
 
-def _analysis_card(
-    title: str,
-    direction: Any,
-    details: dict[str, Any],
+def _five_minute_analysis_panel(
+    multi_timeframe: dict[str, Any],
+    candle_structure: dict[str, Any],
+    support_resistance: dict[str, Any],
+    volume: dict[str, Any],
+    market_bias: Any,
+    decision_status: Any,
+    data: dict[str, Any],
 ) -> str:
-    direction_text = _direction_label(direction)
+    """Render the 5-minute analysis card in place of the unused chart placeholder."""
+    live_5m = _dict(data.get("live_5m"))
+    candle = _dict(live_5m.get("candle") or multi_timeframe.get("candle_5m"))
+    direction = multi_timeframe.get("direction_5m") or multi_timeframe.get("trend_5m") or market_bias or "N/A"
+    direction_label = _direction_label(direction)
     direction_css = _direction_class(direction)
 
-    detail_html = ""
+    def first_value(*values: Any) -> Any:
+        return next((value for value in values if value is not None and value != ""), None)
 
-    preferred_keys = [
-        "trend",
-        "structure",
-        "signal",
-        "alignment",
-        "latest_close",
-        "recent_high",
-        "recent_low",
-        "support",
-        "resistance",
-        "pivot",
-        "r1",
-        "r2",
-        "s1",
-        "s2",
-    ]
-
-    used = set()
-
-    for key in preferred_keys:
-        if key not in details:
-            continue
-
-        value = details.get(key)
-
-        if value is None:
-            continue
-
-        used.add(key)
-
-        label = key.replace("_", " ").title()
-
+    def display(value: Any, decimals: int = 2) -> str:
+        if value is None or value == "":
+            return "—"
         if isinstance(value, (int, float)):
-            display = _number(value)
-        else:
-            display = _safe(value)
+            return _number(value, decimals)
+        return _safe(value)
 
-        detail_html += f"""
-        <div class="detail-row">
-            <span>{escape(label)}</span>
-            <strong>{display}</strong>
-        </div>
-        """
-
-    if not detail_html:
-        detail_html = """
-        <div class="empty-state">
-            No detailed analysis available
-        </div>
-        """
+    opened = first_value(candle.get("open"), live_5m.get("open"), multi_timeframe.get("open_5m"))
+    high = first_value(candle.get("high"), live_5m.get("high"), multi_timeframe.get("high_5m"))
+    low = first_value(candle.get("low"), live_5m.get("low"), multi_timeframe.get("low_5m"))
+    close = first_value(candle.get("close"), live_5m.get("close"), multi_timeframe.get("close_5m"), multi_timeframe.get("latest_close"))
+    strength = first_value(multi_timeframe.get("trend_strength_5m"), multi_timeframe.get("strength_5m"), candle_structure.get("strength"))
+    volume_ratio = first_value(volume.get("ratio"), volume.get("relative_volume"), volume.get("volume_ratio"))
+    volume_label = first_value(volume.get("confirmation"), volume.get("status"), volume.get("signal"))
+    resistance = first_value(support_resistance.get("resistance"), support_resistance.get("nearest_resistance"), support_resistance.get("r1"))
+    support = first_value(support_resistance.get("support"), support_resistance.get("nearest_support"), support_resistance.get("s1"))
+    alignment = first_value(multi_timeframe.get("alignment"), multi_timeframe.get("alignment_5m"), "—")
+    momentum = first_value(multi_timeframe.get("momentum_5m"), candle_structure.get("momentum"), direction_label)
+    candle_time = first_value(live_5m.get("last_completed_at"), live_5m.get("timestamp"), multi_timeframe.get("last_completed_at_5m"), "—")
+    decision = str(decision_status or "WAIT").replace("_", " ").upper()
+    decision_css = "bearish" if any(word in decision for word in ("BLOCK", "REJECT")) else ("neutral" if decision in {"WAIT", "PENDING", "N/A"} else "bullish")
+    strength_width = max(0, min(100, float(strength))) if isinstance(strength, (int, float)) else 0
 
     return f"""
-    <div class="analysis-card">
-        <div class="card-header">
-            <span>{escape(title)}</span>
-            <span class="mini-dot {direction_css}"></span>
+    <div class="five-minute-card" id="five-minute-analysis-card">
+        <div class="five-minute-card-top">
+            <div>
+                <div class="five-minute-eyebrow">5 MIN ANALYSIS</div>
+                <div class="five-minute-direction {direction_css}">{escape(direction_label)} <span aria-hidden="true">{'▼' if direction_css == 'bearish' else '▲' if direction_css == 'bullish' else '●'}</span></div>
+            </div>
+            <div class="five-minute-candle-status">
+                <span class="live-label"><i></i> Live</span>
+                <strong>▥ Candle: {'Completed' if close is not None else 'Waiting'}</strong>
+                <span>Last 5m Candle: {escape(str(candle_time))}</span>
+            </div>
         </div>
-
-        <div class="analysis-direction {direction_css}">
-            {escape(direction_text)}
+        <div class="five-minute-metrics">
+            <div class="five-minute-metric">
+                <h3>Candle Details</h3>
+                <div class="five-minute-value-row"><span>Open</span><strong>{display(opened)}</strong></div>
+                <div class="five-minute-value-row"><span>High</span><strong>{display(high)}</strong></div>
+                <div class="five-minute-value-row"><span>Low</span><strong>{display(low)}</strong></div>
+                <div class="five-minute-value-row"><span>Close</span><strong>{display(close)}</strong></div>
+            </div>
+            <div class="five-minute-metric">
+                <h3>Trend Strength</h3>
+                <div class="five-minute-big-value">{display(strength, 0) + ('/100' if strength is not None else '')}</div>
+                <div class="five-minute-progress"><span style="width:{strength_width}%"></span></div>
+                <strong class="{direction_css}">{'Strong ' if isinstance(strength, (int, float)) and strength >= 70 else ''}{escape(direction_label.title())}</strong>
+            </div>
+            <div class="five-minute-metric">
+                <h3>Volume Confirmation</h3>
+                <div class="five-minute-big-value">{(display(volume_ratio) + 'x') if volume_ratio is not None else '—'}</div>
+                <strong>{escape(str(volume_label or 'Not available'))}</strong>
+                <div class="five-minute-muted">Live volume fields only; no estimated values</div>
+            </div>
+            <div class="five-minute-metric">
+                <h3>Support / Resistance</h3>
+                <div class="five-minute-value-row"><span>Nearest Resistance</span><strong class="bearish">{display(resistance)}</strong></div>
+                <div class="five-minute-value-row"><span>Nearest Support</span><strong class="bullish">{display(support)}</strong></div>
+                <div class="five-minute-breakdown"><span>Breakdown Status</span><strong>{escape(str(first_value(candle_structure.get("breakdown_status"), multi_timeframe.get("breakdown_status_5m"), "—")).upper())}</strong></div>
+            </div>
         </div>
-
-        <div class="detail-list">
-            {detail_html}
+        <div class="five-minute-summary">
+            <div><span>Alignment</span><strong>{escape(str(alignment).replace('_', ' ').upper())}</strong></div>
+            <div><span>Momentum</span><strong class="{direction_css}">{escape(str(momentum).replace('_', ' ').upper())}</strong></div>
+            <div><span>5m Signal</span><strong class="{direction_css}">{escape(direction_label.upper())}</strong></div>
+            <div><span>Decision Status</span><strong class="{decision_css}">{escape(decision)}</strong></div>
+            <div><span>Timeframe</span><strong>5 MIN</strong></div>
         </div>
+        <div class="five-minute-note"><span aria-hidden="true">ⓘ</span> 5-minute analysis only. Values show live source data when available; missing fields remain “—”. No 1-minute entry confirmation is used.</div>
     </div>
     """
-
 
 def _option_card(
     title: str,
@@ -960,6 +974,36 @@ body {{
     padding: 17px;
 }}
 
+
+.five-minute-card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; height:100%; }
+.five-minute-card-top { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:16px; }
+.five-minute-eyebrow { color:var(--muted); font-size:12px; letter-spacing:1px; }
+.five-minute-direction { font-size:26px; font-weight:900; margin-top:10px; }
+.five-minute-candle-status { display:flex; flex-direction:column; align-items:flex-end; gap:6px; color:var(--muted); font-size:12px; text-align:right; }
+.five-minute-candle-status strong { color:var(--text); font-size:15px; }
+.five-minute-candle-status .live-label { color:var(--red); font-weight:700; }
+.five-minute-candle-status .live-label i { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--red); margin-right:6px; }
+.five-minute-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.five-minute-metric { min-width:0; background:rgba(107,114,128,.045); border:1px solid rgba(107,114,128,.13); border-radius:9px; padding:12px; }
+.five-minute-metric h3 { margin:0 0 12px; color:var(--muted); font-size:12px; text-transform:uppercase; }
+.five-minute-value-row { display:flex; justify-content:space-between; gap:8px; padding:5px 0; font-size:12px; }
+.five-minute-value-row span { color:var(--muted); }
+.five-minute-value-row strong { text-align:right; overflow-wrap:anywhere; }
+.five-minute-big-value { color:var(--red); font-size:26px; font-weight:800; margin:14px 0; }
+.five-minute-progress { height:9px; background:#d9dde1; border-radius:99px; overflow:hidden; margin:10px 0; }
+.five-minute-progress span { display:block; height:100%; background:var(--red); border-radius:99px; }
+.five-minute-muted { margin-top:10px; color:var(--muted); font-size:11px; }
+.five-minute-breakdown { border-top:1px solid var(--border); margin-top:10px; padding-top:10px; display:flex; justify-content:space-between; gap:8px; font-size:12px; }
+.five-minute-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
+.five-minute-summary > div { padding:0 10px; border-right:1px solid var(--border); min-width:0; }
+.five-minute-summary > div:first-child { padding-left:0; }
+.five-minute-summary > div:last-child { border-right:0; }
+.five-minute-summary span { display:block; color:var(--muted); font-size:12px; margin-bottom:7px; }
+.five-minute-summary strong { display:block; font-size:14px; overflow-wrap:anywhere; }
+.five-minute-note { display:flex; gap:10px; align-items:center; margin-top:14px; padding:12px; border-radius:9px; background:rgba(192,57,43,.07); color:#8f2520; font-size:12px; line-height:1.5; }
+@media(max-width:1000px) { .five-minute-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .five-minute-summary { grid-template-columns:repeat(3,minmax(0,1fr)); row-gap:12px; } }
+@media(max-width:560px) { .five-minute-card-top { flex-direction:column; } .five-minute-candle-status { align-items:flex-start; text-align:left; } .five-minute-metrics { grid-template-columns:1fr; } .five-minute-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
 .chart-placeholder {{
     min-height: 280px;
     display: grid;
@@ -1322,17 +1366,12 @@ td {{
 
         <div class="lower-grid">
 
-            <div class="panel">
-
+            <div class="panel five-minute-host">
                 <div class="section-title">
-                    <h2>Live SENSEX Chart</h2>
-                    <span>5 Minute</span>
+                    <h2>5-Minute Analysis</h2>
+                    <span>Primary decision timeframe</span>
                 </div>
-
-                <div class="chart-placeholder">
-                    Live chart integration
-                </div>
-
+                {_five_minute_analysis_panel(multi_timeframe, candle_structure, support_resistance, volume, market_bias, decision_status, data)}
             </div>
 
 
@@ -1362,24 +1401,6 @@ td {{
 <!-- ===================================================== -->
     
     <!-- ===================================================== -->
-    <!-- 5-minute-only market analysis -->
-    
-    <section class="section">
-        <div class="section-title">
-            <h2>5-Minute Analysis</h2>
-            <span>Primary decision timeframe</span>
-        </div>
-        <div class="analysis-grid">
-            {_analysis_card(
-                "5 MIN ANALYSIS",
-                multi_timeframe.get("direction_5m")
-                or multi_timeframe.get("trend_5m")
-                or market_bias,
-                multi_timeframe,
-            )}
-        </div>
-    </section>
-
     <!-- SENSEX 30 -->
       <!-- MARKET INTELLIGENCE -->
     <!-- ===================================================== -->
