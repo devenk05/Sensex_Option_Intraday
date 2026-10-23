@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from config_loader import load_project_config
 from live_recommendation_gate import recommendation_time_gate_reason, score_gate_reason
+from entry_quality_engine import evaluate_directional_confluence, finite_number, validate_index_stop
 from kite_client import create_kite_client
 from historical_data import fetch_historical_data
 from option_data_pull import fetch_sensex_options
@@ -136,6 +137,8 @@ LIVE_LAST_DECISION_TRIGGER_CANDLE = None
 
 # Latest same-contract IV snapshots used only for Vega impact estimation.
 VEGA_PREVIOUS_SNAPSHOTS = {}
+OPTION_OI_SNAPSHOT = {}
+OPTION_VOLUME_SNAPSHOT = {}
 
 
 def _aggregate_minute_candle_into_5m(candle):
@@ -245,6 +248,22 @@ EXIT_MONITOR_THREAD = None
 
 ACTIVE_TRADE_STATE_STORAGE = TradeStateStorage()
 
+def _option_5m_change_percent(option_record: dict) -> float | None:
+    """Compute same-contract premium movement from recent 1-minute history."""
+    try:
+        token = int(option_record.get("instrument_token"))
+    except (TypeError, ValueError):
+        return None
+    history = CANDLE_HISTORY.get(token) or []
+    if len(history) < 6:
+        return None
+    old_price = finite_number(history[-6].get("close"))
+    latest_price = finite_number(history[-1].get("close"))
+    if old_price is None or latest_price is None or old_price <= 0:
+        return None
+    return (latest_price - old_price) / old_price * 100.0
+
+
 def _recent_option_reversal_low(option_record: dict, direction: str) -> float | None:
     """Return the latest usable option-premium reversal/swing low."""
     try:
@@ -320,6 +339,15 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
         print("TRADE_REGISTRATION_REJECTED: Strike unavailable.")
         return None
 
+    index_entry = finite_number(final_decision.get("index_entry"))
+    index_sl = finite_number(final_decision.get("index_sl"))
+    index_stop_check = validate_index_stop(
+        index_entry, index_sl, "BULLISH" if direction == "CE" else "BEARISH", max_points=50.0
+    )
+    if index_stop_check.get("status") != "PASS":
+        print("TRADE_REGISTRATION_REJECTED: INDEX_SL_VALIDATION", index_stop_check)
+        return None
+
     try:
         entry = float(
             (candidate or {}).get("latest_premium")
@@ -330,7 +358,7 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
         print("TRADE_REGISTRATION_REJECTED: Entry premium unavailable.")
         return None
 
-    if entry <= 0:
+    if not (entry > 0 and __import__("math").isfinite(entry)):
         print("TRADE_REGISTRATION_REJECTED: Entry premium invalid.")
         return None
 
@@ -363,38 +391,10 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
         )
         return None
 
-    # Keep the latest structural reversal SL; never tighten it artificially.
-    # If broker instrument metadata provides lot size, enforce the ₹1,000
-    # risk budget by rejecting oversized setups instead of recommending an
-    # unsafe trade with a fake/tighter stop.
+    # Option-premium SL and SENSEX index SL are separate units.
+    # The user-defined maximum applies to index points, not premium points.
     risk_points = entry - option_sl
-    lot_size = None
-    try:
-        raw_lot_size = selected.get("lot_size") or (candidate or {}).get("lot_size")
-        parsed_lot_size = int(raw_lot_size)
-        if parsed_lot_size > 0:
-            lot_size = parsed_lot_size
-    except (TypeError, ValueError):
-        pass
-
-    risk_amount_per_lot = (
-        round(risk_points * lot_size, 2) if lot_size is not None else None
-    )
-    risk_limit_inr = float(getattr(config, "MAX_RISK_PER_TRADE_INR", 1000))
-
-    if risk_amount_per_lot is not None and risk_amount_per_lot > risk_limit_inr:
-        print(
-            "TRADE_REGISTRATION_REJECTED: Structural SL exceeds per-trade risk budget.",
-            {
-                "entry": round(entry, 2),
-                "option_sl": round(option_sl, 2),
-                "risk_points": round(risk_points, 2),
-                "lot_size": lot_size,
-                "risk_amount_per_lot": risk_amount_per_lot,
-                "risk_limit_inr": risk_limit_inr,
-            },
-        )
-        return None
+    lot_size = 20
 
     # Dynamic target: minimum 100 premium points, otherwise 2x structural risk.
     target_points = max(100.0, risk_points * 2.0)
@@ -424,10 +424,12 @@ def _build_live_trade(final_decision: dict, candidate: dict | None = None) -> di
         "option_sl": round(option_sl, 2),
         "option_target": round(option_target, 2),
         "target_points": round(target_points, 2),
-        "risk_points": round(risk_points, 2),
+        "option_risk_points": round(risk_points, 2),
+        "index_entry": round(index_entry, 2),
+        "index_sl": round(index_sl, 2),
+        "index_sl_points": index_stop_check["index_sl_points"],
+        "max_index_sl_points": 50.0,
         "lot_size": lot_size,
-        "risk_amount_per_lot": risk_amount_per_lot,
-        "risk_limit_inr": risk_limit_inr,
         "score": score,
         "entry_score": score,
         "entry_time": now,
@@ -564,8 +566,9 @@ def _register_live_trade(final_decision: dict, candidate: dict | None = None) ->
                     f"Symbol: {trade['symbol']}",
                     f"Strike: {trade['strike']}",
                     f"Entry: {trade['entry']:.2f}",
-                    f"SL: {trade['option_sl']:.2f}",
-                    f"Target: {trade['option_target']:.2f}",
+                    f"Option Premium SL: {trade['option_sl']:.2f}",
+                    f"SENSEX Index SL: {trade['index_sl']:.2f} ({trade['index_sl_points']:.2f} points; max 50)",
+                    f"Option Premium Target: {trade['option_target']:.2f}",
                     f"Score: {trade['score']}",
                     *vega_alert_lines,
                     f"Expiry: {trade['expiry']}",
@@ -610,14 +613,18 @@ def _close_active_trade_from_exit(signal: dict) -> None:
     )
     closed["exit_reason"] = close_reason
     closed["exit_price"] = exit_price
-    closed["exit_time"] = datetime.now().astimezone().isoformat()
+    closed_at = datetime.now(ZoneInfo("Asia/Kolkata"))
+    closed["exit_time"] = closed_at.isoformat()
+    closed["date"] = closed_at.strftime("%Y-%m-%d")
 
     try:
         if exit_price is not None:
             entry = float(active.get("entry", 0))
             closed["pnl_points"] = round(exit_price - entry, 2)
+            closed["pnl"] = round(closed["pnl_points"] * int(active.get("lot_size") or 20), 2)
         else:
             closed["pnl_points"] = None
+            closed["pnl"] = None
     except (TypeError, ValueError):
         closed["pnl_points"] = None
 
@@ -634,8 +641,10 @@ def _close_active_trade_from_exit(signal: dict) -> None:
             TRADE_HISTORY.get_all_trades()
         )
 
-        ACTIVE_TRADE_MANAGER.close_trade()
+        # Clear persisted active state before releasing the in-memory lock.
+        # If clearing fails, the active manager remains intact and callback retry is safe.
         ACTIVE_TRADE_STATE_STORAGE.clear()
+        ACTIVE_TRADE_MANAGER.close_trade()
 
         CURRENT_SETUP_DECISION = None
         NEARBY_CURRENT_CANDIDATE = None
@@ -728,6 +737,23 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
                     row["ltp"] = tick["last_price"]
                 if tick.get("volume_traded") is not None:
                     row["volume"] = tick["volume_traded"]
+                if tick.get("oi") is not None:
+                    row["oi"] = tick["oi"]
+
+            token_key = str(token_value) if token_value is not None else None
+            current_oi = finite_number(row.get("oi"))
+            current_volume = finite_number(row.get("volume"))
+            if token_key is not None and current_oi is not None:
+                previous_oi = OPTION_OI_SNAPSHOT.get(token_key)
+                if previous_oi is not None:
+                    row["oi_change"] = current_oi - previous_oi
+                OPTION_OI_SNAPSHOT[token_key] = current_oi
+            if token_key is not None and current_volume is not None:
+                previous_volume = OPTION_VOLUME_SNAPSHOT.get(token_key)
+                if previous_volume is not None and current_volume >= previous_volume:
+                    row["interval_volume"] = current_volume - previous_volume
+                OPTION_VOLUME_SNAPSHOT[token_key] = current_volume
+            row["premium_change_5m"] = _option_5m_change_percent(row)
             options.append(row)
 
         if not options:
@@ -738,11 +764,13 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             options=options,
             target_strike=option_data.get("atm_strike"),
             option_type="CE",
+            require_oi_increase=True,
         )
         pe_result = select_option(
             options=options,
             target_strike=option_data.get("atm_strike"),
             option_type="PE",
+            require_oi_increase=True,
         )
         ce = ce_result.get("option") if ce_result.get("status") == "OK" else {}
         pe = pe_result.get("option") if pe_result.get("status") == "OK" else {}
@@ -796,12 +824,75 @@ def _evaluate_live_setup_on_completed_5m(live_5m):
             oi_summary=oi_summary,
             ce=ce,
             pe=pe,
-            chart_pattern=None,
+            chart_pattern=detect_candle_patterns(live_5m),
             entry_score=entry_score,
             min_entry_score=float(config.MIN_ENTRY_SCORE),
             support_resistance=support_resistance,
             gap_context=None,
         )
+        # Final directional confluence and the 50-index-point SL gate are
+        # applied at the recommendation boundary, after the existing engines.
+        if isinstance(CURRENT_SETUP_DECISION, dict) and CURRENT_SETUP_DECISION.get("status") == "TRADE_CANDIDATE":
+            direction = str(CURRENT_SETUP_DECISION.get("direction") or "").upper()
+            market_direction = "BULLISH" if direction == "CE" else "BEARISH" if direction == "PE" else "NEUTRAL"
+            spot_value = finite_number(spot)
+            recent_candles = live_5m[-5:]
+            try:
+                valid_lows = [finite_number(c.get("low")) for c in recent_candles]
+                valid_highs = [finite_number(c.get("high")) for c in recent_candles]
+                index_sl_value = min(v for v in valid_lows if v is not None) if market_direction == "BULLISH" else max(v for v in valid_highs if v is not None)
+            except (ValueError, TypeError):
+                index_sl_value = None
+            pivot_value = finite_number(pivot_analysis.get("pivot") or (pivot_analysis.get("levels") or {}).get("pivot"))
+            if pivot_value is None or spot_value is None:
+                pivot_signal = None
+            elif market_direction == "BULLISH":
+                pivot_signal = "ABOVE_PIVOT" if spot_value > pivot_value else "BELOW_PIVOT"
+            else:
+                pivot_signal = "BELOW_PIVOT" if spot_value < pivot_value else "ABOVE_PIVOT"
+            pattern_signal = None
+            try:
+                patterns = (detect_candle_patterns(live_5m) or {}).get("patterns") or []
+                pattern_signal = next((p for p in patterns if str(p).upper().startswith(market_direction)), None)
+            except Exception as pattern_error:
+                print("CHART_PATTERN_WARNING:", repr(pattern_error))
+            try:
+                reversal_signal = (detect_reversal(live_5m) or {}).get("signal")
+            except Exception:
+                reversal_signal = None
+            quality = evaluate_directional_confluence(
+                market_direction=market_direction,
+                price_action_signal=(price_action or {}).get("signal"),
+                volume_ratio=(volume_analysis or {}).get("volume_ratio"),
+                ce_change_percent=ce.get("premium_change_5m"),
+                pe_change_percent=pe.get("premium_change_5m"),
+                reversal_signal=reversal_signal,
+                pivot_signal=pivot_signal,
+                chart_pattern_signal=pattern_signal,
+                ce_oi_change=ce.get("oi_change"),
+                pe_oi_change=pe.get("oi_change"),
+            )
+            index_stop = validate_index_stop(spot_value, index_sl_value, market_direction, max_points=50.0)
+            CURRENT_SETUP_DECISION["entry_quality"] = quality
+            CURRENT_SETUP_DECISION["index_stop_validation"] = index_stop
+            if quality.get("status") != "PASS" or index_stop.get("status") != "PASS":
+                CURRENT_SETUP_DECISION["status"] = "WAIT"
+                CURRENT_SETUP_DECISION["reason"] = quality.get("reason") if quality.get("status") != "PASS" else index_stop.get("reason")
+                print("LIVE_DECISION_BLOCKED_BY_FINAL_GATES:", {"quality": quality, "index_stop": index_stop})
+            else:
+                CURRENT_SETUP_DECISION.update({
+                    "index_entry": spot_value,
+                    "index_sl": index_sl_value,
+                    "index_sl_points": index_stop.get("index_sl_points"),
+                    "max_index_sl_points": 50.0,
+                })
+                candidate_record = CURRENT_SETUP_DECISION.get("candidate")
+                if isinstance(candidate_record, dict):
+                    candidate_record.update({
+                        "index_entry": spot_value,
+                        "index_sl": index_sl_value,
+                        "index_sl_points": index_stop.get("index_sl_points"),
+                    })
         NEARBY_CURRENT_CANDIDATE = (
             CURRENT_SETUP_DECISION.get("candidate")
             if isinstance(CURRENT_SETUP_DECISION, dict) else None
