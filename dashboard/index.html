@@ -761,7 +761,7 @@ td {
         <div class="live-status">
             <span class="live-dot"></span>
             LIVE ENGINE
-            <span class="status-badge positive">TRADING</span>
+            <span class="status-badge neutral">CHECKING SESSION</span>
         </div>
 
     </div>
@@ -2094,6 +2094,21 @@ async function updateDashboardLive() {
             } else {
                 biasElement.classList.add("neutral");
             }
+        }
+
+        const status = String(data.status || "UNKNOWN").toUpperCase();
+        const sessionLabel = status === "TRADING" ? "MARKET OPEN"
+            : status === "PRE_MARKET" ? "PRE MARKET"
+            : status === "CLOSED" ? "MARKET CLOSED"
+            : status.replace(/_/g, " ");
+
+        const engineStatusElement = document.querySelector(".live-status .status-badge");
+        if (engineStatusElement) {
+            engineStatusElement.textContent = sessionLabel;
+            engineStatusElement.classList.remove("positive", "warning", "neutral");
+            if (status === "TRADING") engineStatusElement.classList.add("positive");
+            else if (status === "PRE_MARKET" || status === "CLOSED") engineStatusElement.classList.add("warning");
+            else engineStatusElement.classList.add("neutral");
         }
 
         const statusElement = document.querySelector(
