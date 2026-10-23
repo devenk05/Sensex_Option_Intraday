@@ -125,9 +125,15 @@ def evaluate_directional_confluence(
     if ce_change is None or pe_change is None:
         return {"status": "WAIT", "reason": "CE_PE_PREMIUM_CHANGE_UNAVAILABLE"}
     premium_spread = ce_change - pe_change
-    premium_aligned = premium_spread > 0 if direction == "BULLISH" else premium_spread < 0
+    # Require opposite 5-minute premium movement, not merely relative strength:
+    # bullish market => CE up and PE down; bearish market => PE up and CE down.
+    premium_aligned = (
+        ce_change > 0 and pe_change < 0
+        if direction == "BULLISH"
+        else pe_change > 0 and ce_change < 0
+    )
     if not premium_aligned:
-        return {"status": "WAIT", "reason": "CE_PE_PREMIUM_DIRECTION_NOT_ALIGNED"}
+        return {"status": "WAIT", "reason": "CE_PE_PREMIUMS_NOT_MOVING_IN_OPPOSITE_CONFIRMED_DIRECTIONS"}
     supporting = [
         str(value or "").strip().upper()
         for value in (reversal_signal, pivot_signal, chart_pattern_signal)
