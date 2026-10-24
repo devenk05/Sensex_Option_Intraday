@@ -2073,26 +2073,41 @@ function dmCard(data) {
     const scoreRaw = data.entry_score ?? decision.entry_score ?? decision.score ?? null;
     const score = scoreRaw == null || !Number.isFinite(Number(scoreRaw)) ? null : Number(scoreRaw);
     const lastTick = sensex.timestamp || sensex.last_tick_time || option.timestamp || option.updated_at || null;
+    let tickAgeMs = null;
     let tickFresh = null;
-    if (lastTick) { const t = Date.parse(lastTick); if (Number.isFinite(t)) tickFresh = now - t >= 0 && now - t <= 120000; }
+    if (lastTick) {
+      const tickTime = Date.parse(lastTick);
+      if (Number.isFinite(tickTime)) {
+        tickAgeMs = now - tickTime;
+        tickFresh = tickAgeMs >= 0 && tickAgeMs <= 120000;
+      }
+    }
+    const tickAgeText = tickAgeMs == null
+      ? "Tick age: Not available"
+      : tickAgeMs < 0
+        ? "Tick timestamp is in the future; verify system/data timezone"
+        : "Tick age: " + Math.floor(tickAgeMs / 1000) + " sec";
     const hasFeed = data.spot != null && Number.isFinite(Number(data.spot));
-    const live1 = hasFeed ? (tickFresh === false ? "STALE" : tickFresh === true ? "CONNECTED" : (data.live_sensex ? "CONNECTED" : "NO DATA")) : "NO DATA";
+    const live1 = !hasFeed ? "NO DATA" : tickFresh === false ? "STALE" : tickFresh === true ? "CONNECTED" : "NO DATA";
     const candleState = stale5m ? "STALE" : data.live_5m_last_refresh ? "FRESH" : (Object.keys(candle).length ? "PENDING" : "NO DATA");
     const ce = option.ce_ltp ?? option.ce?.ltp ?? null;
     const pe = option.pe_ltp ?? option.pe?.ltp ?? null;
     const cepeState = ce != null && pe != null ? "PASS" : "NO DATA";
-    const oiState = oi.status || oi.confirmation_status || decision.oi_status || decision.oi_confirmation || "NO DATA";
+    const oiBias = oi.bias || oi.direction || decision.oi_bias || null;
+    const oiReason = oi.reason || decision.oi_reason || null;
+    const reportedOiState = oi.status || oi.confirmation_status || decision.oi_status || decision.oi_confirmation || null;
+    const oiState = !oiBias || !oiReason ? "NO DATA" : reportedOiState || "NO DATA";
     const scoreState = score == null ? "NO DATA" : score >= 80 ? "PASS" : "WAIT";
     const tickState = tickFresh === true ? "PASS" : tickFresh === false ? "FAIL" : "NO DATA";
     const riskState = decision.risk_status || decision.risk_gate || decision.stop_loss_status || (active ? "ACTIVE TRADE" : "NO DATA");
     const oneTradeState = active ? "ACTIVE TRADE" : "PASS";
     const rows = [
-      ["Kite live feed", live1, "Spot: " + dmText(data.spot, "—"), "Last tick: " + dmText(lastTick, "Not reported")],
+      ["Kite live feed", live1, "Spot: " + dmText(data.spot, "—"), "Last tick: " + dmText(lastTick, "Not reported") + " • " + tickAgeText],
       ["Completed 5-minute candle", candleState, "Last close: " + dmText(candle.close, "—"), "Completed at: " + dmText(data.live_5m_last_refresh, "Not reported")],
       ["ATM CE / PE comparison", cepeState, "CE premium: " + dmText(ce, "—"), "PE premium: " + dmText(pe, "—")],
-      ["Directional OI confirmation", oiState, "OI bias: " + dmText(oi.bias || oi.direction || decision.oi_bias, "Not reported"), "Reason: " + dmText(oi.reason || decision.oi_reason, "No reason reported")],
+      ["Directional OI confirmation", oiState, "OI bias: " + dmText(oiBias, "Not reported"), "Reason: " + dmText(oiReason, "No reason reported")],
       ["Confluence score ≥ 80", scoreState, "Score: " + (score == null ? "—" : score + " / 100"), "Minimum required: 80"],
-      ["Fresh option ticks", tickState, "Tick timestamp: " + dmText(lastTick, "Not reported"), "Freshness window: 120 sec"],
+      ["Fresh option ticks", tickState, "Tick timestamp: " + dmText(lastTick, "Not reported"), tickAgeText + " • freshness window: 120 sec"],
       ["Stop-loss / risk limit", riskState, "Index SL: " + dmText(decision.index_sl ?? (active ? data.active_trade.index_sl : null), "Not reported"), "Risk: " + dmText(decision.risk_inr ?? decision.estimated_risk_inr, "Not reported")],
       ["One active trade rule", oneTradeState, "Active trade: " + (active ? "Yes" : "No"), "New setup: " + (active ? "Blocked while active" : "Allowed if all gates pass")]
     ];
