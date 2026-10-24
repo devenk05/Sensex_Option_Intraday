@@ -676,6 +676,38 @@ td {
     }
 }
 
+
+/* Single-card 5-minute decision monitor */
+.decision-monitor{margin:0 0 22px;background:#071426;color:#e8f4ff;border:1px solid #145b91;border-radius:16px;padding:18px;box-shadow:0 12px 32px rgba(2,12,27,.22);overflow:hidden}
+.decision-monitor *{box-sizing:border-box}
+.dm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.dm-title{font-size:19px;font-weight:850;letter-spacing:.3px;color:#eaf5ff}
+.dm-subtitle{font-size:11px;color:#8ba9c6;margin-top:4px}
+.dm-clock{font-size:12px;color:#9bdcff;border:1px solid #164b78;background:#0a2039;border-radius:10px;padding:9px 12px;white-space:nowrap}
+.dm-checks{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
+.dm-check{min-width:0;border:1px solid #164d78;background:linear-gradient(180deg,#0a2038,#071525);border-radius:11px;padding:11px 9px;position:relative;animation:dmFade .35s ease both}
+.dm-check:after{content:"";position:absolute;left:50%;bottom:-9px;width:2px;height:8px;background:#1e779a;opacity:.5}
+.dm-num{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;margin:0 auto 8px;border:2px solid #0ea5e9;color:#7dd3fc;font-size:12px;font-weight:800}
+.dm-label{font-size:11px;line-height:1.35;font-weight:750;text-align:center;min-height:31px;color:#e6f4ff}
+.dm-status{font-size:10px;font-weight:900;text-align:center;border-radius:6px;padding:6px 3px;margin:9px 0 8px;letter-spacing:.3px}
+.dm-status.pass{background:#00d084;color:#032a1b}.dm-status.wait{background:#f5b700;color:#382600}.dm-status.pending{background:#60758a;color:#f4f8fc}.dm-status.fail{background:#ef4444;color:white}.dm-status.unknown{background:#243b53;color:#d8e7f5}
+.dm-detail{font-size:10px;color:#a9c3dc;line-height:1.65;overflow-wrap:anywhere}
+.dm-detail strong{color:#e5f5ff;font-weight:700}
+.dm-lower{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.dm-score,.dm-decision{border:1px solid #164d78;background:#091a2d;border-radius:10px;padding:12px}
+.dm-small-title{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#8ba9c6;margin-bottom:8px}
+.dm-score-line{display:flex;align-items:center;gap:12px}
+.dm-score-value{font-size:25px;font-weight:900;color:#56d7ff;white-space:nowrap}
+.dm-meter{height:8px;background:#1e344a;border-radius:10px;overflow:hidden;flex:1}
+.dm-meter-fill{height:100%;width:0;background:linear-gradient(90deg,#00d084,#f5b700,#ef4444);transition:width .6s ease}
+.dm-decision-value{font-size:20px;font-weight:900;color:#f5b700}
+.dm-reason{font-size:11px;line-height:1.55;color:#b6cce0;margin-top:5px}
+.dm-footer{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;color:#7192b1;font-size:10px}
+@keyframes dmFade{from{opacity:.45;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1250px){.dm-checks{grid-template-columns:repeat(4,minmax(0,1fr))}.dm-check:after{display:none}}
+@media(max-width:600px){.decision-monitor{padding:12px}.dm-checks{grid-template-columns:repeat(2,minmax(0,1fr))}.dm-lower{grid-template-columns:1fr}.dm-title{font-size:16px}}
+@media(prefers-reduced-motion:reduce){.dm-check{animation:none}.dm-meter-fill{transition:none}}
+
 </style>
 </head>
 
@@ -767,6 +799,22 @@ td {
 
     </div>
 
+
+
+    <section class="decision-monitor" id="five-minute-decision-card" aria-live="polite">
+      <div class="dm-head">
+        <div><div class="dm-title">◈ 5-MINUTE DECISION CHECKS</div><div class="dm-subtitle">Live pipeline health • statuses use available dashboard data only</div></div>
+        <div class="dm-clock">NEXT 5M CANDLE IN <strong id="dm-countdown">--:--</strong></div>
+      </div>
+      <div class="dm-checks" id="dm-checks">
+        <div class="dm-check"><div class="dm-num">1</div><div class="dm-label">Kite live feed</div><div class="dm-status unknown">CHECKING</div><div class="dm-detail">Waiting for live state…</div></div>
+      </div>
+      <div class="dm-lower">
+        <div class="dm-score"><div class="dm-small-title">Confluence / Entry Score</div><div class="dm-score-line"><div class="dm-score-value" id="dm-score">— / 100</div><div class="dm-meter"><div class="dm-meter-fill" id="dm-score-fill"></div></div></div><div class="dm-reason" id="dm-score-note">No score reported yet.</div></div>
+        <div class="dm-decision"><div class="dm-small-title">Final Decision</div><div class="dm-decision-value" id="dm-decision">WAITING FOR LIVE DATA</div><div class="dm-reason" id="dm-reason">The dashboard will show the available gate reasons here.</div></div>
+      </div>
+      <div class="dm-footer"><span id="dm-updated">Last dashboard update: waiting</span><span>Manual recommendations only • No auto orders</span></div>
+    </section>
 
     <!-- ===================================================== -->
     <!-- MARKET METRICS -->
@@ -1998,6 +2046,86 @@ function updateClosedTradeHistory(data) {
         }).join("") + '</tbody></table></div>';
 }
 
+
+function dmText(value, fallback = "Not reported") {
+    if (value === null || value === undefined || value === "") return fallback;
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+}
+function dmStatus(value) {
+    const v = String(value || "").toUpperCase();
+    if (["PASS","PASSED","OK","VALID","CONNECTED","FRESH","CONFIRMED","ALIGNED","ACTIVE","LIVE"].includes(v)) return ["PASS","pass"];
+    if (["FAIL","FAILED","ERROR","REJECTED","STALE","INVALID","BLOCKED"].includes(v)) return ["FAIL","fail"];
+    if (["WAIT","WAITING","NOT_CONFIRMED"].includes(v)) return ["WAIT","wait"];
+    if (["PENDING","IN_PROGRESS","CHECKING","CALCULATING"].includes(v)) return ["PENDING","pending"];
+    return ["NO DATA","unknown"];
+}
+function dmCard(data) {
+    if (!data || typeof data !== "object") return;
+    const now = Date.now();
+    const option = data.live_option && typeof data.live_option === "object" ? data.live_option : {};
+    const sensex = data.live_sensex && typeof data.live_sensex === "object" ? data.live_sensex : {};
+    const oi = data.oi_summary && typeof data.oi_summary === "object" ? data.oi_summary : {};
+    const decision = data.decision && typeof data.decision === "object" ? data.decision : {};
+    const active = data.active_trade && typeof data.active_trade === "object";
+    const stale5m = data.live_5m_stale === true;
+    const candle = data.live_5m && typeof data.live_5m === "object" ? data.live_5m : {};
+    const scoreRaw = data.entry_score ?? decision.entry_score ?? decision.score ?? null;
+    const score = scoreRaw == null || !Number.isFinite(Number(scoreRaw)) ? null : Number(scoreRaw);
+    const lastTick = sensex.timestamp || sensex.last_tick_time || option.timestamp || option.updated_at || null;
+    let tickFresh = null;
+    if (lastTick) { const t = Date.parse(lastTick); if (Number.isFinite(t)) tickFresh = now - t >= 0 && now - t <= 120000; }
+    const hasFeed = data.spot != null && Number.isFinite(Number(data.spot));
+    const live1 = hasFeed ? (tickFresh === false ? "STALE" : tickFresh === true ? "CONNECTED" : (data.live_sensex ? "CONNECTED" : "NO DATA")) : "NO DATA";
+    const candleState = stale5m ? "STALE" : data.live_5m_last_refresh ? "FRESH" : (Object.keys(candle).length ? "PENDING" : "NO DATA");
+    const ce = option.ce_ltp ?? option.ce?.ltp ?? null;
+    const pe = option.pe_ltp ?? option.pe?.ltp ?? null;
+    const cepeState = ce != null && pe != null ? "PASS" : "NO DATA";
+    const oiState = oi.status || oi.confirmation_status || decision.oi_status || decision.oi_confirmation || "NO DATA";
+    const scoreState = score == null ? "NO DATA" : score >= 80 ? "PASS" : "WAIT";
+    const tickState = tickFresh === true ? "PASS" : tickFresh === false ? "FAIL" : "NO DATA";
+    const riskState = decision.risk_status || decision.risk_gate || decision.stop_loss_status || (active ? "ACTIVE TRADE" : "NO DATA");
+    const oneTradeState = active ? "ACTIVE TRADE" : "PASS";
+    const rows = [
+      ["Kite live feed", live1, "Spot: " + dmText(data.spot, "—"), "Last tick: " + dmText(lastTick, "Not reported")],
+      ["Completed 5-minute candle", candleState, "Last close: " + dmText(candle.close, "—"), "Completed at: " + dmText(data.live_5m_last_refresh, "Not reported")],
+      ["ATM CE / PE comparison", cepeState, "CE premium: " + dmText(ce, "—"), "PE premium: " + dmText(pe, "—")],
+      ["Directional OI confirmation", oiState, "OI bias: " + dmText(oi.bias || oi.direction || decision.oi_bias, "Not reported"), "Reason: " + dmText(oi.reason || decision.oi_reason, "No reason reported")],
+      ["Confluence score ≥ 80", scoreState, "Score: " + (score == null ? "—" : score + " / 100"), "Minimum required: 80"],
+      ["Fresh option ticks", tickState, "Tick timestamp: " + dmText(lastTick, "Not reported"), "Freshness window: 120 sec"],
+      ["Stop-loss / risk limit", riskState, "Index SL: " + dmText(decision.index_sl ?? (active ? data.active_trade.index_sl : null), "Not reported"), "Risk: " + dmText(decision.risk_inr ?? decision.estimated_risk_inr, "Not reported")],
+      ["One active trade rule", oneTradeState, "Active trade: " + (active ? "Yes" : "No"), "New setup: " + (active ? "Blocked while active" : "Allowed if all gates pass")]
+    ];
+    const container = document.getElementById("dm-checks");
+    if (container) container.innerHTML = rows.map((r,i) => {
+      const [label, raw, line1, line2] = r;
+      const [labelStatus, cls] = dmStatus(raw);
+      return '<div class="dm-check"><div class="dm-num">' + (i+1) + '</div><div class="dm-label">' + label + '</div><div class="dm-status ' + cls + '">' + labelStatus + '</div><div class="dm-detail"><strong>' + line1 + '</strong><br>' + line2 + '</div></div>';
+    }).join("");
+    const scoreEl = document.getElementById("dm-score");
+    if (scoreEl) scoreEl.textContent = score == null ? "— / 100" : score + " / 100";
+    const fill = document.getElementById("dm-score-fill");
+    if (fill) fill.style.width = score == null ? "0%" : Math.max(0,Math.min(100,score)) + "%";
+    const scoreNote = document.getElementById("dm-score-note");
+    if (scoreNote) scoreNote.textContent = score == null ? "No score reported yet; no placeholder score is shown." : score >= 80 ? "Score gate passed; all other final gates must still pass." : "Below the configured minimum score of 80.";
+    const decisionEl = document.getElementById("dm-decision");
+    const decisionText = String(data.decision_status || decision.status || "WAIT").toUpperCase().replace(/_/g," ");
+    if (decisionEl) decisionEl.textContent = decisionText;
+    const reasons = decision.block_reasons || decision.reasons || decision.gate_reasons || [];
+    const reasonEl = document.getElementById("dm-reason");
+    if (reasonEl) reasonEl.textContent = Array.isArray(reasons) && reasons.length ? reasons.map(x => typeof x === "string" ? x : (x.reason || x.message || JSON.stringify(x))).join(" • ") : (active ? "An active trade exists; do not register another setup." : "Only source-reported decision details are shown; unavailable gate reasons are not invented.");
+    const updated = document.getElementById("dm-updated");
+    if (updated) updated.textContent = "Last dashboard update: " + dmText(data.live_update || data.timestamp, "Not reported");
+}
+function dmCountdown() {
+    const el = document.getElementById("dm-countdown");
+    if (!el) return;
+    const now = new Date();
+    const seconds = now.getSeconds();
+    const remaining = (5 - (now.getMinutes() % 5) - 1) * 60 + (59 - seconds) + 1;
+    el.textContent = String(Math.floor(remaining/60)).padStart(2,"0") + ":" + String(remaining%60).padStart(2,"0");
+}
+
 async function updateDashboardLive() {
     try {
         const response = await fetch("live_state.json?ts=" + Date.now(), {
@@ -2007,6 +2135,7 @@ async function updateDashboardLive() {
         if (!response.ok) return;
 
         const data = await response.json();
+        dmCard(data);
         updateOptionChainLive(data);
         updateActiveTradeLive(data);
         updateClosedTradeHistory(data);
@@ -2112,6 +2241,8 @@ async function updateDashboardLive() {
 }
 
 updateDashboardLive();
+dmCountdown();
+setInterval(dmCountdown, 1000);
 setInterval(updateDashboardLive, 1000);
 updateSensex30Live();
 setInterval(updateSensex30Live, 1000);
