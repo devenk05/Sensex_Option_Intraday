@@ -709,6 +709,51 @@ td {
 @media(prefers-reduced-motion:reduce){.dm-check{animation:none}.dm-meter-fill{transition:none}}
 
 </style>
+
+<style id="jarvis-theme-overrides">
+:root {
+ --bg:#050b16; --bg2:#081426; --panel:rgba(10,24,44,.92); --panel2:rgba(12,32,56,.92);
+ --border:#163b5b; --border-bright:#247aa0; --text:#e6f4ff; --muted:#8ba9c6;
+ --green:#00d084; --green2:#00b878; --red:#ff5368; --red2:#e63e58;
+ --yellow:#ffc857; --orange:#ff914d; --blue:#46b8ff; --blue2:#2e8fcf;
+ --cyan:#39e7ff; --purple:#a78bfa; --pink:#ff6bd6; --shadow:0 12px 35px rgba(0,0,0,.28);
+}
+html { color-scheme:dark; background:#050b16; }
+body { background:radial-gradient(ellipse at 12% 0%,rgba(0,156,255,.13),transparent 38%),radial-gradient(ellipse at 88% 18%,rgba(0,229,255,.07),transparent 32%),var(--bg); color:var(--text); }
+body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.22; background-image:linear-gradient(rgba(57,231,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(57,231,255,.045) 1px,transparent 1px); background-size:36px 36px; mask-image:linear-gradient(to bottom,black,transparent 85%); }
+#jarvis-particles { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; opacity:.55; }
+.dashboard { position:relative; z-index:2; }
+.sidebar { background:rgba(5,14,27,.94); border-right-color:#123652; box-shadow:8px 0 32px rgba(0,0,0,.18); backdrop-filter:blur(16px); }
+.logo { color:#eaf8ff; } .logo-mark { color:#071421; background:linear-gradient(135deg,#5be7ff,#228bdb); box-shadow:0 0 22px rgba(57,231,255,.28); }
+.nav-title { color:#5c91b6; } .nav-item { color:#a9c4da; transition:background .2s,border-color .2s,color .2s,transform .2s; border:1px solid transparent; }
+.nav-item:hover { color:#e7fbff; background:rgba(30,126,174,.12); transform:translateX(2px); }
+.nav-item.active { color:#9df4ff; background:linear-gradient(90deg,rgba(0,194,255,.18),rgba(0,194,255,.04)); border-color:#1d6487; box-shadow:inset 3px 0 #39e7ff,0 0 20px rgba(0,194,255,.06); }
+.sidebar-footer { color:#7299b7; }
+.main { position:relative; z-index:2; }
+.page-title h1 { color:#f0f9ff; letter-spacing:.2px; text-shadow:0 0 24px rgba(57,231,255,.12); }
+.page-title p { color:#83a8c6; }
+.live-status,.metric-card,.analysis-card,.option-card,.panel { background:linear-gradient(145deg,rgba(13,32,55,.94),rgba(7,19,35,.96)); border-color:#194463; box-shadow:var(--shadow),inset 0 1px rgba(135,220,255,.035); }
+.live-status { color:#dff7ff; } .live-dot { background:#00d084; box-shadow:0 0 12px #00d084,0 0 24px rgba(0,208,132,.32); }
+.metric-card,.analysis-card,.option-card,.panel { transition:border-color .22s,box-shadow .22s,transform .22s; }
+.metric-card:hover,.analysis-card:hover,.option-card:hover,.panel:hover { border-color:#28749a; box-shadow:0 14px 38px rgba(0,0,0,.34),0 0 18px rgba(57,231,255,.055); }
+.metric-title,.metric-subtitle,.section-title span,.sensex30-panel-title span,.option-header,.card-header,.detail-row span,.detail-row strong,.trade-grid span,th,.footer { color:#8ba9c6; }
+.metric-value,.analysis-direction,.option-price,.trade-direction,.section-title h2 { color:#eaf8ff; }
+.status-badge { background:rgba(83,150,190,.15); border:1px solid rgba(77,157,202,.2); }
+.chart-placeholder { color:#83a8c6; border-color:#1c4b6c; background:linear-gradient(rgba(57,231,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(57,231,255,.045) 1px,transparent 1px),radial-gradient(ellipse,rgba(0,137,255,.07),transparent 65%); background-size:35px 35px,35px 35px,auto; }
+table td { color:#d3e9f8; border-bottom-color:rgba(106,174,212,.12); }
+th { border-bottom-color:#1b4664; } .detail-list,.detail-row { border-color:rgba(106,174,212,.13); }
+.trade-tabs { border-bottom-color:#194463; } .trade-tab { color:#9bbbd3; } .trade-tab.active { color:#5deaff; border-bottom-color:#39e7ff; }
+.dm-check,.dm-score,.dm-decision { box-shadow:inset 0 1px rgba(120,220,255,.035); }
+.footer { border-top-color:#173d5b; }
+@keyframes jarvisPanelPulse { 0%,100% { box-shadow:0 12px 35px rgba(0,0,0,.28),0 0 0 rgba(57,231,255,0); } 50% { box-shadow:0 12px 35px rgba(0,0,0,.28),0 0 22px rgba(57,231,255,.055); } }
+.decision-monitor { animation:jarvisPanelPulse 7s ease-in-out infinite; }
+@media(max-width:850px) { .sidebar { display:none; } }
+@media(prefers-reduced-motion:reduce) {
+ *,*::before,*::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+ #jarvis-particles { display:none !important; }
+}
+</style>
+
 </head>
 
 <body>
@@ -2263,5 +2308,51 @@ updateSensex30Live();
 setInterval(updateSensex30Live, 1000);
 </script>
 <script src="agentic_panel.js"></script>
+
+<script id="jarvis-particle-engine">
+(() => {
+  "use strict";
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) return;
+  const canvas = document.createElement("canvas");
+  canvas.id = "jarvis-particles";
+  canvas.setAttribute("aria-hidden","true");
+  document.body.prepend(canvas);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) { canvas.remove(); return; }
+  let w=0,h=0,dpr=1,points=[],raf=0,last=0;
+  const maxFps=30, spacing=125;
+  function resize() {
+    dpr=Math.min(window.devicePixelRatio||1,1.5); w=window.innerWidth; h=window.innerHeight;
+    canvas.width=Math.floor(w*dpr); canvas.height=Math.floor(h*dpr);
+    canvas.style.width=w+"px"; canvas.style.height=h+"px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const count=Math.min(65,Math.max(20,Math.floor(w*h/22000)));
+    points=Array.from({length:count},()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,r:.7+Math.random()*1.4}));
+  }
+  function draw(ts) {
+    raf=0;
+    if (document.hidden) return;
+    if (ts-last < 1000/maxFps) { raf=requestAnimationFrame(draw); return; }
+    last=ts; ctx.clearRect(0,0,w,h);
+    for(let i=0;i<points.length;i++) {
+      const p=points[i]; p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>w)p.vx*=-1; if(p.y<0||p.y>h)p.vy*=-1;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle="rgba(77,220,255,.6)"; ctx.fill();
+      for(let j=i+1;j<points.length;j++) {
+        const q=points[j],dx=p.x-q.x,dy=p.y-q.y,dist=Math.hypot(dx,dy);
+        if(dist<spacing) { ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.strokeStyle="rgba(40,170,225,"+((1-dist/spacing)*.16)+")"; ctx.lineWidth=.7; ctx.stroke(); }
+      }
+    }
+    raf=requestAnimationFrame(draw);
+  }
+  function start(){if(!document.hidden&&!raf)raf=requestAnimationFrame(draw);}
+  function stop(){if(raf){cancelAnimationFrame(raf);raf=0;}}
+  window.addEventListener("resize",resize,{passive:true});
+  document.addEventListener("visibilitychange",()=>document.hidden?stop():start());
+  resize(); start();
+})();
+</script>
+
 </body>
 </html>
