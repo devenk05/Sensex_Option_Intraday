@@ -2697,6 +2697,39 @@ def main():
     dashboard_thread.start()
     print("LIVE_DASHBOARD_UPDATER_STARTED: 1s")
 
+    # Publish an advisory JARVIS review at startup so the dashboard does not
+    # depend on waiting for the next completed 5-minute candle.
+    # This review is informational only and cannot register or place a trade.
+    if dispatch_agent_review is not None:
+        try:
+            startup_decision = (
+                CURRENT_SETUP_DECISION
+                if isinstance(CURRENT_SETUP_DECISION, dict)
+                else {"status": "WAIT", "reason": "STARTUP_REVIEW"}
+            )
+            dispatch_agent_review({
+                "decision": startup_decision,
+                "entry_score": LATEST_ENTRY_SCORE,
+                "minimum_score": float(config.MIN_ENTRY_SCORE),
+                "market_analysis": market_analysis,
+                "candle_structure": candle_structure,
+                "multi_timeframe": multi_timeframe,
+                "support_resistance": support_resistance,
+                "price_action": price_action,
+                "volume_analysis": {},
+                "cepe_comparison": {},
+                "oi_summary": oi_summary,
+                "pivot_analysis": pivot_analysis,
+                "active_trade": ACTIVE_TRADE_MANAGER.has_active_trade(),
+                "option_chain_available": bool(options),
+                "risk_limit_inr": 1000,
+            })
+            print("JARVIS_STARTUP_REVIEW_QUEUED")
+        except Exception as startup_review_exc:
+            print("JARVIS_STARTUP_REVIEW_ERROR:", repr(startup_review_exc))
+    else:
+        print("JARVIS_STARTUP_REVIEW_SKIPPED: AgenticAI import unavailable")
+
     # Start daily reporting only after history, recovery, monitoring and dashboard setup.
     daily_report_thread = Thread(
         target=daily_report_loop.run_forever,
