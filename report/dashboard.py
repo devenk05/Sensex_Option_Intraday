@@ -2106,7 +2106,7 @@ setInterval(updateSensex30Live, 1000);
 """
 
     # Keep the live dashboard wired to the read-only JARVIS review panel.
-    html = html.replace("</body>", '<script src="agentic_panel.js"></script>\n</body>')
+    html = html.replace("</body>", '<script src="scene_animations.js"></script>\n<script src="agentic_panel.js"></script>\n</body>')
 
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
